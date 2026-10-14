@@ -3,6 +3,10 @@ import { LOBBY_SLOTS } from './config'
 import { FakePeer } from './fakepeer'
 export const LOOPBACK = location.search.includes('loopback')
 const P: any = LOOPBACK ? FakePeer : Peer
+// PeerJS's built-in TURN hosts (eu-0/us-0.turn.peerjs.com) no longer resolve, so set ICE ourselves.
+// Add a TURN server at build time with VITE_ICE_SERVERS='[{"urls":"turn:...","username":"..","credential":".."}]'.
+const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }, ...JSON.parse(import.meta.env.VITE_ICE_SERVERS || '[]')]
+const OPTS = { config: { iceServers: ICE } }
 export const store = LOOPBACK ? sessionStorage : localStorage
 
 export type Gender = 'man' | 'woman'
@@ -34,7 +38,7 @@ const okWith = (me: Profile, them: Profile, byCode: boolean) => !blocked().inclu
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 function openPeer(id?: string): Promise<Peer> {
   return new Promise((ok, bad) => {
-    const p: Peer = id ? new P(id) : new P()
+    const p: Peer = id ? new P(id, OPTS) : new P(OPTS)
     const t = setTimeout(() => { p.destroy(); bad(new Error('timeout')) }, 8000)
     // only fatal until open: a later 'peer-unavailable' (failed knock) must NOT destroy the peer
     const fail = (e: any) => { dlog('open ' + (id || 'peer') + ' failed: ' + e?.type); clearTimeout(t); p.destroy(); bad(e) }
@@ -42,11 +46,20 @@ function openPeer(id?: string): Promise<Peer> {
   })
 }
 function onceData(c: DataConnection, ms: number): Promise<any> {
-  return new Promise((ok, bad) => { const t = setTimeout(() => bad(new Error('timeout')), ms); c.once('data', d => { clearTimeout(t); ok(d) }); c.once('close', () => { clearTimeout(t); bad(new Error('closed')) }) })
+  return quiet(new Promise((ok, bad) => { const t = setTimeout(() => bad(new Error('timeout')), ms); c.once('data', d => { clearTimeout(t); ok(d) }); c.once('close', () => { clearTimeout(t); bad(new Error('closed')) }) }))
 }
-function openConn(p: Peer, id: string, ms = 5000): Promise<DataConnection> {
+/** Mark a promise as handled (callers still see the rejection when they await it). */
+function quiet<T>(x: Promise<T>) { x.catch(() => {}); return x }
+/** ?debug: log the RTC states of a data connection as they change. */
+function watch(c: DataConnection, tag: string) {
+  if (!DEBUG || LOOPBACK) return
+  const pc = () => (c as any).peerConnection as RTCPeerConnection | undefined
+  const on = () => { const x = pc(); if (!x) return void setTimeout(on, 50); const f = () => dlog(`${tag} ice=${x.iceConnectionState} conn=${x.connectionState}`); x.addEventListener('iceconnectionstatechange', f); x.addEventListener('connectionstatechange', f) }
+  on()
+}
+function openConn(p: Peer, id: string, ms = 15000): Promise<DataConnection> {
   return new Promise((ok, bad) => {
-    const c = p.connect(id, { reliable: true }); let done = false
+    const c = p.connect(id, { reliable: true }); let done = false; watch(c, 'to ' + id.slice(-12))
     const fail = (e: any) => { if (!done) { done = true; p.off('error', pe); c.close(); bad(e) } }
     const pe = (e: any) => { if (e?.type === 'peer-unavailable' && String(e.message).includes(id)) fail(e) }
     p.on('error', pe); setTimeout(() => fail(new Error('timeout')), ms)
@@ -55,12 +68,13 @@ function openConn(p: Peer, id: string, ms = 5000): Promise<DataConnection> {
 }
 /** Queue data until the app attaches its listener (App replays conn.q), so early messages aren't lost. */
 const buffer = (c: DataConnection) => { const x = c as any; x.q = []; x.qf = (d: any) => x.q.push(d); c.on('data', x.qf); return c }
-export interface Match { conn: DataConnection; them: Profile }
+/** peer = their personal peer id (for calls); conn may be a lobby-slot connection. */
+export interface Match { conn: DataConnection; them: Profile; peer: string }
 
 /** The personal peer: has id pd-<code>, receives the match connection and calls. */
 export class Net {
   peer!: Peer; code = ''; busy = false; searching = false
-  private pending = new Map<string, (c: DataConnection) => void>()
+  private slot: Peer | null = null // kept while a match made through it is live
   onIncomingByCode?: (m: Match) => void
   me: Profile
   constructor(me: Profile) { this.me = me }
@@ -71,29 +85,29 @@ export class Net {
     }
     this.peer.on('disconnected', () => { try { this.peer.reconnect() } catch {} })
     this.peer.on('connection', async c => {
-      const w = this.pending.get(c.peer)
-      if (w) { this.pending.delete(c.peer); buffer(c); c.on('open', () => w(c)); return } // buffer until the app listens
       // direct "join with a code"
       c.on('open', async () => {
         try {
-          const h = await onceData(c, 5000)
+          const h = await onceData(c, 10000)
           if (h?.t !== 'hello' || this.busy || !okWith(this.me, h.p, true)) { c.send({ t: 'no' }); setTimeout(() => c.close(), 300); return }
-          this.busy = true; this.searching = false; c.send({ t: 'ok', p: this.me }); this.onIncomingByCode?.({ conn: c, them: h.p })
+          this.busy = true; this.searching = false; c.send({ t: 'ok', p: this.me }); this.onIncomingByCode?.({ conn: c, them: h.p, peer: c.peer })
         } catch { c.close() }
       })
     })
   }
   async joinCode(code: string): Promise<Match> {
     const c = await openConn(this.peer, 'pd-' + code.trim().toLowerCase(), 8000)
-    c.send({ t: 'hello', p: this.me }); const r = await onceData(c, 6000)
+    c.send({ t: 'hello', p: this.me }); const r = await onceData(c, 10000)
     if (r?.t !== 'ok') { c.close(); throw new Error('They are busy or unavailable') }
-    this.busy = true; return { conn: c, them: r.p }
+    this.busy = true; return { conn: c, them: r.p, peer: c.peer }
   }
   cancel() { this.searching = false }
+  /** Match over: free the lobby slot it came through. */
+  release() { const s = this.slot; this.slot = null; setTimeout(() => s?.destroy(), 600) }
   private lock = false
   /** Random matching: hold one lobby slot for the whole search, and meanwhile knock on the other slots one by one. */
   async find(skipUids: Set<string>, log = dlog): Promise<Match | null> {
-    this.searching = true; this.busy = false; this.lock = false
+    this.searching = true; this.busy = false; this.lock = false; this.slot?.destroy(); this.slot = null
     log('me ' + this.peer.id + ' ' + this.me.iam + '/' + this.me.seek + ' uid ' + this.me.uid.slice(0, 6))
     let slot: Peer | null = null, won: Match | null = null
     const win = (m: Match) => { if (!won) { won = m; this.busy = true; this.searching = false; log('matched ' + m.them.name) } }
@@ -107,7 +121,7 @@ export class Net {
       }
       if (this.searching) await sleep(2000 + Math.random() * 3000)
     }
-    const s = slot; setTimeout(() => s?.destroy(), 1500)
+    if (won) this.slot = slot; else slot?.destroy() // a match made via my slot uses the slot's connection
     return won
   }
   private async claim(skipUids: Set<string>, win: (m: Match) => void, log: (s: string) => void): Promise<Peer | null> {
@@ -117,17 +131,16 @@ export class Net {
       log('claimed ' + slot.id.slice(16))
       slot.on('error', (e: any) => log('slot error ' + e?.type))
       slot.on('connection', c => {
-        log('knock from ' + c.peer)
-        const h = onceData(c, 8000) // listen before 'open' so the hello can't be missed
-        c.on('open', async () => {
-          try {
-            const hi = await h
-            if (this.lock || !this.searching || hi?.t !== 'hello' || !okWith(this.me, hi.p, false) || skipUids.has(hi.p.uid)) { log('declined ' + (hi?.p?.uid === this.me.uid ? '(same uid)' : '')); c.send({ t: 'no' }); return }
-            this.lock = true; const g = onceData(c, 6000); c.send({ t: 'ok', p: this.me, id: this.peer.id })
-            if ((await g)?.t !== 'go') throw new Error('no go')
-            const conn = openConn(this.peer, hi.id, 8000); win({ conn: buffer(await conn), them: hi.p })
-          } catch (e: any) { this.lock = false; log('handshake failed ' + (e?.type || e?.message)) }
-        })
+        log('knock from ' + c.peer); watch(c, 'from ' + c.peer)
+        const h = onceData(c, 15000) // listen before 'open' so the hello can't be missed
+        c.on('open', () => log('open from ' + c.peer))
+        ;(async () => {
+          const hi = await h
+          if (this.lock || !this.searching || hi?.t !== 'hello' || !okWith(this.me, hi.p, false) || skipUids.has(hi.p.uid)) { log('declined ' + (hi?.p?.uid === this.me.uid ? '(same uid)' : '')); c.send({ t: 'no' }); setTimeout(() => c.close(), 500); return }
+          this.lock = true; const g = onceData(c, 8000); c.send({ t: 'ok', p: this.me, id: this.peer.id })
+          if ((await g)?.t !== 'go') throw new Error('no go')
+          win({ conn: buffer(c), them: hi.p, peer: hi.id })
+        })().catch((e: any) => { this.lock = false; log('handshake failed ' + (e?.type || e?.message)); c.close() })
       })
       return slot
     }
@@ -135,16 +148,14 @@ export class Net {
   }
   private async knock(id: string, skipUids: Set<string>, log: (s: string) => void): Promise<Match | null> {
     if (this.lock) return null
-    const c = await openConn(this.peer, id, 6000)
+    const c = await openConn(this.peer, id)
+    log('open to ' + id.slice(16))
     try {
-      const r = onceData(c, 5000); c.send({ t: 'hello', p: this.me, id: this.peer.id }); const a = await r
-      if (a?.t !== 'ok' || this.lock || !okWith(this.me, a.p, false) || skipUids.has(a.p.uid) || !this.searching) { log('knock ' + id.slice(16) + ': declined'); c.send({ t: 'bye' }); return null }
-      this.lock = true
-      try {
-        const conn = await new Promise<DataConnection>((ok, bad) => { this.pending.set(a.id, ok); c.send({ t: 'go' }); setTimeout(() => { this.pending.delete(a.id); bad(new Error('no callback')) }, 10000) })
-        return { conn, them: a.p }
-      } catch (e) { this.lock = false; throw e }
-    } finally { setTimeout(() => c.close(), 500) }
+      const r = onceData(c, 10000); c.send({ t: 'hello', p: this.me, id: this.peer.id }); const a = await r
+      if (a?.t !== 'ok' || this.lock || !this.searching || !okWith(this.me, a.p, false) || skipUids.has(a.p.uid)) { log('knock ' + id.slice(16) + ': declined'); c.send({ t: 'bye' }); throw 0 }
+      this.lock = true; c.send({ t: 'go' }) // this connection becomes the match connection
+      return { conn: buffer(c), them: a.p, peer: a.id }
+    } catch (e) { setTimeout(() => c.close(), 500); if (e === 0) return null; throw e }
   }
 
 }

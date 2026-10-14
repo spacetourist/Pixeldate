@@ -90,7 +90,7 @@ export default function App() {
     const n = new Net(p); net.current = n; await n.start(); setCode(n.code)
     n.onIncomingByCode = mm => beginMatch(mm)
     n.peer.on('call', async mc => {
-      if (mc.peer !== st.current.m?.conn.peer) { mc.close(); return }
+      if (mc.peer !== st.current.m?.peer) { mc.close(); return }
       const cam = await getCam(); if (!cam) { mc.close(); return }
       (window as any).__pdCam = cam; cam.setLevel(st.current.level); mc.answer(withAudio(cam)); hookCall(cam, mc); setTab('call')
     })
@@ -102,7 +102,7 @@ export default function App() {
   }
   const startCall = async () => {
     const cam = await getCam(); if (!cam || !m) return; cam.setLevel(level); (window as any).__pdCam = cam
-    hookCall(cam, net.current!.peer.call(m.conn.peer, withAudio(cam)))
+    hookCall(cam, net.current!.peer.call(m.peer, withAudio(cam)))
   }
   const endCall = (tell = true) => { const c = st.current.call; if (!c) return; c.cam.stop(); c.mc.close(); setCall(null); if (tell) send({ t: 'endcall' }) }
   useEffect(() => { call?.cam.setLevel(level) }, [level, call])
@@ -123,7 +123,7 @@ export default function App() {
   }
   const leave = (why: string, again = false) => {
     endCall(false); const c = st.current.m; if (!c) return; st.current.m = null; setM(null)
-    setTimeout(() => { try { c.conn.close() } catch {} }, 300); net.current!.busy = false
+    setTimeout(() => { try { c.conn.close() } catch {} }, 300); net.current!.busy = false; net.current!.release()
     setNotice(why); setScreen('lobby'); if (again) setTimeout(find, 50)
   }
   const doSkip = (blk = false) => { const t = st.current.m?.them; if (!t) return; if (blk) block(t.uid); skip.current.add(t.uid); send({ t: 'skip' }); leave(blk ? 'Blocked. Finding someone new.' : 'Skipped. Finding someone new.', true) }

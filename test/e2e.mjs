@@ -17,6 +17,8 @@ async function page(name, iam, seek, age, face) {
   p.on('dialog', d => d.accept()); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
   await p.type('[data-t=name]', name); await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
+  await p.waitForSelector('[data-t=reveal-skip]:not(.hid)', { timeout: 10000 }); await p.click('[data-t=reveal-skip]') // skip the onboarding reveal
+  await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]'); await p.click('[data-t=photo-confirm]')
   await p.select('[data-t=iam]', iam); await p.select('[data-t=seek]', seek)
   await p.$eval('[data-t=age]', (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(age))
   await p.$eval('[data-t=adult]', e => e.click()); step('filled ' + name); return wrap(p)

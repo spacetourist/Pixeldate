@@ -1,17 +1,20 @@
 import { FULL_PHOTO_PX, LEVELS, REVEAL_MS } from './config'
 /** Square-crop and block-average the photo ON THE SENDER. Output is exactly `blocks` px wide,
  *  so the receiver physically cannot get more detail. Level 5 sends FULL_PHOTO_PX. */
-export function pixelatePhoto(img: HTMLImageElement | HTMLCanvasElement, level: number): string {
+/** Square-crop and block-average ON THE SENDER: a canvas exactly `blocks` px wide (FULL_PHOTO_PX at level 5),
+ *  so the receiver physically cannot get more detail. Also used by the onboarding preview, so it is identical. */
+export function pixelateCanvas(img: HTMLImageElement | HTMLCanvasElement, level: number): HTMLCanvasElement {
   const blocks = LEVELS[level - 1].blocks || FULL_PHOTO_PX
   const w = 'naturalWidth' in img ? img.naturalWidth : img.width, h = 'naturalHeight' in img ? img.naturalHeight : img.height
   const s = Math.min(w, h)
-  // two-step box filter: draw to 4x then let the browser average down
+  // two-step box filter: draw to 8x then let the browser average down
   const mid = document.createElement('canvas'); mid.width = mid.height = Math.min(s, blocks * 8)
   mid.getContext('2d')!.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, mid.width, mid.width)
   const out = document.createElement('canvas'); out.width = out.height = blocks
   const c = out.getContext('2d')!; c.imageSmoothingQuality = 'high'; c.drawImage(mid, 0, 0, blocks, blocks)
-  return out.toDataURL(level === 5 ? 'image/jpeg' : 'image/png', 0.9)
+  return out
 }
+export const pixelatePhoto = (img: HTMLImageElement | HTMLCanvasElement, level: number) => pixelateCanvas(img, level).toDataURL(level === 5 ? 'image/jpeg' : 'image/png', 0.9)
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = src })
 }

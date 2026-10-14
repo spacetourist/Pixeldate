@@ -106,3 +106,32 @@ select.fld option { background: var(--plum-900); }
 .px-av { display: inline-block; } .px-av img { image-rendering: pixelated; }
 .ib { color: var(--coral); } .pinned { flex: none; }
 .noentry { display: block; }
+
+/* onboarding photo reveal (design v3/photo-reveal) */
+.reveal { display: flex; flex-direction: column; align-items: center; padding-bottom: 56px; position: relative; }
+.rv-bar { width: 100%; height: 40px; margin: 12px 0 8px; display: flex; align-items: center; justify-content: space-between; }
+.steps { display: flex; gap: 4px; } .steps i { width: 16px; height: 6px; background: var(--plum-800); box-shadow: 0 0 0 2px var(--ink); } .steps i.on { background: var(--coral); }
+.reveal .copy { width: 100%; gap: 8px; }
+.rv-box { width: 336px; display: flex; flex-direction: column; align-items: center; }
+.rv-stage { position: relative; margin-top: 16px; width: 336px; height: 340px; }
+.rv-stage .px-card { position: absolute; inset: 0; }
+.rv-stage canvas.pv { position: absolute; left: 8px; top: 8px; width: 320px; height: 320px; image-rendering: pixelated; background: var(--ink); }
+.rv-stage canvas.fx { position: absolute; left: -24px; top: -24px; width: 384px; height: 388px; pointer-events: none; image-rendering: pixelated; }
+.rv-stage .badge { position: absolute; left: 16px; top: 16px; transform-origin: 0 100%; z-index: 3; white-space: nowrap; }
+.rv-stage .badge.gold { border-image-source: none; background: var(--gold); box-shadow: 0 0 0 2px var(--ink); }
+.rv-stage .blk { position: absolute; right: 16px; bottom: 22px; z-index: 3; font: var(--t-label-b); color: var(--cream); background: rgba(3,17,19,.72); padding: 4px 6px; }
+.rv-ladder { width: 100%; margin-top: 12px; display: flex; align-items: center; justify-content: space-between; }
+.rv-ladder .nm { white-space: nowrap; font: var(--t-label-b); color: var(--cream); }
+.rv-strip { position: relative; width: 100%; margin-top: 12px; display: flex; justify-content: space-between; touch-action: none; }
+.rv-strip .th { position: relative; width: 64px; height: 64px; padding: 0; border: 0; background: var(--plum-800); box-shadow: 0 0 0 2px var(--ink), 0 4px 0 2px var(--ink); cursor: pointer; }
+.rv-strip .th canvas { width: 64px; height: 64px; display: block; image-rendering: pixelated; }
+.rv-strip .th.empty canvas { visibility: hidden; }
+.rv-strip .th.empty::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, var(--plum-800) 0 4px, var(--plum-700) 4px 8px); }
+.rv-strip .th .n { position: absolute; left: 0; bottom: 0; font: var(--t-label-b); color: var(--ink); background: var(--muted-text, var(--mauve)); padding: 2px 3px; }
+.rv-strip .th.sel { box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px var(--coral), 0 0 0 8px var(--ink); } .rv-strip .th.sel .n { background: var(--coral); }
+.rv-strip input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
+.rv-acts { width: 100%; max-width: 336px; margin-top: 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: var(--acts, 1); }
+.reveal .ghost { font: var(--t-label-b); color: var(--coral-l); padding: 10px 12px; background: none; border: 0; cursor: pointer; }
+.reveal .hid, .rv-acts.hid { opacity: 0; pointer-events: none; }
+.rv-skip { position: fixed; left: 0; right: 0; bottom: 24px; margin: auto; width: 120px; padding: 8px; font: var(--t-label-b); color: var(--mauve); background: none; border: 0; cursor: pointer; z-index: 6; }
+.rv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

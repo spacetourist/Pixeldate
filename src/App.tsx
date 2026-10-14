@@ -3,6 +3,7 @@ import type { MediaConnection } from 'peerjs'
 import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
+import { mountReveal } from './reveal'
 import { PixelCam } from './video'
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
@@ -38,6 +39,21 @@ function Splash({ ready }: { ready: boolean }) {
   </div>
 }
 const NoEntry = () => <svg className="noentry" viewBox="0 0 14 14" width={28} height={28} shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 0h1v1h-1zM7 0h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 1h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM1 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM1 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM12 6h1v1h-1zM13 6h1v1h-1zM0 7h1v1h-1zM1 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM8 7h1v1h-1zM12 7h1v1h-1zM13 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM1 9h1v1h-1zM2 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM11 9h1v1h-1zM12 9h1v1h-1zM1 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM5 11h1v1h-1zM8 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM8 12h1v1h-1zM9 12h1v1h-1zM10 12h1v1h-1zM6 13h1v1h-1zM7 13h1v1h-1z" /></svg>
+/** "This is how they'll meet you": plays the 5-level reveal for a freshly picked photo (local only). */
+function PhotoReveal({ src, onConfirm, onChange }: { src: string; onConfirm: () => void; onChange: () => void }) {
+  const box = useRef<HTMLDivElement>(null); const [ready, setReady] = useState(false)
+  useEffect(() => { let off = () => {}, dead = false; setReady(false)
+    loadImage(src).then(img => { if (!dead && box.current) off = mountReveal(box.current, img, setReady) })
+    return () => { dead = true; off() } }, [src])
+  return <div className="reveal">
+    <header className="rv-bar"><span className="kicker">CREATE YOUR PROFILE</span><span className="steps" aria-label="Step 2 of 3"><i className="on" /><i className="on" /><i /></span></header>
+    <div className="copy"><h1 className="h1">This is how they'll meet you.</h1><p className="read m">Every answer you share together brings you into focus.</p></div>
+    <div ref={box} className="rv-box" data-t="reveal" />
+    <div className={`rv-acts ${ready ? '' : 'hid'}`}>
+      <button className="px-frame px-btn" data-t="photo-confirm" onClick={onConfirm}><span className="px-btn__label">Looks good, continue</span></button>
+      <button className="ghost" type="button" data-t="photo-change" onClick={onChange}>CHANGE PHOTO</button></div>
+  </div>
+}
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -46,15 +62,17 @@ function Meter({ level, pct }: { level: number; pct: number }) {
 }
 
 function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
-  const [name, setName] = useState(''); const [photo, setPhoto] = useState(''); const [adult, setAdult] = useState(false)
+  const [name, setName] = useState(''); const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const fileIn = useRef<HTMLInputElement>(null); const [adult, setAdult] = useState(false)
   const [iam, setIam] = useState<Gender>('man'); const [seek, setSeek] = useState<Seek>('everyone')
   const [age, setAge] = useState(30); const [min, setMin] = useState(18); const [max, setMax] = useState(99)
   const [cam, setCam] = useState<MediaStream | null>(null); const vid = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
-  const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPhoto(c.toDataURL('image/jpeg', .9)); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
-  const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPhoto(String(r.result)); r.readAsDataURL(f) } }
-  const ok = name.trim() && photo && adult && age >= 18 && min <= max
-  return <div className="screen scroll">
+  const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPhoto(c.toDataURL('image/jpeg', .9)); setOkPhoto(false); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
+  const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => { setPhoto(String(r.result)); setOkPhoto(false) }; r.readAsDataURL(f) } }
+  const ok = name.trim() && photo && okPhoto && adult && age >= 18 && min <= max
+  const input = <input ref={fileIn} type="file" accept="image/*" hidden data-t="gallery" onChange={e => { file(e.target.files?.[0]); e.target.value = '' }} />
+  if (photo && !okPhoto) return <div className="screen scroll">{input}<PhotoReveal src={photo} onConfirm={() => setOkPhoto(true)} onChange={() => fileIn.current?.click()} /></div>
+  return <div className="screen scroll">{input}
     <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /></header>
     <h1 className="h2">Create your profile</h1>
     <label className="px-label lab">NAME</label>
@@ -65,7 +83,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
       <div className="col">
         {cam ? <button className="px-frame px-btn-small" onClick={snap}>SNAP</button>
           : <button className="px-frame px-btn-ghost" onClick={async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera') } }}>CAMERA</button>}
-        <label className="px-frame px-btn-ghost">GALLERY<input type="file" accept="image/*" hidden data-t="gallery" onChange={e => file(e.target.files?.[0])} /></label>
+        <button className="px-frame px-btn-ghost" onClick={() => fileIn.current?.click()}>{photo ? 'CHANGE' : 'GALLERY'}</button>
       </div>
     </div>
     <div className="grid2">

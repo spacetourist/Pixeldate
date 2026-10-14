@@ -1,0 +1,88 @@
+/* Pixeldate v2 - pixel-art UI kit.
+   GRID: 1 art px = var(--px) = 2 CSS px (6 device px @3x). Every size, offset and gap is an
+   integer number of art px; sprites and frames are drawn at 1 image px = 1 art px and scaled
+   with image-rendering: pixelated. Fonts are grid-snapped (assets/fonts/FONTLOG.txt). */
+@font-face { font-family: "Pixeldate Sans"; src: url("../fonts/PixeldateSans-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Pixeldate Caps"; src: url("../fonts/PixeldateCaps-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Pixeldate Caps"; src: url("../fonts/PixeldateCaps-Bold.woff2") format("woff2"); font-weight: 700; }
+
+:root {
+  --px: 2px;
+  --ink: #031113; --plum-900: #072226; --plum-800: #0d3136; --plum-700: #15434a; --plum-600: #21606a;
+  --mauve: #86b1b2; --cream: #f4f3ea; --coral-d: #dc7356; --coral: #ffa27b; --coral-l: #ffd2b0; --gold: #ffe38c;
+  /* type: 1 font px = 1 art px; line heights keep baselines on the art grid */
+  --t-body: 22px/26px "Pixeldate Sans";      /* x-height 5, cap 7 art px */
+  --t-tight: 22px/22px "Pixeldate Sans";
+  --t-title: 44px/44px "Pixeldate Sans";     /* 2x: cap 14 art px */
+  --t-label: 16px/12px "Pixeldate Caps";     /* caps 5 art px */
+  --t-label-b: 700 16px/12px "Pixeldate Caps";
+}
+
+.px, .px * { image-rendering: pixelated; }
+.px svg { display: block; }
+.px img { display: block; }
+.px-text { font: var(--t-body); color: var(--cream); }
+.px-title { font: var(--t-title); color: var(--cream); }
+.px-label { font: var(--t-label); color: var(--mauve); }
+.px-label b, .px-label-b { font: var(--t-label-b); }
+.px-muted { color: var(--mauve); } .px-coral { color: var(--coral); } .px-coral-l { color: var(--coral-l); } .px-cream { color: var(--cream); }
+
+/* ---- 9-slice frames: stepped corners, 1 art px ink outline + 1 art px bevel, pixel drop shadow.
+   border widths = slice x --px; content starts inside the bevel ring + corner. */
+.px-frame { border-style: solid; border-image-repeat: stretch; box-sizing: border-box; }
+.px-card       { border-width: 8px 8px 12px; border-image: url(../frames/card.png) 4 4 6 4 fill; }
+.px-card--hot  { border-image-source: url(../frames/card-coral.png); }
+.px-plate      { border-width: 8px 8px 12px; border-image: url(../frames/plate.png) 4 4 6 4 fill; }
+.px-iconbtn    { border-width: 8px 8px 12px; border-image: url(../frames/iconbtn.png) 4 4 6 4 fill; }
+.px-bubble     { border-width: 8px 8px 12px; border-image: url(../frames/bubble.png) 4 4 6 4 fill; }
+.px-bubble--me { border-image-source: url(../frames/bubble-me.png); }
+.px-input      { border-width: 8px; border-image: url(../frames/input.png) 4 fill; }
+.px-btn        { border-width: 8px 8px 14px; border-image: url(../frames/btn.png) 4 4 7 4 fill; }
+.px-btn--locked{ border-image-source: url(../frames/btn-locked.png); }
+.px-btn-ghost  { border-width: 6px 6px 10px; border-image: url(../frames/btn-ghost.png) 3 3 5 3 fill; }
+.px-btn-small  { border-width: 6px 6px 10px; border-image: url(../frames/btn-small.png) 3 3 5 3 fill; }
+.px-tag        { border-width: 6px; border-image: url(../frames/tag.png) 3 fill; }
+.px-chip       { border-width: 6px 6px 8px; border-image: url(../frames/chip.png) 3 3 4 3 fill; }
+/* pressed = sink by the shadow height (whole art px, no easing) */
+.px-btn:active { transform: translateY(4px); border-bottom-width: 10px; }
+
+/* ---- primary button ---- */
+.px-btn { display: flex; align-items: center; gap: 8px; height: 62px; padding: 0 6px; font: var(--t-tight); color: var(--ink); }
+.px-btn__label { flex: 1; text-align: center; }
+.px-btn--locked { color: var(--mauve); }
+.px-btn__meta { font: var(--t-label-b); color: var(--coral-l); }
+
+/* ---- tag: "SPARK · Q3" ---- */
+.px-tag { display: inline-block; padding: 0 2px 2px; font: var(--t-label-b); color: var(--ink); }
+
+/* ---- level meter: 5 pixel blocks, 12 art px each (10 px inner), gap 2 art px.
+   <div class="px-meter"><i class="is-full"></i><i style="--f:6"></i><i></i><i></i><i></i></div>
+   --f = filled inner columns of the current block, 0..10 (whole art px = 10 % steps). */
+.px-meter { display: flex; gap: 4px; }
+.px-meter i { position: relative; width: 24px; height: 24px; background: url(../sprites/meter-empty.png) 0 0 / 24px 24px; }
+.px-meter i::after { content: ""; position: absolute; top: 0; left: 0; bottom: 0; display: none;
+  width: calc((var(--f) + 1) * var(--px)); background: url(../sprites/meter-full.png) 0 0 / 24px 24px; }
+.px-meter i[style]::after { display: block; }
+.px-meter i.is-full::after { display: block; width: 24px; }
+
+/* ---- avatars ---- */
+.px-av { position: relative; width: 36px; height: 36px; flex: none; }
+.px-av > img { width: 36px; height: 36px; }
+.px-av .px-tick { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; }
+
+/* ---- question card ---- */
+.px-qcard { padding: 2px 2px 0; }
+.px-qcard__top { display: flex; align-items: center; justify-content: space-between; }
+.px-qcard__q { margin: 6px 0 6px; font: var(--t-body); color: var(--cream); }
+.px-qcard__foot { display: flex; align-items: center; gap: 8px; }
+.px-qcard__foot .px-av + .px-av { margin-left: -4px; }
+.px-qcard__foot .px-label { flex: 1; white-space: nowrap; }
+.px-qcard__meta { display: flex; align-items: center; gap: 4px; font: var(--t-label); color: var(--mauve); }
+.px-btn-ghost, .px-btn-small { font: var(--t-label-b); padding: 2px 4px; color: var(--coral-l); }
+.px-btn-small { color: var(--ink); }
+
+/* ---- nav ---- */
+.px-nav { display: flex; justify-content: space-around; background: var(--plum-900);
+  box-shadow: inset 0 2px 0 var(--ink), inset 0 4px 0 var(--plum-700); }
+.px-nav a { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--mauve); font: var(--t-label-b); }
+.px-nav a.on { color: var(--coral); --px-icon-hi: var(--coral-l); }

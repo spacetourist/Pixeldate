@@ -124,7 +124,8 @@ select.fld option { background: var(--plum-900); }
 .rv-ladder .nm { white-space: nowrap; font: var(--t-label-b); color: var(--cream); }
 .rv-strip { position: relative; width: 100%; margin-top: 12px; display: flex; justify-content: space-between; touch-action: none; }
 .rv-strip .th { position: relative; width: 64px; height: 64px; padding: 0; border: 0; background: var(--plum-800); box-shadow: 0 0 0 2px var(--ink), 0 4px 0 2px var(--ink); cursor: pointer; }
-.rv-strip .th canvas { width: 64px; height: 64px; display: block; image-rendering: pixelated; }
+.rv-strip .th canvas { width: 64px; height: 64px; display: block; image-rendering: crisp-edges; image-rendering: pixelated; }
+.rv-strip .th:last-of-type canvas { image-rendering: auto; } /* Crystal clear: the full photo */
 .rv-strip .th.empty canvas { visibility: hidden; }
 .rv-strip .th.empty::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, var(--plum-800) 0 4px, var(--plum-700) 4px 8px); }
 .rv-strip .th .n { position: absolute; left: 0; bottom: 0; font: var(--t-label-b); color: var(--ink); background: var(--muted-text, var(--mauve)); padding: 2px 3px; }

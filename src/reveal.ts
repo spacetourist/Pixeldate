@@ -66,7 +66,7 @@ export function mountReveal(root: HTMLElement, img: HTMLImageElement, onSettled:
   const show = (el: Element, on: boolean) => el.classList.toggle('hid', !on)
   const thumbs = LEVELS.map((L, i) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'th empty'; b.dataset.t = 'reveal-thumb-' + (i + 1); b.setAttribute('aria-label', `Level ${i + 1}: ${L.name}`)
-    const c = document.createElement('canvas'); c.width = c.height = 64 * DPR; const n = document.createElement('span'); n.className = 'n'; n.textContent = String(i + 1)
+    const c = document.createElement('canvas'); const n = document.createElement('span'); n.className = 'n'; n.textContent = String(i + 1)
     b.append(c, n); b.onclick = () => select(i); strip.append(b); return { b, c }
   })
   const range = Object.assign(document.createElement('input'), { type: 'range', min: '0', max: '4', step: '1', value: '4' })
@@ -104,7 +104,7 @@ export function mountReveal(root: HTMLElement, img: HTMLImageElement, onSettled:
     else full = cur + 1
     setMeter(full, part)
     show(strip, t >= crunchEnd)
-    thumbs.forEach((th, i) => { const landed = t >= lvLand(i); if (landed && th.b.classList.contains('empty')) { drawLevel(th.c.getContext('2d')!, lv[i], 64 * DPR); th.b.classList.remove('empty') } if (!landed) th.b.classList.add('empty') })
+    thumbs.forEach((th, i) => { const landed = t >= lvLand(i); if (landed && th.b.classList.contains('empty')) { th.c.width = th.c.height = lv[i].width; th.c.getContext('2d')!.drawImage(lv[i], 0, 0) /* real block count; CSS scales it pixelated */; th.b.classList.remove('empty') } if (!landed) th.b.classList.add('empty') })
     markSel(t >= SETTLE ? sel : Math.max(0, shown))
     settled(t >= SETTLE); (root.parentElement ?? root).style.setProperty('--acts', t >= END ? '1' : t >= SETTLE ? String(stepped(clamp((t - SETTLE) / 300), 3) || .34) : '0')
     const off = 32 * DPR, stride = Math.max(1, Math.ceil(dust.length / 18))

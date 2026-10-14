@@ -2,7 +2,132 @@
 <html lang="en"><head><meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#072226" />
-<link rel="stylesheet" href="/Pixeldate/px/css/pixeldate-px.css" />
 <link rel="icon" href="data:," />
-<title>Pixeldate</title></head>
-<body class="type-v21"><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<title>Pixeldate: chemistry first, clarity later</title>
+<meta name="description" content="Pixeldate pairs you with someone at random. Photos and video calls start as 8 blurry blocks and get sharper as you both answer questions." />
+<link rel="stylesheet" href="/Pixeldate/px/css/pixeldate-px.css" /><link rel="stylesheet" href="/Pixeldate/px/css/v3.css" />
+<style>
+.land{width:390px;background:var(--bg);position:relative}
+.land .lnav{position:sticky;top:0;z-index:4;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:var(--bg);box-shadow:inset 0 -2px 0 var(--ink),inset 0 -4px 0 var(--raised)}
+.land .lnav .px-btn-small{padding:4px 4px}
+.land .hero{height:300px;overflow:hidden;box-shadow:inset 0 -2px 0 var(--ink)}
+.land .hero .art{width:390px;height:300px}
+.land .pad{padding:32px 14px 36px;display:flex;flex-direction:column;gap:16px}
+.land .intro{background:var(--bg);margin-top:0}
+.land .intro .h1{margin-top:2px}
+.land .center{text-align:center}
+.land .dither2{background:url(/Pixeldate/px/bg/screen-bg.png) 0 0/390px 844px;box-shadow:inset 0 2px 0 var(--ink),inset 0 4px 0 var(--raised),inset 0 -2px 0 var(--ink)}
+.land .lvs{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.land .lvrow{display:flex;gap:12px;align-items:center}
+.land .lvrow>div{min-width:0}
+.land .lvrow .read{display:none}
+.land .lvrow .row{flex-direction:column;align-items:flex-start;gap:8px}
+.land .lvrow .tile{width:256px;height:128px;box-shadow:0 0 0 2px var(--ink),4px 4px 0 2px var(--ink);flex:none}
+.land .lvrow .lvb{white-space:nowrap;margin:8px 0 6px;color:var(--accent-l)}
+.land .cards .px-qcard{margin-top:2px}
+.land .meterbox{padding:4px 4px 2px;display:flex;flex-direction:column;gap:10px}
+.land .sb{justify-content:space-between}
+.land .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.land .sf{padding:4px 4px 2px;display:flex;flex-direction:column;gap:8px}
+.land .final{align-items:center;text-align:center;padding:48px 14px 44px;background:radial-gradient(circle at 50% 0,var(--surface),var(--bg) 70%)}
+.land .final .px-btn{width:100%}
+.land .final .mk{image-rendering:pixelated}
+.land .final .c{text-align:center}
+.land .foot{padding:28px 14px 40px;display:flex;flex-direction:column;gap:12px;align-items:center;background:var(--ink)}
+.land .foot .dim{opacity:.7}
+.dl{width:1440px}
+.dl .dnav{height:80px;display:flex;align-items:center;justify-content:space-between;padding:0 48px;box-shadow:inset 0 -2px 0 var(--ink),inset 0 -4px 0 var(--raised)}
+.dl .dnav nav{display:flex;gap:40px;color:var(--muted)}
+.dl .dnav .row{gap:12px}
+.dl .dnav .px-btn-small,.dl .dnav .px-btn-ghost{padding:4px 10px}
+.dl .dhero{display:grid;grid-template-columns:720px 1fr;gap:56px;align-items:center;padding:56px 48px 64px}
+.dl .dhero .art{box-shadow:0 0 0 2px var(--ink),8px 8px 0 2px var(--ink)}
+.dl .copy{display:flex;flex-direction:column;gap:20px}
+.dl .big{font-size:88px;line-height:88px}
+.dl .lead{font-size:20px;max-width:520px}
+.dl .cta{max-width:520px}
+.dl .dither2{background:url(/Pixeldate/px/bg/screen-bg.png) 0 0/390px 844px;box-shadow:inset 0 2px 0 var(--ink),inset 0 4px 0 var(--raised),inset 0 -2px 0 var(--ink)}
+.dl .dsec{padding:72px 48px;display:flex;flex-direction:column;gap:18px}
+.dl .w{max-width:640px}
+.dl .strip{display:flex;gap:16px;margin-top:20px}
+.dl .dt{width:256px;display:flex;flex-direction:column;gap:10px}
+.dl .dt img{box-shadow:0 0 0 2px var(--ink),6px 6px 0 2px var(--ink);margin-bottom:8px}
+.dl .acc{color:var(--accent-l)}
+.dl .two{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start}
+.dl .two>div:first-child{display:flex;flex-direction:column;gap:18px}
+.dl .qs{display:flex;flex-direction:column;gap:16px;max-width:560px}
+.dl .meterbox{padding:6px 6px 4px;display:flex;flex-direction:column;gap:10px;max-width:420px;margin-top:8px}
+.dl .sb{justify-content:space-between}
+.dl .sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:12px}
+.dl .sf{padding:8px 8px 6px;display:flex;flex-direction:column;gap:10px}
+.dl .final{align-items:center;text-align:center;background:radial-gradient(circle at 50% 0,var(--surface),var(--bg) 70%)}
+.dl .final .px-btn{width:360px}
+.dl .c{text-align:center}
+.dl .foot{padding:32px 48px 40px;display:flex;justify-content:space-between;align-items:center;background:var(--ink)}
+html,body{width:auto} .land{width:100%;max-width:480px;margin:0 auto} .land .hero .art{width:100%;height:300px;object-fit:cover;image-rendering:pixelated}
+.land .lvrow .tile{width:min(256px,60vw);height:auto} img{image-rendering:pixelated} .dl{display:none;width:100%;max-width:1440px;margin:0 auto}
+@media (min-width:900px){ .land{display:none} .dl{display:block} }
+@media (min-width:900px) and (max-width:1300px){ .dl .dhero{grid-template-columns:1fr 1fr} .dl .dhero .art{width:100%;height:auto} .dl .big{font-size:56px;line-height:56px} .dl .strip{flex-wrap:wrap} .dl .sgrid{grid-template-columns:1fr 1fr} }
+</style></head>
+<body class="px type-v21">
+<div class="land">
+<header class="lnav"><img src="/Pixeldate/px/logo/logo-2.svg" width="244" height="36" alt="pixeldate"><a class="px-frame px-btn-small" href="./app/">SIGN UP</a></header>
+<section class="hero"><img class="art" src="/Pixeldate/px/hero/hero-dusk@2x.png" width="390" height="300"></section>
+<section class="pad intro">
+  <p class="kicker"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+ DATING, ONE PIXEL AT A TIME</p>
+  <h1 class="h1">Chemistry first.<br><span class="px-coral">Clarity</span> later.</h1>
+  <p class="read">Pixeldate pairs you with someone at random. Photos and video calls start as 8 blurry blocks and get sharper as you both answer questions.</p>
+  <div class="cta"><a class="px-frame px-btn" href="./app/"><span class="px-btn__label">Sign up</span></a><a class="px-frame px-btn-ghost" href="./app/">Try it now</a></div>
+  <p class="px-label center">FREE · 18+ · NO SWIPING</p>
+</section>
+<section class="pad how dither2"><p class="kicker">HOW IT WORKS</p><h2 class="h2">Five levels to crystal clear</h2>
+  <p class="read m">You both answer a question card, the meter fills, and you both tap to reveal the next level. Either of you can step back down at any time.</p>
+  <div class="lvs"><div class="lvrow"><img class="tile" src="/Pixeldate/px/hero/band-L1@2x.png"><div><div class="row"><span class="px-frame px-tag">LV 1</span><span class="px-label-b px-cream">STRANGER</span></div>
+<p class="px-label lvb">8 BLOCKS</p><p class="read m">Shapes and colours. Say hi.</p></div></div><div class="lvrow"><img class="tile" src="/Pixeldate/px/hero/band-L2@2x.png"><div><div class="row"><span class="px-frame px-tag">LV 2</span><span class="px-label-b px-cream">SPARK</span></div>
+<p class="px-label lvb">16 BLOCKS</p><p class="read m">A smile starts to show.</p></div></div><div class="lvrow"><img class="tile" src="/Pixeldate/px/hero/band-L3@2x.png"><div><div class="row"><span class="px-frame px-tag">LV 3</span><span class="px-label-b px-cream">CRUSH</span></div>
+<p class="px-label lvb">32 BLOCKS</p><p class="read m">Now it is getting interesting.</p></div></div><div class="lvrow"><img class="tile" src="/Pixeldate/px/hero/band-L4@2x.png"><div><div class="row"><span class="px-frame px-tag">LV 4</span><span class="px-label-b px-cream">CLOSE</span></div>
+<p class="px-label lvb">64 BLOCKS</p><p class="read m">Almost there. Keep talking.</p></div></div><div class="lvrow"><img class="tile" src="/Pixeldate/px/hero/band-L5@2x.png"><div><div class="row"><span class="px-frame px-tag">LV 5</span><span class="px-label-b px-cream">CRYSTAL CLEAR</span></div>
+<p class="px-label lvb">FULL</p><p class="read m">Face to face, no filter.</p></div></div></div></section>
+<section class="pad cards"><p class="kicker">QUESTION CARDS</p><h2 class="h2">Answer together, level up together</h2>
+  <p class="read m">Every level brings new cards, from easy openers to the ones you would only ask someone close.</p>
+  <div class="px-frame px-card px-qcard px-card--hot"><div class="px-qcard__top"><span class="px-frame px-tag">STRANGER · Q1</span><span class="px-qcard__meta"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+</span><b class="px-coral">+20%</b></span></div>
+<p class="px-qcard__q">What did you have for breakfast today?</p><div class="px-qcard__foot"><span class="px-av"><img src="/Pixeldate/px/hero/avatar-b-18.png"><img class="px-tick" src="/Pixeldate/px/sprites/tick.png"></span><span class="px-av"><img src="/Pixeldate/px/hero/avatar-a-18.png"><img class="px-tick" src="/Pixeldate/px/sprites/tick.png"></span><span class="px-label">BOTH ANSWERED</span><span class="px-frame px-btn-ghost">READ</span></div></div>
+  <div class="px-frame px-card px-qcard"><div class="px-qcard__top"><span class="px-frame px-tag">SPARK · Q3</span><span class="px-qcard__meta"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+</span>+20% TOGETHER</span></div>
+<p class="px-qcard__q">What small thing always makes your day?</p><div class="px-qcard__foot"><span class="px-av"><img src="/Pixeldate/px/hero/avatar-b-18.png"><img class="px-tick" src="/Pixeldate/px/sprites/tick.png"></span><span class="px-av"><img src="/Pixeldate/px/sprites/avatar-empty-18.png"></span><span class="px-label">ALEX ANSWERED</span><span class="px-frame px-btn-small">ANSWER</span></div></div>
+  <div class="meterbox px-frame px-card"><div class="row sb"><b class="px-label-b px-cream">SPARK</b><span class="px-label">60% TO <b class="px-coral">CRUSH</b></span></div>
+  <div class="px-meter"><i class="is-full"></i><i style="--f:6"></i><i></i><i></i><i></i></div></div>
+</section>
+<section class="pad safety dither2"><p class="kicker">SAFETY</p><h2 class="h2">You set the pace</h2><div class="sgrid"><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><title>matches (16x16)</title><path fill="currentColor" d="M2 2h4v1h-4zM10 2h4v1h-4zM1 3h6v1h-6zM9 3h6v1h-6zM1 4h1v1h-1zM4 4h11v1h-11zM1 5h1v1h-1zM3 5h12v1h-12zM1 6h14v1h-14zM2 7h12v1h-12zM3 8h10v1h-10zM4 9h8v1h-8zM5 10h6v1h-6zM6 11h4v1h-4zM7 12h2v1h-2z"/><path style="fill:var(--px-icon-hi, currentColor)" d="M2 4h2v1h-2zM2 5h1v1h-1z"/></svg>
+</span><p class="px-label-b px-cream">RANDOM MATCH</p><p class="meta">No swiping, no ranking. Tap once and meet whoever is out there.</p></div><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><title>lock (16x16)</title><path fill="currentColor" d="M5 2h6v1h-6zM4 3h8v1h-8zM4 4h2v1h-2zM10 4h2v1h-2zM4 5h2v1h-2zM10 5h2v1h-2zM2 6h12v1h-12zM2 7h1v1h-1zM5 7h9v1h-9zM2 8h1v1h-1zM4 8h10v1h-10zM2 9h5v1h-5zM9 9h5v1h-5zM2 10h5v1h-5zM9 10h5v1h-5zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM2 13h12v1h-12z"/><path style="fill:var(--px-icon-hi, currentColor)" d="M3 7h2v1h-2zM3 8h1v1h-1z"/></svg>
+</span><p class="px-label-b px-cream">START ANONYMOUS</p><p class="meta">Everyone begins as 8 blocks. You choose when to show more.</p></div><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><path fill="currentColor" d="M2 3h2v1h-2zM2 4h3v1h-3zM3 5h3v1h-3zM4 6h3v1h-3zM5 7h3v2h-3zM4 9h3v1h-3zM3 10h3v1h-3zM2 11h3v1h-3zM2 12h2v1h-2zM8 3h2v1h-2zM8 4h3v1h-3zM9 5h3v1h-3zM10 6h3v1h-3zM11 7h3v2h-3zM10 9h3v1h-3zM9 10h3v1h-3zM8 11h3v1h-3zM8 12h2v1h-2z"/></svg></span><p class="px-label-b px-cream">SKIP OR BLOCK</p><p class="meta">Leave any match in one tap. Blocked people never match you again.</p></div><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><path fill="currentColor" d="M1 4h2v1h-2zM2 5h1v6h-1zM1 11h3v1h-3zM6 4h3v1h-3zM5 5h1v2h-1zM9 5h1v2h-1zM6 7h3v1h-3zM5 8h1v3h-1zM9 8h1v3h-1zM6 11h3v1h-3zM12 6h1v1h-1zM11 7h3v1h-3zM12 8h1v1h-1z"/></svg></span><p class="px-label-b px-cream">18+ ONLY</p><p class="meta">Pixeldate is for adults. Clearer levels need both of you to agree.</p></div></div></section>
+<section class="pad final"><img src="/Pixeldate/px/logo/mark-2.svg" width="72" height="72" class="mk"><h2 class="h1 c">Meet someone<br>new tonight</h2>
+  <a class="px-frame px-btn" href="./app/"><span class="px-btn__label">Sign up, it's free</span></a></section>
+<footer class="foot"><img src="/Pixeldate/px/logo/logo-5.svg" width="244" height="36"><p class="px-label">ABOUT · SAFETY · PRIVACY · TERMS</p><p class="px-label dim">© 2026 PIXELDATE</p></footer>
+</div>
+<div class="dl">
+<header class="dnav"><img src="/Pixeldate/px/logo/logo-2.svg" width="244" height="36"><nav class="px-label-b"><a href="#how">HOW IT WORKS</a><a href="#cards">QUESTION CARDS</a><a href="#safety">SAFETY</a></nav><div class="row"><a class="px-frame px-btn-ghost" href="./app/">TRY IT NOW</a><a class="px-frame px-btn-small" href="./app/">SIGN UP</a></div></header>
+<section class="dhero"><img class="art" src="/Pixeldate/px/hero/hero-dusk-wide@2x.png" width="720" height="400"><div class="copy">
+  <p class="kicker"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+ DATING, ONE PIXEL AT A TIME</p><h1 class="h1 big">Chemistry first.<br><span class="px-coral">Clarity</span> later.</h1>
+  <p class="read lead">Pixeldate pairs you with someone at random. Photos and video calls start as 8 blurry blocks and get sharper as you both answer questions.</p>
+  <div class="cta"><a class="px-frame px-btn" href="./app/"><span class="px-btn__label">Sign up</span></a><a class="px-frame px-btn-ghost" href="./app/">Try it now</a></div>
+  <p class="px-label">FREE · 18+ · NO SWIPING</p></div></section>
+<section class="dsec dither2" id="how"><p class="kicker">HOW IT WORKS</p><h2 class="h1">Five levels to crystal clear</h2><p class="read m w">You both answer a question card, the meter fills, and you both tap to reveal the next level. Either of you can step back down at any time.</p><div class="strip"><div class="dt"><img src="/Pixeldate/px/hero/level128-L1@2x.png" width="256" height="256"><div class="row"><span class="px-frame px-tag">LV 1</span><span class="px-label-b px-cream">STRANGER</span></div><p class="px-label acc">8 BLOCKS</p><p class="read m">Shapes and colours. Say hi.</p></div><div class="dt"><img src="/Pixeldate/px/hero/level128-L2@2x.png" width="256" height="256"><div class="row"><span class="px-frame px-tag">LV 2</span><span class="px-label-b px-cream">SPARK</span></div><p class="px-label acc">16 BLOCKS</p><p class="read m">A smile starts to show.</p></div><div class="dt"><img src="/Pixeldate/px/hero/level128-L3@2x.png" width="256" height="256"><div class="row"><span class="px-frame px-tag">LV 3</span><span class="px-label-b px-cream">CRUSH</span></div><p class="px-label acc">32 BLOCKS</p><p class="read m">Now it is getting interesting.</p></div><div class="dt"><img src="/Pixeldate/px/hero/level128-L4@2x.png" width="256" height="256"><div class="row"><span class="px-frame px-tag">LV 4</span><span class="px-label-b px-cream">CLOSE</span></div><p class="px-label acc">64 BLOCKS</p><p class="read m">Almost there. Keep talking.</p></div><div class="dt"><img src="/Pixeldate/px/hero/level128-L5@2x.png" width="256" height="256"><div class="row"><span class="px-frame px-tag">LV 5</span><span class="px-label-b px-cream">CRYSTAL CLEAR</span></div><p class="px-label acc">FULL</p><p class="read m">Face to face, no filter.</p></div></div></section>
+<section class="dsec two" id="cards"><div><p class="kicker">QUESTION CARDS</p><h2 class="h1">Answer together,<br>level up together</h2><p class="read m w">Every level brings new cards, from easy openers to the ones you would only ask someone close. Each card you both answer adds 20% to the meter.</p>
+  <div class="meterbox px-frame px-card"><div class="row sb"><b class="px-label-b px-cream">SPARK</b><span class="px-label">60% TO <b class="px-coral">CRUSH</b></span></div><div class="px-meter"><i class="is-full"></i><i style="--f:6"></i><i></i><i></i><i></i></div></div></div>
+  <div class="qs"><div class="px-frame px-card px-qcard px-card--hot"><div class="px-qcard__top"><span class="px-frame px-tag">STRANGER · Q1</span><span class="px-qcard__meta"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+</span><b class="px-coral">+20%</b></span></div>
+<p class="px-qcard__q">What did you have for breakfast today?</p><div class="px-qcard__foot"><span class="px-av"><img src="/Pixeldate/px/hero/avatar-b-18.png"><img class="px-tick" src="/Pixeldate/px/sprites/tick.png"></span><span class="px-av"><img src="/Pixeldate/px/hero/avatar-a-18.png"><img class="px-tick" src="/Pixeldate/px/sprites/tick.png"></span><span class="px-label">BOTH ANSWERED</span><span class="px-frame px-btn-ghost">READ</span></div></div><div class="px-frame px-card px-qcard"><div class="px-qcard__top"><span class="px-frame px-tag">SPARK · Q3</span><span class="px-qcard__meta"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+</span>+20% TOGETHER</span></div>
+<p class="px-qcard__q">What small thing always makes your day?</p><div class="px-qcard__foot"><span class="px-av"><img src="/Pixeldate/px/hero/avatar-b-18.png"><img class="px-tick" src="/Pixeldate/px/sprites/tick.png"></span><span class="px-av"><img src="/Pixeldate/px/sprites/avatar-empty-18.png"></span><span class="px-label">ALEX ANSWERED</span><span class="px-frame px-btn-small">ANSWER</span></div></div><div class="px-frame px-card px-qcard"><div class="px-qcard__top"><span class="px-frame px-tag">CRUSH · Q2</span><span class="px-qcard__meta"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><title>sparkle (8x8)</title><path fill="currentColor" d="M3 0h1v1h-1zM3 1h1v1h-1zM2 2h3v1h-3zM0 3h7v1h-7zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z"/></svg>
+</span>NEW CARD</span></div>
+<p class="px-qcard__q">Where would you take me on a first real date?</p><div class="px-qcard__foot"><span class="px-av"><img src="/Pixeldate/px/sprites/avatar-empty-18.png"></span><span class="px-av"><img src="/Pixeldate/px/sprites/avatar-empty-18.png"></span><span class="px-label">NEW CARD</span><span class="px-frame px-btn-small">ANSWER</span></div></div></div></section>
+<section class="dsec dither2" id="safety"><p class="kicker">SAFETY</p><h2 class="h1">You set the pace</h2><div class="sgrid"><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><title>matches (16x16)</title><path fill="currentColor" d="M2 2h4v1h-4zM10 2h4v1h-4zM1 3h6v1h-6zM9 3h6v1h-6zM1 4h1v1h-1zM4 4h11v1h-11zM1 5h1v1h-1zM3 5h12v1h-12zM1 6h14v1h-14zM2 7h12v1h-12zM3 8h10v1h-10zM4 9h8v1h-8zM5 10h6v1h-6zM6 11h4v1h-4zM7 12h2v1h-2z"/><path style="fill:var(--px-icon-hi, currentColor)" d="M2 4h2v1h-2zM2 5h1v1h-1z"/></svg>
+</span><p class="px-label-b px-cream">RANDOM MATCH</p><p class="read m">No swiping, no ranking. Tap once and meet whoever is out there.</p></div><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic " xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><title>lock (16x16)</title><path fill="currentColor" d="M5 2h6v1h-6zM4 3h8v1h-8zM4 4h2v1h-2zM10 4h2v1h-2zM4 5h2v1h-2zM10 5h2v1h-2zM2 6h12v1h-12zM2 7h1v1h-1zM5 7h9v1h-9zM2 8h1v1h-1zM4 8h10v1h-10zM2 9h5v1h-5zM9 9h5v1h-5zM2 10h5v1h-5zM9 10h5v1h-5zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM2 13h12v1h-12z"/><path style="fill:var(--px-icon-hi, currentColor)" d="M3 7h2v1h-2zM3 8h1v1h-1z"/></svg>
+</span><p class="px-label-b px-cream">START ANONYMOUS</p><p class="read m">Everyone begins as 8 blocks. You choose when to show more.</p></div><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><path fill="currentColor" d="M2 3h2v1h-2zM2 4h3v1h-3zM3 5h3v1h-3zM4 6h3v1h-3zM5 7h3v2h-3zM4 9h3v1h-3zM3 10h3v1h-3zM2 11h3v1h-3zM2 12h2v1h-2zM8 3h2v1h-2zM8 4h3v1h-3zM9 5h3v1h-3zM10 6h3v1h-3zM11 7h3v2h-3zM10 9h3v1h-3zM9 10h3v1h-3zM8 11h3v1h-3zM8 12h2v1h-2z"/></svg></span><p class="px-label-b px-cream">SKIP OR BLOCK</p><p class="read m">Leave any match in one tap. Blocked people never match you again.</p></div><div class="px-frame px-card sf"><span class="px-coral-l"><svg class="ic" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges"><path fill="currentColor" d="M1 4h2v1h-2zM2 5h1v6h-1zM1 11h3v1h-3zM6 4h3v1h-3zM5 5h1v2h-1zM9 5h1v2h-1zM6 7h3v1h-3zM5 8h1v3h-1zM9 8h1v3h-1zM6 11h3v1h-3zM12 6h1v1h-1zM11 7h3v1h-3zM12 8h1v1h-1z"/></svg></span><p class="px-label-b px-cream">18+ ONLY</p><p class="read m">Pixeldate is for adults. Clearer levels need both of you to agree.</p></div></div></section>
+<section class="dsec final"><img src="/Pixeldate/px/logo/mark-2.svg" width="72" height="72"><h2 class="h1 big c">Meet someone new tonight</h2><a class="px-frame px-btn" href="./app/"><span class="px-btn__label">Sign up, it's free</span></a></section>
+<footer class="foot"><img src="/Pixeldate/px/logo/logo-5.svg" width="244" height="36"><p class="px-label">ABOUT · SAFETY · PRIVACY · TERMS</p><p class="px-label">© 2026 PIXELDATE</p></footer></div>
+</body></html>

@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer-core'
 const LB = !!process.env.LOOPBACK
-const URL = (process.env.URL || 'http://localhost:4173/Pixeldate/') + (LB ? '?loopback' : '')
+const URL = (process.env.URL || 'http://localhost:4173/Pixeldate/app/') + (LB ? '?loopback&dev=1' : '?dev=1')
 let shared
 const S = p => `/workspace/pixeldate/shots/${p}.png`
 const shot = async (p, n) => { await p.bringToFront(); await new Promise(r => setTimeout(r, 400)); await p.screenshot({ path: S(n) }) }
@@ -15,11 +15,11 @@ async function page(name, iam, seek, age, face) {
   await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
   p.on('console', m => { if (!/404/.test(m.text())) console.log(`  [${name}]`, m.text().slice(0, 150)) })
   p.on('dialog', d => d.accept()); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
-  step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded')
-  await p.type('[data-t=name]', name); await p.click(`[data-t=face-${face}]`)
+  step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
+  await p.type('[data-t=name]', name); await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
   await p.select('[data-t=iam]', iam); await p.select('[data-t=seek]', seek)
   await p.$eval('[data-t=age]', (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(age))
-  await p.click('[data-t=adult]'); step('filled ' + name); return wrap(p)
+  await p.$eval('[data-t=adult]', e => e.click()); step('filled ' + name); return wrap(p)
 }
 const t = (p, sel) => p.waitForSelector(sel, { timeout: 60000 })
 const click = async (p, sel) => { await t(p, sel); await p.click(sel) }
@@ -82,7 +82,7 @@ if (await pw(b) !== 8) throw 'drop not applied'
 // call
 // call: request from the chat screen, B accepts
 const shotW = async (p, n) => { for (const w of [360, 412]) { await p.setViewport({ width: w, height: 800, deviceScaleFactor: 2 }); await shot(p, `${n}-${w}`) } await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
-await tab(a, 'chat'); await tab(b, 'chat'); await click(a, '[data-t=call-video]'); await t(a, '[data-t=ring-out]'); await shotW(a, '09a-call-request')
+await tab(a, 'call'); await tab(b, 'chat'); await click(a, '[data-t=call-video]'); await t(a, '[data-t=ring-out]'); await shotW(a, '09a-call-request')
 await t(b, '[data-t=ring-in]'); await shotW(b, '09b-incoming-request'); log('call request shown on B')
 await b.click('[data-t=call-accept]')
 await t(b, '[data-t=remote-video]'); log('accepted; call started')

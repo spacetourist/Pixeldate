@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MediaConnection } from 'peerjs'
-import { LEVELS, METER, VERSION, DEV_SKIP_STAGE } from './config'
+import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { PixelCam } from './video'
@@ -14,6 +14,29 @@ const deck: QuestionSource = localDeck
 const Ic = ({ n, s = 16 }: { n: string; s?: number }) => <i className="ic" style={{ width: s * 2, height: s * 2, WebkitMaskImage: `url(${B}px/icons/${s}/${n}.svg)`, maskImage: `url(${B}px/icons/${s}/${n}.svg)` }} />
 // per tab, so two tabs in one browser are different people
 const uid = () => { let u = sessionStorage.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); sessionStorage.setItem('pd-uid', u) } return u }
+const AV = (k: 'a' | 'b' | 'c', big = false) => `${B}px/hero/avatar-${k}-${big ? '32' : '18'}@2x.png`
+// hidden dev tools (level-skip request): ?dev=1 (remembered for the session) or long-press the level badge
+if (/[?&]dev=1/.test(location.search)) sessionStorage.setItem('pd-dev', '1')
+const isDev = () => sessionStorage.getItem('pd-dev') === '1'
+/** Boot splash: heart resolves through logo-1..5 (200 ms steps), holds to 1200 ms, steps out by 1400 ms. */
+function Splash({ ready }: { ready: boolean }) {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const [t, setT] = useState(reduce ? 4 : 0); const [out, setOut] = useState(false); const [gone, setGone] = useState(false)
+  const r = useRef(ready); r.current = ready
+  useEffect(() => {
+    if (reduce) { const a = setTimeout(() => setOut(true), 600), b = setTimeout(() => setGone(true), 800); return () => { clearTimeout(a); clearTimeout(b) } }
+    const t0 = performance.now(); let id = 0
+    const tick = () => { const e = performance.now() - t0; setT(Math.floor(e / 200)); if (e >= 1200 && r.current) { setOut(true); setTimeout(() => setGone(true), 200); return } id = window.setTimeout(tick, 50) }
+    tick(); return () => clearTimeout(id)
+  }, [])
+  if (gone) return null
+  const f = Math.min(t, 4), lit = t <= 4 ? t + 1 : (t % 5) + 1 // after 1200 ms while not ready: loop the loader
+  return <div className={`splash dither ${out ? 'out' : ''}`} data-t="splash" data-frame={f + 1}>
+    {[1, 2, 3, 4, 5].map(n => <img key={n} src={`${B}px/logo/logo-${n}.svg`} width={244} height={36} style={{ display: n === f + 1 ? 'block' : 'none' }} alt={n === 5 ? 'pixeldate' : ''} />)}
+    <p className="px-label mauve">GET CLOSER TO SEE CLEARER</p>
+    <div className="load">{[1, 2, 3, 4, 5].map(n => <i key={n} className={n <= lit ? 'on' : ''} />)}</div>
+  </div>
+}
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -31,22 +54,19 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPhoto(String(r.result)); r.readAsDataURL(f) } }
   const ok = name.trim() && photo && adult && age >= 18 && min <= max
   return <div className="screen scroll">
-    <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><span className="ver">{VERSION}</span></header>
-    <div className="px-frame px-card pad">
-      <p className="px-text">Get to know someone before you see them. Photos start as 8 blocks and sharpen as you get closer.</p>
-    </div>
+    <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /></header>
+    <h1 className="h2">Create your profile</h1>
     <label className="px-label lab">NAME</label>
     <input className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Your first name" data-t="name" />
     <label className="px-label lab">PHOTO</label>
     <div className="photo-row">
-      <div className="thumb">{cam ? <video ref={vid} muted playsInline /> : photo ? <img src={photo} /> : <Ic n="matches" />}</div>
+      <div className="thumb">{cam ? <video ref={vid} muted playsInline /> : photo ? <img src={photo} /> : <img src={AV('a', true)} className="ph" />}</div>
       <div className="col">
         {cam ? <button className="px-frame px-btn-small" onClick={snap}>SNAP</button>
           : <button className="px-frame px-btn-ghost" onClick={async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera') } }}>CAMERA</button>}
-        <label className="px-frame px-btn-ghost">GALLERY<input type="file" accept="image/*" hidden onChange={e => file(e.target.files?.[0])} /></label>
+        <label className="px-frame px-btn-ghost">GALLERY<input type="file" accept="image/*" hidden data-t="gallery" onChange={e => file(e.target.files?.[0])} /></label>
       </div>
     </div>
-    <div className="faces">{['sam', 'alex', 'robin'].map(f => <img key={f} data-t={'face-' + f} src={`${B}faces/${f}.jpg`} onClick={() => setPhoto(`${B}faces/${f}.jpg`)} className={photo.endsWith(f + '.jpg') ? 'on' : ''} />)}<span className="px-label">DEMO FACES</span></div>
     <div className="grid2">
       <div><label className="px-label lab">I AM</label>
         <select className="px-frame px-input fld" value={iam} onChange={e => setIam(e.target.value as Gender)} data-t="iam"><option value="man">A man</option><option value="woman">A woman</option></select></div>
@@ -60,9 +80,8 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
       <input className="px-frame px-input fld" type="number" min={18} max={99} value={min} onChange={e => setMin(+e.target.value)} data-t="min" />
       <input className="px-frame px-input fld" type="number" min={18} max={99} value={max} onChange={e => setMax(+e.target.value)} data-t="max" />
     </div>
-    <label className="tick px-text"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /> I am 18 or over</label>
+    <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box">{adult && <Ic n="check" s={8} />}</span> I am 18 or over</label>
     <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => onDone({ name: name.trim(), age, min, max, iam, seek, uid: uid() }, photo)}><span className="px-btn__label">Continue</span></button>
-    <p className="px-label note">DEMO, TEST WITH PEOPLE YOU KNOW</p>
   </div>
 }
 
@@ -85,6 +104,8 @@ export default function App() {
   const [call, setCall] = useState<{ cam: Media; mc: MediaConnection; kind: Kind; remote?: MediaStream } | null>(null)
   const [ring, setRing] = useState<{ dir: 'in' | 'out'; kind: Kind } | null>(null); const [muted, setMuted] = useState(false); const [camOff, setCamOff] = useState(false)
   const ready = useRef<{ cam: Media; kind: Kind } | null>(null) // media grabbed on accept, used when their call arrives
+  const [dev, setDev] = useState(isDev); const matchedAt = useRef(''); const lp = useRef(0) // long-press on the level badge toggles dev tools
+  const myAv = useMemo(() => photo ? pixelatePhoto(photo, 1) : AV('a'), [photo])
   const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
   const st = useRef({ level, taps, pct, call, m, ring, skipReq }); st.current = { level, taps, pct, call, m, ring, skipReq }
 
@@ -147,7 +168,7 @@ export default function App() {
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
-    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null)
+    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); matchedAt.current = new Date().toTimeString().slice(0, 5)
     setM(mm); setScreen('match')
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
   }
@@ -203,7 +224,7 @@ export default function App() {
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab])
 
-  if (screen === 'onboard') return <div className="app px"><Onboard onDone={start} /></div>
+  if (screen === 'onboard') return <div className="app px"><Onboard onDone={start} /><Splash ready /></div>
 
   const Q = ({ id, inChat }: { id: string; inChat?: boolean; key?: any }) => {
     const q = cardById(id)!; const a = ans[id] || {}; const both = a.me && a.them
@@ -215,7 +236,8 @@ export default function App() {
       {answering === id ? <form className="ansrow" onSubmit={e => { e.preventDefault(); const v = (e.currentTarget.elements[0] as HTMLInputElement).value.trim(); if (v) answer(id, v) }}>
         <input className="px-frame px-input fld" autoFocus placeholder="Your answer" data-t="ans-input" /><button className="px-frame px-btn-small" data-t="ans-send">SEND</button></form>
         : <div className="px-qcard__foot">
-          <span className={`dot ${a.them ? 'on' : ''}`} data-t="dot-them" /><span className={`dot me ${a.me ? 'on' : ''}`} data-t="dot-me" />
+          <span className={`px-av ${a.them ? 'on' : ''}`} data-t="dot-them"><img src={a.them ? AV('b') : `${B}px/sprites/avatar-empty-18.png`} />{a.them && <img className="px-tick" src={`${B}px/sprites/tick.png`} />}</span>
+          <span className={`px-av ${a.me ? 'on' : ''}`} data-t="dot-me"><img src={a.me ? AV('a') : `${B}px/sprites/avatar-empty-18.png`} />{a.me && <img className="px-tick" src={`${B}px/sprites/tick.png`} />}</span>
           <span className="px-label">{both ? 'BOTH ANSWERED' : a.them ? `${m?.them.name.toUpperCase()} ANSWERED` : a.me ? 'WAITING' : 'NEW CARD'}</span>
           {!a.me && <button className={`px-frame ${inChat ? 'px-btn-small' : 'px-btn-ghost'}`} data-t="answer" onClick={() => setAnswering(id)}>ANSWER</button>}
           {!inChat && a.me && !both && <button className="px-frame px-btn-ghost" onClick={() => dropCard(id)}>TO CHAT</button>}
@@ -225,10 +247,10 @@ export default function App() {
   const lv = LEVELS[level - 1], nx = LEVELS[level]
   const askSkip = () => { setSkip('out'); send({ t: 'skipreq', level }) }
   const ansSkip = (ok: boolean) => { setSkip(null); send({ t: 'skipans', ok, level }); if (ok) raise(level) } // my accept = my consent
-  const skipBar = !DEV_SKIP_STAGE || level >= 5 ? null : skipReq === 'in' ? <div className="px-frame px-card ringin" data-t="skip-in"><p className="px-text"><b className="px-coral">{m?.them.name}</b> wants to skip to {nx?.name}</p>
+  const skipBar = !DEV_SKIP_STAGE || !dev || level >= 5 ? null : skipReq === 'in' ? <div className="px-frame px-card ringin" data-t="skip-in"><p className="px-text"><b className="px-coral">{m?.them.name}</b> wants to skip to {nx?.name}</p>
       <div className="row2"><button className="px-frame px-btn-small" data-t="skip-accept" onClick={() => ansSkip(true)}>ACCEPT</button><button className="px-frame px-btn-ghost" data-t="skip-decline" onClick={() => ansSkip(false)}>DECLINE</button></div></div>
     : skipReq === 'out' ? <p className="px-label" data-t="skip-out">ASKED TO SKIP TO {nx?.name.toUpperCase()}… WAITING</p>
-    : <button className="px-frame px-btn-ghost callbar" data-t="skip-stage" onClick={askSkip}>SKIP TO NEXT LEVEL (DEV)</button>
+    : <button className="px-frame px-btn-ghost callbar" data-t="skip-stage" onClick={askSkip}>DEV · SKIP TO {nx?.name.toUpperCase()}</button>
   const them = m?.them.name || ''
   const callBar = call ? <button className="px-frame px-btn-ghost callbar" data-t="to-call" onClick={() => setTab('call')}><Ic n="call" s={8} /> IN CALL · OPEN</button>
     : ring?.dir === 'in' ? <div className="px-frame px-card ringin" data-t="ring-in"><p className="px-text"><b className="px-coral">{them}</b> wants a {ring.kind} call</p>
@@ -236,30 +258,39 @@ export default function App() {
     : ring ? <div className="px-frame px-card ringin" data-t="ring-out"><p className="px-text">Calling {them} ({ring.kind})… waiting for them to accept</p><button className="px-frame px-btn-ghost" onClick={cancelRing}>CANCEL</button></div>
     : <div className="row2 callbar"><button className="px-frame px-btn-small" data-t="call-voice" onClick={() => requestCall('voice')}><Ic n="call" s={8} /> VOICE CALL</button>
       <button className="px-frame px-btn-small" data-t="call-video" onClick={() => requestCall('video')}><Ic n="call" s={8} /> VIDEO CALL</button></div>
+  const press = () => { lp.current = window.setTimeout(() => { const v = !dev; sessionStorage.setItem('pd-dev', v ? '1' : ''); setDev(v) }, 800) }
+  const unpress = () => clearTimeout(lp.current)
+  const theirAv = theirImgs.current[level]?.src || AV('b', true)
   return <div className="app px">
-    {screen !== 'match' ? <div className="screen">
-      <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><span className="ver">{VERSION}</span></header>
-      {screen === 'finding' ? <div className="finding" data-t="finding">
-        <div className="sprite" /><p className="px-label-b px-cream">FINDING SOMEONE…</p>
-        <p className="px-label">{me!.seek === 'everyone' ? 'EVERYONE' : me!.seek.toUpperCase()} · {me!.min}–{me!.max}</p>
-        <button className="px-frame px-btn-ghost" onClick={() => { net.current!.cancel(); setScreen('lobby') }}>CANCEL</button>
-      </div> : <div className="lobby">
-        <div className="px-frame px-card pad"><p className="px-text">Hi {me!.name}. Tap below and we'll pair you with someone at random. Everyone starts as a Stranger: 8 blocks.</p></div>
-        {notice && <p className="px-label px-coral-l">{notice.toUpperCase()}</p>}
-        <button className="px-frame px-btn big" data-t="find" disabled={!code} onClick={find}><Ic n="matches" /><span className="px-btn__label">{code ? 'Find someone' : 'Connecting…'}</span></button>
-        <div className="px-frame px-card pad">
-          <p className="px-label">JOIN WITH A CODE</p>
-          <p className="px-text">Your code: <b className="px-coral" data-t="code">{code || '…'}</b></p>
-          <div className="ansrow"><input className="px-frame px-input fld" value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Friend's code" data-t="joincode" />
-            <button className="px-frame px-btn-small" onClick={doJoin} data-t="join">JOIN</button></div>
-        </div>
-        <p className="px-label note">DEMO, TEST WITH PEOPLE YOU KNOW</p>
-      </div>}
+    {screen !== 'match' ? <div className="screen scroll home">
+      <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><img className="av" src={myAv} alt="" /></header>
+      <div className="stage">
+        <img src={`${B}px/hero/hero-dusk@2x.png`} width={390} height={300} alt="" />
+        <span className="px-frame px-chip chip"><Ic n="heart" s={8} /> {me!.seek === 'everyone' ? 'EVERYONE' : me!.seek.toUpperCase()} · {me!.min}–{me!.max}</span>
+        {screen === 'finding' && <div className="sprite" data-t="finding" />}
+      </div>
+      <div className="copy">{screen === 'finding' ? <><h1 className="h1">Finding someone…</h1><p className="read m">Hang tight. As soon as someone is free, you'll both start as Strangers.</p></>
+        : <><h1 className="h1">Hi {me!.name},<br />ready to meet?</h1><p className="read m">We'll pair you with someone at random. You both start as Strangers: 8 blocks.</p></>}</div>
+      {notice && <p className="px-label px-coral-l">{notice.toUpperCase()}</p>}
+      {screen === 'finding' ? <button className="px-frame px-btn big" data-t="cancel" onClick={() => { net.current!.cancel(); setScreen('lobby') }}><span className="px-btn__label">Cancel</span></button>
+        : <button className="px-frame px-btn big" data-t="find" disabled={!code} onClick={find}><Ic n="matches" /><span className="px-btn__label">{code ? 'Find someone' : 'Connecting…'}</span></button>}
+      <div className="ladder"><div className="mtop"><span className="px-label-b px-cream">STRANGER</span><span className="px-label">LV 1 OF 5</span></div><Meter level={1} pct={0} /></div>
+      <div className="px-frame px-card codecard">
+        <p className="px-label">MEETING A FRIEND? <b className="px-cream" data-t="code">{code ? code.toUpperCase() : '…'}</b></p>
+        <div className="ansrow"><input className="px-frame px-input fld" value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Friend's code" data-t="joincode" />
+          <button className="px-frame px-btn-small" onClick={doJoin} data-t="join">JOIN</button></div>
+      </div>
+      <p className="px-label safe"><Ic n="lock" s={8} /> 18+ · SKIP OR BLOCK ANYTIME</p>
     </div> : <div className="screen">
-      <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" />
-        <div className="acts"><button className="px-frame px-btn-ghost" data-t="skip" onClick={() => doSkip()}>SKIP</button>
-          <button className="blockbtn" title="Block" data-t="block" onClick={() => confirm('Block and never match again?') && doSkip(true)}><Ic n="lock" s={8} /></button></div></header>
-      {(tab !== 'call' || ring?.dir === 'in') && (tab === 'chat' || ring?.dir === 'in' || call) && callBar}
+      <header className="top">
+        <img className="av l" src={theirAv} alt="" />
+        <div className="who"><div className="px-text">{them}, {m!.them.age}</div>
+          <div className="sub"><span className="px-label-b px-coral" data-t="lvbadge" onPointerDown={press} onPointerUp={unpress} onPointerLeave={unpress} onContextMenu={e => e.preventDefault()}>{lv.name.toUpperCase()}{dev ? ' · DEV' : ''}</span>
+            <span className="mini">{LEVELS.map((_, i) => <i key={i} className={i + 1 < level || level === 5 ? 'f' : i + 1 === level && pct >= 50 ? 'h' : ''} />)}</span></div></div>
+        <button className="px-frame px-btn-ghost sk" data-t="skip" onClick={() => doSkip()}>SKIP</button>
+        <button className="px-frame px-iconbtn ib" title="Block" data-t="block" onClick={() => confirm('Block and never match again?') && doSkip(true)}><Ic n="lock" /></button>
+      </header>
+      {ring?.dir === 'in' && tab !== 'call' ? callBar : call && tab !== 'call' ? callBar : null}
       {(tab !== 'profile' || skipReq === 'in') && skipBar}
       <div className="body scroll">
         {tab === 'profile' && <>
@@ -280,7 +311,8 @@ export default function App() {
             : <button className="px-frame px-btn px-btn--locked" data-t="reveal" data-state="locked"><Ic n="lock" /><span className="px-btn__label">Reveal more</span><span className="px-btn__meta">{Math.floor(pct)}%</span></button>)}
         </>}
         {tab === 'chat' && <div className="chat">
-          {msgs.length === 0 && <p className="px-label">SAY HI TO {m!.them.name.toUpperCase()}. CARDS YOU DROP IN APPEAR HERE.</p>}
+          <p className="px-meta day">MATCHED · {matchedAt.current}</p>
+          {<p className="px-label sys"><Ic n="sparkle" s={8} /> NOW AT <b className="px-coral">{lv.name.toUpperCase()}</b> · {lv.blocks || 'FULL'}{lv.blocks ? ' BLOCKS' : ''}</p>}
           {msgs.map((x, i) => x.from === 'sys' ? <p key={i} className="px-label sys">{x.text}</p>
             : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div> : <div key={i} className={`px-frame px-bubble ${x.from === 'me' ? 'px-bubble--me me' : ''} bub msg`} data-t={'msg-' + x.from}>{x.text}</div>)}
         </div>}
@@ -300,12 +332,12 @@ export default function App() {
             {taps.them && !taps.me && <p className="px-text px-coral-l hint">{them} has tapped. Your turn</p>}
             {card && Q({ id: card.id })}
           </> : <>
-            <div className="px-frame px-card pad"><p className="px-text">Video is pixelated on your phone before it is sent. {them} sees you at {lv.name}, you see your own clear preview. They have to accept first.</p></div>
-            {callBar}</>}
+            {callBar}
+            <p className="meta">Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p></>}
         </div>}
       </div>
       {tab === 'chat' && <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>
-        <input className="px-frame px-input fld" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Message" data-t="chat-input" />
+        <input className="px-frame px-input fld" value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${them}`} data-t="chat-input" />
         <button className="px-frame px-iconbtn" data-t="chat-send"><Ic n="send" /></button></form>}
       <nav className="px-nav nav">
         {(['profile', 'chat', 'call'] as const).map(t => <a key={t} className={tab === t ? 'on' : ''} data-t={'tab-' + t} onClick={() => setTab(t)}><Ic n={t === 'profile' ? 'matches' : t} />{t === 'profile' ? 'MATCH' : t === 'chat' ? 'CHAT' : 'CALL'}</a>)}

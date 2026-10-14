@@ -8,8 +8,8 @@
 
 :root {
   --px: 2px;
-  --ink: #12081a; --plum-900: #1e0f24; --plum-800: #2b1533; --plum-700: #3e1f49; --plum-600: #5c3366;
-  --mauve: #a083a6; --cream: #fbf3e9; --coral-d: #c7385a; --coral: #ff5a6e; --coral-l: #ff9d8a; --gold: #ffd37a;
+  --ink: #031113; --plum-900: #072226; --plum-800: #0d3136; --plum-700: #15434a; --plum-600: #21606a;
+  --mauve: #86b1b2; --cream: #f4f3ea; --coral-d: #dc7356; --coral: #ffa27b; --coral-l: #ffd2b0; --gold: #ffe38c;
   /* type: 1 font px = 1 art px; line heights keep baselines on the art grid */
   --t-body: 22px/26px "Pixeldate Sans";      /* x-height 5, cap 7 art px */
   --t-tight: 22px/22px "Pixeldate Sans";

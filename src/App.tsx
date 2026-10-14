@@ -45,7 +45,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
     <div className="faces">{['sam', 'alex', 'robin'].map(f => <img key={f} data-t={'face-' + f} src={`${B}faces/${f}.jpg`} onClick={() => setPhoto(`${B}faces/${f}.jpg`)} className={photo.endsWith(f + '.jpg') ? 'on' : ''} />)}<span className="px-label">DEMO FACES</span></div>
     <div className="grid2">
       <div><label className="px-label lab">I AM</label>
-        <select className="px-frame px-input fld" value={iam} onChange={e => setIam(e.target.value as Gender)} data-t="iam"><option value="man">A man</option><option value="woman">A woman</option><option value="nb">Non-binary</option></select></div>
+        <select className="px-frame px-input fld" value={iam} onChange={e => setIam(e.target.value as Gender)} data-t="iam"><option value="man">A man</option><option value="woman">A woman</option></select></div>
       <div><label className="px-label lab">MY AGE</label>
         <input className="px-frame px-input fld" type="number" min={18} max={99} value={age} onChange={e => setAge(+e.target.value)} data-t="age" /></div>
     </div>

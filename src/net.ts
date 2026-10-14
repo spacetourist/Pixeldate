@@ -5,11 +5,11 @@ export const LOOPBACK = location.search.includes('loopback')
 const P: any = LOOPBACK ? FakePeer : Peer
 export const store = LOOPBACK ? sessionStorage : localStorage
 
-export type Gender = 'man' | 'woman' | 'nb'
+export type Gender = 'man' | 'woman'
 export type Seek = 'men' | 'women' | 'everyone'
 export interface Profile { name: string; age: number; min: number; max: number; iam: Gender; seek: Seek; uid: string }
 
-const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman', 'nb'] }
+const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman'] }
 const SEEKS: Seek[] = ['men', 'women', 'everyone']
 export const wants = (a: Profile, b: Profile) => G[a.seek].includes(b.iam) && b.age >= a.min && b.age <= a.max
 export const compatible = (a: Profile, b: Profile) => wants(a, b) && wants(b, a)

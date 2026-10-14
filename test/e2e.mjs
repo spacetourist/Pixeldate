@@ -26,7 +26,8 @@ async function page(name, iam, seek, age, face) {
 const t = (p, sel) => p.waitForSelector(sel, { timeout: 60000 })
 const click = async (p, sel) => { await t(p, sel); await p.click(sel) }
 const tab = async (p, n) => click(p, `[data-t=tab-${n}]`)
-async function answerCard(p, text) { step('vis ' + await p.evaluate(() => document.visibilityState + ' ' + document.querySelectorAll('[data-t=card] [data-t=answer]').length + ' ' + location.search)); await click(p, '[data-t=card] [data-t=answer]'); await t(p, '[data-t=ans-input]'); await p.type('[data-t=ans-input]', text); await p.click('[data-t=ans-send]') }
+const dismiss = async (...ps) => { for (const p of ps) await p.evaluate(() => { document.querySelector('[data-t=ans-pair]')?.click() }) }
+async function answerCard(p, text) { step('vis ' + await p.evaluate(() => document.visibilityState + ' ' + document.querySelectorAll('[data-t=card] [data-t=answer]').length + ' ' + location.search)); await click(p, '[data-t=card] [data-t=answer]'); await t(p, '[data-t=ans-input]'); await p.type('[data-t=ans-input]', text); await p.click('[data-t=ans-send]'); await sleep(600); await dismiss(a, b) }
 async function photoW(p) { return p.evaluate(() => window.__pdLastPhotoW) }
 
 const mode = process.argv[2] || 'full'
@@ -55,6 +56,23 @@ const pw = async p => p.evaluate(() => window.__pd?.photoW)
 const ph = async p => p.evaluate(() => window.__pd?.photoH)
 log('received photo widths at Stranger:', await pw(a), await pw(b)); if (await pw(a) !== 8 || await pw(b) !== 8 || await ph(a) !== 8 || await ph(b) !== 8) throw 'photo payload not 8x8'
 await shot(b, '04-match-stranger')
+// Q1 via the pinned card on A while B is on the call tab
+await tab(a, 'chat'); await tab(b, 'call')
+await click(a, '[data-t=pinned-card] [data-t=answer]'); await a.type('[data-t=ans-input]', 'Toast and coffee'); await a.click('[data-t=ans-send]')
+await t(b, '[data-t=ans-turn]'); if ((await b.content()).includes('Toast and coffee')) throw 'partner answer leaked before B answered'
+log('B (on call tab) sees "your turn"; answer text not in the DOM')
+const shotW412 = async (p, n) => { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await shot(p, n); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
+await shotW412(b, 'v3.4-their-turn-412')
+if (!(await a.$eval('.chat', e => e.textContent)).includes('YOU ANSWERED Q1')) throw 'A chat log missing Q1'
+await b.click('[data-t=ans-turn]'); await t(b, '[data-t=ans-input]'); await b.type('[data-t=ans-input]', 'Porridge'); await b.click('[data-t=ans-send]')
+await t(a, '[data-t=ans-pair]'); await t(b, '[data-t=ans-pair]')
+for (const p of [a, b]) { const x = await p.$eval('[data-t=ans-pair]', e => e.textContent); if (!x.includes('Toast and coffee') || !x.includes('Porridge')) throw 'pair reveal missing answers' }
+await sleep(1500); await shotW412(b, 'v3.4-answer-event-412'); log('both see the paired reveal')
+await b.click('[data-t=evt-close]'); await a.click('[data-t=evt-close]')
+await tab(b, 'chat')
+for (const p of [a, b]) { const x = await p.$eval('[data-t=pair-log]', e => e.textContent); if (!x.includes('Toast and coffee') || !x.includes('Porridge')) throw 'chat log missing the Q1 pair' }
+await shotW412(b, 'v3.4-header-412'); { const r = await b.evaluate(() => { const s = document.querySelector('[data-t=skip]').getBoundingClientRect(), w = document.querySelector('.who').getBoundingClientRect(); return { gap: s.left - w.right, block: !!document.querySelector('[title^=Block]') } }); if (r.gap < 12 || r.block) throw 'header ' + JSON.stringify(r); log('header: skip gap', r.gap, 'block hidden') }
+log('Q1 pair recorded in both chat logs')
 // chat
 await tab(a, 'chat'); await tab(b, 'chat')
 await a.type('[data-t=chat-input]', 'Hi Alex!'); await a.click('[data-t=chat-send]')
@@ -69,11 +87,16 @@ const dots = await a.$$eval('[data-t=dot-them].on', e => e.length); log('card an
 await tab(b, 'profile'); await tab(a, 'profile'); await sleep(300)
 await shot(b, '06-reveal-locked')
 for (const [n, p] of [['A', a], ['B', b]]) { const t1 = Date.now(); await p.evaluate(() => 1); step(n + ' responsive ' + (Date.now() - t1)) }
-for (let i = 0; i < 4; i++) { step('round ' + i); await answerCard(a, 'a' + i); await sleep(300); await answerCard(b, 'b' + i); await sleep(700) }
+for (let i = 0; i < 3; i++) { step('round ' + i); await answerCard(a, 'a' + i); await sleep(300); await answerCard(b, 'b' + i); await sleep(700) }
 await t(a, '[data-t=reveal][data-state=ready]'); await t(b, '[data-t=reveal][data-state=ready]'); log('meter full, Reveal more unlocked on both')
-await a.click('[data-t=reveal]'); await sleep(600); await shot(b, '07-reveal-unlocked-their-turn')
+for (const p of [a, b]) for (const sel of ['[data-t=ans-pair]', '[data-t=ready]']) if (await p.$(sel)) await p.evaluate(s => { const m = document.querySelector(s); m.dispatchEvent(new MouseEvent('click', { bubbles: true })) }, sel)
+await sleep(300); await a.click('[data-t=reveal]'); await t(a, '[data-t=ready-waiting]'); log('A tapped: "Waiting for Alex…"')
+await t(b, '[data-t=ready] [data-t=ready-reveal]'); await shot(b, '07-reveal-unlocked-their-turn'); log('B nudged with the Ready modal')
 const lvlB = await b.$eval('.chip', e => e.textContent); if (!lvlB.includes('LV 1')) throw 'level rose on one tap'
-await b.click('[data-t=reveal]'); await sleep(1500)
+await b.click('[data-t=ready-reveal]'); await t(a, '[data-t=lvup]'); await t(b, '[data-t=lvup]'); await sleep(1300)
+await b.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await shot(b, 'v3.4-levelup-412'); await b.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
+log('level-up event on both:', await a.$eval('[data-t=lvup-name]', e => e.textContent), '/', await b.$eval('[data-t=lvup-name]', e => e.textContent))
+for (const p of [a, b]) await p.click('[data-t=lvup-close]'); await sleep(500)
 log('after both tapped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))
 if (await pw(a) !== 16) throw 'not 16'
 await shot(b, '08-after-reveal-spark')
@@ -110,7 +133,7 @@ await b.click('[data-t=skip-accept]'); await sleep(1500)
 if (await pw(a) !== 16 || await pw(b) !== 16 || await ph(a) !== 16) throw 'skip did not raise to 16x16 photo'
 log('skip accepted: both at', await a.$eval('.chip, [data-t=tab-profile]', e => e.textContent), 'photo payload 16x16')
 // skip from B
-await b.click('[data-t=skip]'); await sleep(2000); for (const p of [a, b]) step('after skip: ' + (await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 120))))
+for (const p of [a, b]) if (await p.$('[data-t=lvup]')) await p.click('[data-t=lvup-close]'); await sleep(300); await b.click('[data-t=skip]'); await sleep(2000); for (const p of [a, b]) step('after skip: ' + (await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 120))))
 await t(a, '[data-t=finding]'); await t(b, '[data-t=finding]'); log('Skip ended match; both returned to lobby and auto-search for the next match')
 await shot(b, '10-after-skip')
 await browser.close(); console.log('ALL OK')

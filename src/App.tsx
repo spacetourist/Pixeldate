@@ -15,6 +15,9 @@ const deck: QuestionSource = localDeck
 const Ic = ({ n, s = 16 }: { n: string; s?: number }) => <i className="ic" style={{ width: s * 2, height: s * 2, WebkitMaskImage: `url(${B}px/icons/${s}/${n}.svg)`, maskImage: `url(${B}px/icons/${s}/${n}.svg)` }} />
 // per tab, so two tabs in one browser are different people
 const uid = () => { let u = sessionStorage.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); sessionStorage.setItem('pd-uid', u) } return u }
+/** Block button hidden for now (Callum); logic (block(), doSkip(true)) stays. */
+const SHOW_BLOCK = false
+const qn = (id: string) => 'Q' + (cardById(id)?.index ?? '')
 const AV = (k: 'a' | 'b' | 'c', big = false) => `${B}px/hero/avatar-${k}-${big ? '32' : '18'}@2x.png`
 // hidden dev tools (level-skip request): ?dev=1 (remembered for the session) or long-press the level badge
 if (/[?&]dev=1/.test(location.search)) sessionStorage.setItem('pd-dev', '1')
@@ -63,13 +66,19 @@ function AgeField({ value, onChange, t }: { value: number; onChange: (n: number)
     onChange={e => { const v = e.target.value.replace(/\D/g, ''); setTxt(v); if (v) onChange(+v) }}
     onBlur={() => { const n = clampAge(+txt); setTxt(String(n)); onChange(n) }} />
 }
-type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string }
+type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string; pair?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
 function Meter({ level, pct }: { level: number; pct: number }) {
   return <div className="px-meter">{LEVELS.map((_, i) => i + 1 < level || level === 5 ? <i key={i} className="is-full" /> : i + 1 === level ? <i key={i} style={{ ['--f' as any]: Math.floor(pct / 10) }} /> : <i key={i} />)}</div>
 }
 
+/** Meter that ticks up one art px (10%) at a time from `from` to `to` after the card flip. */
+function TickMeter({ level, from, to }: { level: number; from: number; to: number }) {
+  const [p, setP] = useState(from)
+  useEffect(() => { setP(from); let v = from; const t0 = setTimeout(() => { const i = setInterval(() => { v = Math.min(to, v + 10); setP(v); if (v >= to) clearInterval(i) }, 90) }, 450); return () => clearTimeout(t0) }, [from, to])
+  return <div className="tick-meter"><Meter level={level} pct={p} /><span className="px-label-b px-coral">+{METER.cardBonus}%</span></div>
+}
 function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const [name, setName] = useState(''); const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const fileIn = useRef<HTMLInputElement>(null); const [adult, setAdult] = useState(false)
   const [iam, setIam] = useState<Gender>('man'); const [seek, setSeek] = useState<Seek>('everyone')
@@ -135,7 +144,9 @@ export default function App() {
   const [dev, setDev] = useState(isDev); const matchedAt = useRef(''); const lp = useRef(0) // long-press on the level badge toggles dev tools
   const myAv = useMemo(() => photo ? pixelatePhoto(photo, 1) : AV('a'), [photo])
   const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
-  const st = useRef({ level, taps, pct, call, m, ring, skipReq }); st.current = { level, taps, pct, call, m, ring, skipReq }
+  const [readyOpen, setReadyOpen] = useState(false); const [lvup, setLvup] = useState<{ from: number; to: number } | null>(null); const prevLv = useRef(1); const lvCv = useRef<HTMLCanvasElement>(null); const [photoV, setPhotoV] = useState(0)
+  const [evt, setEvt] = useState<{ id: string; kind: 'turn' | 'pair'; from: number } | null>(null); const [unread, setUnread] = useState(0)
+  const st = useRef({ level, taps, pct, call, m, ring, skipReq, ans, tab }); st.current = { level, taps, pct, call, m, ring, skipReq, ans, tab }
 
   const send = (d: any) => { try { st.current.m?.conn.send(d) } catch {} }
   /* PRIVACY GUARANTEE: everything leaving this device is already reduced to the shared level.
@@ -196,7 +207,7 @@ export default function App() {
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
-    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); matchedAt.current = new Date().toTimeString().slice(0, 5)
+    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
     setM(mm); setScreen('match')
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
   }
@@ -211,19 +222,29 @@ export default function App() {
   // meter: time together
   useEffect(() => { if (!m || level === 5) return; const t = setInterval(() => setPct(p => Math.min(100, p + METER.percentPerMinute / 60)), 1000); return () => clearInterval(t) }, [m, level])
   // card credit when BOTH answered
-  useEffect(() => { for (const [id, a] of Object.entries(ans)) if (a.me && a.them && !credited.includes(id)) { setCredited(c => [...c, id]); setPct(p => Math.min(100, p + METER.cardBonus)); setMsgs(x => [...x, { from: 'sys', text: `${cardById(id)!.id.replace(/L\dQ/, 'Q')} ANSWERED +${METER.cardBonus}%` }]) } }, [ans])
+  useEffect(() => { for (const [id, a] of Object.entries(ans)) if (a.me && a.them && !credited.includes(id)) { setCredited(c => [...c, id]); setEvt({ id, kind: 'pair', from: pct }); setPct(p => Math.min(100, p + METER.cardBonus)); setMsgs(x => [...x, { from: 'sys', pair: id }]) } }, [ans])
   const raise = (from: number) => { setLevel(l => l === from && l < 5 ? l + 1 : l); setPct(0); setTaps({ me: false, them: false }) }
   useEffect(() => { if (taps.me && taps.them) raise(level) }, [taps])
+  useEffect(() => { if (pct >= 100 && level < 5 && m) setReadyOpen(true) }, [pct >= 100])
+  useEffect(() => { if (taps.them || taps.me) setReadyOpen(true) }, [taps.them, taps.me])
+  // level-up event (both consented): overlay on any tab + a system card in the chat; drops are silent here
+  useEffect(() => { const p = prevLv.current; prevLv.current = level
+    if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `NOW AT ${L.name.toUpperCase()} · ${L.blocks ? L.blocks + ' BLOCKS' : 'FULL PHOTO'}` }]) } }, [level])
+  useEffect(() => { const c = lvCv.current, to = theirImgs.current[lvup?.to ?? 0]; if (!lvup || !c || !to) return
+    const from = theirImgs.current[lvup.from] || null; if (matchMedia('(prefers-reduced-motion: reduce)').matches) animateReveal(c, null, to); else animateReveal(c, from, to) }, [lvup, photoV])
 
   function onData(d: any) {
     const s = st.current
     switch (d?.t) {
-      case 'chat': setMsgs(x => [...x, { from: 'them', text: d.text }]); break
+      case 'chat': setMsgs(x => [...x, { from: 'them', text: d.text }]); if (s.tab !== 'chat') setUnread(n => n + 1); break
       case 'card': setMsgs(x => [...x, { from: 'them', card: d.id }]); break
-      case 'ans': setAns(a => ({ ...a, [d.id]: { ...a[d.id], them: d.text } })); break
+      case 'ans': if (!cardById(d.id) || s.ans[d.id]?.them) break
+        setAns(a => ({ ...a, [d.id]: { ...a[d.id], them: String(d.text) } })) // kept in state only; shown once I've answered too
+        if (!s.ans[d.id]?.me) { setEvt({ id: d.id, kind: 'turn', from: 0 }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} ANSWERED ${qn(d.id)} · YOUR TURN` }]); if (s.tab !== 'chat') setUnread(n => n + 1) }
+        break
       case 'tap': if (d.level === s.level) setTaps(t => ({ ...t, them: true })); break
       case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} LOWERED TO ${LEVELS[d.level - 1].name.toUpperCase()}` }]); break
-      case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; if (d.level === st.current.level) paint(img) }); break
+      case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break
       case 'skip': leave('They moved on. Finding someone new.', true); break
       case 'skipreq': if (DEV_SKIP_STAGE && d.level === s.level && s.level < 5) setSkip('in'); break
       case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) setMsgs(x => [...x, { from: 'sys', text: 'SKIP DECLINED' }]); break
@@ -239,12 +260,20 @@ export default function App() {
     if (prev && img.naturalWidth > prev.naturalWidth) animateReveal(c, prev, img); else animateReveal(c, null, img)
   }
   useEffect(() => { const i = theirImgs.current[level]; if (i) paint(i) }, [level])
+  useEffect(() => { if (tab === 'chat') setUnread(0) }, [tab])
+  useEffect(() => { if (evt?.kind !== 'turn') return; const t = setTimeout(() => setEvt(e => e === evt ? null : e), 6000); return () => clearTimeout(t) }, [evt])
   useEffect(() => { if (tab === 'profile' && shown.current && cv.current) animateReveal(cv.current, null, shown.current) }, [tab, screen])
 
   const used = new Set(Object.keys(ans).filter(k => ans[k].me && ans[k].them))
   const card = level < 6 ? deck.next(Math.min(level, 5), used) : null
-  const answer = (id: string, text: string) => { setAns(a => ({ ...a, [id]: { ...a[id], me: text } })); send({ t: 'ans', id, text }); setAnswering(null) }
-  const tapReveal = () => { if (pct < 100 || level === 5) return; setTaps(t => ({ ...t, me: true })); send({ t: 'tap', level }) }
+  // one path for every entry point (pinned, chat, match tab, call tab): update card state, send, log
+  const answer = (id: string, text: string) => {
+    if (ans[id]?.me) return
+    setAns(a => ({ ...a, [id]: { ...a[id], me: text } })); send({ t: 'ans', id, text }); setAnswering(null)
+    if (!ans[id]?.them) setMsgs(x => [...x, { from: 'sys', text: `YOU ANSWERED ${qn(id)} · WAITING FOR ${m?.them.name.toUpperCase()}` }])
+    if (evt?.kind === 'turn' && evt.id === id) setEvt(null)
+  }
+  const tapReveal = () => { if (pct < 100 || level === 5) return; setTaps(t => ({ ...t, me: true })); setReadyOpen(true); send({ t: 'tap', level }) }
   const drop = () => { if (level === 1) return; const l = level - 1; setLevel(l); setPct(0); setTaps({ me: false, them: false }); send({ t: 'drop', level: l }) }
   const chat = () => { if (!draft.trim()) return; send({ t: 'chat', text: draft }); setMsgs(x => [...x, { from: 'me', text: draft }]); setDraft('') }
   const dropCard = (id: string) => { send({ t: 'card', id }); setMsgs(x => [...x, { from: 'me', card: id }]); setTab('chat') }
@@ -316,7 +345,7 @@ export default function App() {
           <div className="sub"><span className="px-label-b px-coral" data-t="lvbadge" onPointerDown={press} onPointerUp={unpress} onPointerLeave={unpress} onContextMenu={e => e.preventDefault()}>{lv.name.toUpperCase()}{dev ? ' · DEV' : ''}</span>
             <span className="mini">{LEVELS.map((_, i) => <i key={i} className={i + 1 < level || level === 5 ? 'f' : i + 1 === level && pct >= 50 ? 'h' : ''} />)}</span></div></div>
         <button className="px-frame px-btn-ghost sk" data-t="skip" onClick={() => doSkip()}>SKIP</button>
-        <button className="px-frame px-iconbtn ib" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>
+        {SHOW_BLOCK && <button className="px-frame px-iconbtn ib" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>}
       </header>
       {ring?.dir === 'in' && tab !== 'call' ? callBar : call && tab !== 'call' ? callBar : null}
       {(tab !== 'profile' || skipReq === 'in') && skipBar}
@@ -341,7 +370,11 @@ export default function App() {
         {tab === 'chat' && <div className="chat">
           <p className="px-meta day">MATCHED · {matchedAt.current}</p>
           {<p className="px-label sys"><Ic n="sparkle" s={8} /> NOW AT <b className="px-coral">{lv.name.toUpperCase()}</b> · {lv.blocks || 'FULL'}{lv.blocks ? ' BLOCKS' : ''}</p>}
-          {msgs.map((x, i) => x.from === 'sys' ? <p key={i} className="px-label sys">{x.text}</p>
+          {msgs.map((x, i) => x.pair ? <div key={i} className="px-frame px-card px-qcard px-card--hot pair" data-t="pair-log">
+              <div className="px-qcard__top"><span className="px-frame px-tag">{qn(x.pair)}</span><span className="px-qcard__meta"><Ic n="sparkle" s={8} />+{METER.cardBonus}%</span></div>
+              <p className="px-qcard__q">{qn(x.pair)} · {cardById(x.pair)!.text}</p>
+              <p className="read"><b className="px-coral">You:</b> {ans[x.pair]?.me}</p><p className="read" data-t="pair-them"><b className="px-coral-l">{them}:</b> {ans[x.pair]?.them}</p></div>
+            : x.from === 'sys' ? <p key={i} className="px-label sys">{x.text}</p>
             : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div> : <div key={i} className={`px-frame px-bubble ${x.from === 'me' ? 'px-bubble--me me' : ''} bub msg`} data-t={'msg-' + x.from}>{x.text}</div>)}
         </div>}
         {tab === 'call' && <div className="call">
@@ -364,12 +397,45 @@ export default function App() {
             <p className="meta">Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p></>}
         </div>}
       </div>
-      {tab === 'chat' && level === 1 && card && msgs.length === 0 && !Object.keys(ans).length && <div className="pinned" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
+      {tab === 'chat' && level === 1 && card && !ans[card.id]?.me && !msgs.some(x => x.from !== 'sys') && <div className="pinned" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
       {tab === 'chat' && <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>
         <input className="px-frame px-input fld" value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${them}`} data-t="chat-input" />
         <button className="px-frame px-iconbtn" data-t="chat-send"><Ic n="send" /></button></form>}
+      {evt?.kind === 'turn' && <button className="px-frame px-card turn" data-t="ans-turn" onClick={() => { setEvt(null); setTab('profile'); setAnswering(evt.id) }}>
+        <span className="px-frame px-card cardback" aria-hidden="true"><b>?</b></span>
+        <span><span className="px-label-b px-cream">{them.toUpperCase()} ANSWERED, YOUR TURN</span><br /><span className="meta">{qn(evt.id)} · {cardById(evt.id)?.text}</span></span></button>}
+      {evt?.kind === 'pair' && ans[evt.id]?.me && ans[evt.id]?.them && <div className="modal" data-t="ans-pair" role="dialog" aria-label="Both answered" onClick={e => { if (e.target === e.currentTarget) setEvt(null) }}>
+        <div className="pairbox">
+          <p className="px-label-b px-cream ctr">{qn(evt.id)} · BOTH ANSWERED</p>
+          <p className="read ctr">{cardById(evt.id)?.text}</p>
+          <div className="flips"><div className="px-frame px-card px-qcard flip me"><span className="px-label-b">YOU</span><p className="read">{ans[evt.id].me}</p></div>
+            <div className="px-frame px-card px-qcard flip them"><span className="px-label-b">{them.toUpperCase()}</span><p className="read">{ans[evt.id].them}</p></div>
+            <div className="burst" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7].map(k => <i key={k} style={{ ['--a' as any]: k * 45 + 'deg' }}><Ic n="heart" s={8} /></i>)}</div></div>
+          <TickMeter level={level} from={evt.from} to={pct} />
+          {pct >= 100 && level < 5 ? <button className="px-frame px-btn" data-t="evt-reveal" onClick={() => { setEvt(null); setTab('profile'); tapReveal() }}><Ic n="sparkle" /><span className="px-btn__label">Reveal more</span></button>
+            : <button className="px-frame px-btn" data-t="evt-close" onClick={() => setEvt(null)}><span className="px-btn__label">Keep chatting</span></button>}
+        </div></div>}
+      {readyOpen && !evt && !lvup && level < 5 && pct >= 100 && <div className="modal" data-t="ready" role="dialog" aria-label="Ready to see more" onClick={e => { if (e.target === e.currentTarget) setReadyOpen(false) }}>
+        <div className="pairbox ctr pulse">
+          <p className="kicker" style={{ justifyContent: 'center' }}><Ic n="sparkle" s={8} /> METER FULL</p>
+          <h2 className="h1 ctr">Ready to see more?</h2>
+          <div className="tick-meter shimmer"><Meter level={level} pct={100} /></div>
+          <p className="read m">{taps.me ? `Waiting for ${them}…` : taps.them ? `${them} is ready. Your turn to reveal ${nx?.name}.` : `You both filled the meter. Reveal ${nx?.name} when you're both ready.`}</p>
+          {taps.me ? <p className="px-label-b px-cream" data-t="ready-waiting"><span className="beat"><Ic n="heart" s={8} /></span> WAITING FOR {them.toUpperCase()}…</p>
+            : <button className="px-frame px-btn big" data-t="ready-reveal" onClick={tapReveal}><Ic n="sparkle" /><span className="px-btn__label">Reveal more</span></button>}
+          <button className="ghost" onClick={() => setReadyOpen(false)}>LATER</button>
+        </div></div>}
+      {lvup && <div className="modal lvup" data-t="lvup" onClick={() => setLvup(null)}>
+        <div className="pairbox ctr">
+          <div className="lvphoto"><canvas ref={lvCv} width={480} height={480} />
+            <div className="burst gold" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => <i key={k} style={{ ['--a' as any]: k * 36 + 'deg' }}><Ic n={k % 2 ? 'sparkle' : 'heart'} s={8} /></i>)}</div></div>
+          <h2 className="h1 ctr stamp" data-t="lvup-name">LV {lvup.to} · {LEVELS[lvup.to - 1].name.toUpperCase()}</h2>
+          <span className="px-frame px-tag stamp2">{LEVELS[lvup.to - 1].blocks ? `${LEVELS[lvup.to - 1].blocks} BLOCKS` : 'FULL PHOTO'}</span>
+          <div className="tick-meter"><Meter level={lvup.to} pct={0} /></div>
+          <button className="px-frame px-btn" data-t="lvup-close" onClick={() => setLvup(null)}><span className="px-btn__label">Keep chatting</span></button>
+        </div></div>}
       <nav className="px-nav nav">
-        {(['profile', 'chat', 'call'] as const).map(t => <a key={t} className={tab === t ? 'on' : ''} data-t={'tab-' + t} onClick={() => setTab(t)}><Ic n={t === 'profile' ? 'matches' : t} />{t === 'profile' ? 'MATCH' : t === 'chat' ? 'CHAT' : 'CALL'}</a>)}
+        {(['profile', 'chat', 'call'] as const).map(t => <a key={t} className={tab === t ? 'on' : ''} data-t={'tab-' + t} onClick={() => setTab(t)}><Ic n={t === 'profile' ? 'matches' : t} />{t === 'profile' ? 'MATCH' : t === 'chat' ? 'CHAT' : 'CALL'}{t === 'chat' && unread > 0 && tab !== 'chat' && <span className="unread" data-t="unread">{unread}</span>}</a>)}
       </nav>
     </div>}
   </div>

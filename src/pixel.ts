@@ -23,7 +23,7 @@ export function animateReveal(canvas: HTMLCanvasElement, from: HTMLImageElement 
   const S = canvas.width, c = canvas.getContext('2d')!; c.imageSmoothingEnabled = false
   const n = to.naturalWidth, t0 = performance.now()
   const step = () => {
-    const t = Math.min(1, (performance.now() - t0) / REVEAL_MS)
+    const r = Math.min(1, (performance.now() - t0) / REVEAL_MS), t = r < .5 ? 4 * r * r * r : 1 - Math.pow(-2 * r + 2, 3) / 2 // ease-in-out
     if (!from || t >= 1) { c.drawImage(to, 0, 0, S, S); if (t >= 1 || !from) { onDone?.(); return } }
     c.drawImage(from!, 0, 0, S, S)
     const g = Math.min(n, 128), cell = S / g, slant = 0.35, sweep = 0.3

@@ -14,11 +14,18 @@ const SEEKS: Seek[] = ['men', 'women', 'everyone']
 export const wants = (a: Profile, b: Profile) => G[a.seek].includes(b.iam) && b.age >= a.min && b.age <= a.max
 export const compatible = (a: Profile, b: Profile) => wants(a, b) && wants(b, a)
 const slotId = (g: Gender, s: Seek, n: number) => `pixeldate-lobby-${g}-${s}-${n}`
-/** Slots held by people I could match: their gender is one I seek, and they seek my gender. */
+/** Every slot I could match with (including my own combo), shuffled. */
 function joinSlots(me: Profile) {
   const ids: string[] = []
   for (const g of G[me.seek]) for (const s of SEEKS) if (G[s].includes(me.iam)) for (let n = 0; n < LOBBY_SLOTS; n++) ids.push(slotId(g, s, n))
   return ids.sort(() => Math.random() - 0.5)
+}
+export const DEBUG = location.search.includes('debug')
+let dbgEl: HTMLElement | null = null
+export function dlog(s: string) {
+  console.log('[lobby]', s); if (!DEBUG) return
+  if (!dbgEl) { dbgEl = document.createElement('pre'); dbgEl.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:40vh;overflow:auto;margin:0;padding:4px;font:10px monospace;background:#000c;color:#0f0;z-index:9999;white-space:pre-wrap;pointer-events:none'; document.body.appendChild(dbgEl) }
+  dbgEl.textContent = (new Date().toTimeString().slice(0, 8) + ' ' + s + '\n' + dbgEl.textContent).slice(0, 4000)
 }
 export const blocked = (): string[] => JSON.parse(store.getItem('pd-blocked') || '[]')
 export const block = (uid: string) => store.setItem('pd-blocked', JSON.stringify([...new Set([...blocked(), uid])]))
@@ -29,7 +36,9 @@ function openPeer(id?: string): Promise<Peer> {
   return new Promise((ok, bad) => {
     const p: Peer = id ? new P(id) : new P()
     const t = setTimeout(() => { p.destroy(); bad(new Error('timeout')) }, 8000)
-    p.on('open', () => { clearTimeout(t); ok(p) }); p.on('error', e => { clearTimeout(t); p.destroy(); bad(e) })
+    // only fatal until open: a later 'peer-unavailable' (failed knock) must NOT destroy the peer
+    const fail = (e: any) => { dlog('open ' + (id || 'peer') + ' failed: ' + e?.type); clearTimeout(t); p.destroy(); bad(e) }
+    p.on('open', () => { clearTimeout(t); p.off('error', fail); ok(p) }); p.on('error', fail)
   })
 }
 function onceData(c: DataConnection, ms: number): Promise<any> {
@@ -44,6 +53,8 @@ function openConn(p: Peer, id: string, ms = 5000): Promise<DataConnection> {
     c.on('open', () => { if (!done) { done = true; p.off('error', pe); ok(c) } })
   })
 }
+/** Queue data until the app attaches its listener (App replays conn.q), so early messages aren't lost. */
+const buffer = (c: DataConnection) => { const x = c as any; x.q = []; x.qf = (d: any) => x.q.push(d); c.on('data', x.qf); return c }
 export interface Match { conn: DataConnection; them: Profile }
 
 /** The personal peer: has id pd-<code>, receives the match connection and calls. */
@@ -61,7 +72,7 @@ export class Net {
     this.peer.on('disconnected', () => { try { this.peer.reconnect() } catch {} })
     this.peer.on('connection', async c => {
       const w = this.pending.get(c.peer)
-      if (w) { this.pending.delete(c.peer); c.on('open', () => w(c)); return }
+      if (w) { this.pending.delete(c.peer); buffer(c); c.on('open', () => w(c)); return } // buffer until the app listens
       // direct "join with a code"
       c.on('open', async () => {
         try {
@@ -79,53 +90,61 @@ export class Net {
     this.busy = true; return { conn: c, them: r.p }
   }
   cancel() { this.searching = false }
-  /** Random matching through well-known lobby slots on the public PeerJS server. */
-  async find(skipUids: Set<string>, log = (_: string) => {}): Promise<Match | null> {
-    this.searching = true; this.busy = false
+  private lock = false
+  /** Random matching: hold one lobby slot for the whole search, and meanwhile knock on the other slots one by one. */
+  async find(skipUids: Set<string>, log = dlog): Promise<Match | null> {
+    this.searching = true; this.busy = false; this.lock = false
+    log('me ' + this.peer.id + ' ' + this.me.iam + '/' + this.me.seek + ' uid ' + this.me.uid.slice(0, 6))
+    let slot: Peer | null = null, won: Match | null = null
+    const win = (m: Match) => { if (!won) { won = m; this.busy = true; this.searching = false; log('matched ' + m.them.name) } }
     while (this.searching) {
-      // 1) knock on every compatible slot at once; first compatible holder wins
-      let winner: { c: DataConnection; r: any } | null = null
-      const tries = joinSlots(this.me).map(async id => {
-        const c = await openConn(this.peer, id, 7000)
-        try {
-          c.send({ t: 'hello', p: this.me, id: this.peer.id })
-          const r = await onceData(c, 4000)
-          if (r?.t !== 'ok' || !okWith(this.me, r.p, false) || skipUids.has(r.p.uid) || winner || !this.searching) throw new Error('no')
-          winner = { c, r }; return winner
-        } catch (e) { try { c.send({ t: 'bye' }) } catch {}; setTimeout(() => c.close(), 200); throw e }
-      })
-      log('scan ' + tries.length); const w = await Promise.any(tries).catch(() => null); log('scan done ' + !!w)
-      if (w && this.searching) {
-        try {
-          const conn = await new Promise<DataConnection>((ok, bad) => { this.pending.set(w.r.id, ok); w.c.send({ t: 'go' }); setTimeout(() => bad(new Error('timeout')), 8000) })
-          w.c.close(); this.busy = true; this.searching = false; log('joined ' + w.c.peer); return { conn, them: w.r.p }
-        } catch { w.c.close() }
-      } else if (w) w.c.close()
-      await Promise.allSettled(tries)
-      if (!this.searching) return null
-      // 2) nobody compatible waiting: claim a slot of my own and wait there
-      let slot: Peer | null = null
-      for (let n = 0; n < LOBBY_SLOTS && !slot; n++) { try { slot = await openPeer(slotId(this.me.iam, this.me.seek, n)) } catch {} }
-      if (!slot) { await sleep(1500 + Math.random() * 1500); continue }
-      log('waiting in ' + slot.id)
-      const m = await new Promise<Match | null>(done => {
-        let taken = false
-        const end = setTimeout(() => done(null), 6000 + Math.random() * 6000)
-        const stop = setInterval(() => { if (!this.searching) { clearTimeout(end); clearInterval(stop); done(null) } }, 300)
-        slot!.on('connection', c => c.on('open', async () => {
-          try {
-            const h = await onceData(c, 4000)
-            if (taken || h?.t !== 'hello' || !okWith(this.me, h.p, false) || skipUids.has(h.p.uid)) { c.send({ t: 'no' }); return }
-            taken = true; c.send({ t: 'ok', p: this.me, id: this.peer.id })
-            const g = await onceData(c, 5000); if (g?.t !== 'go') { taken = false; return }
-            const conn = await openConn(this.peer, h.id, 6000)
-            clearTimeout(end); clearInterval(stop); done({ conn, them: h.p })
-          } catch { taken = false }
-        }))
-      })
-      slot.destroy() // free the slot for others
-      if (m) { this.busy = true; this.searching = false; return m }
+      if (!slot || slot.destroyed || slot.disconnected) { slot?.destroy(); slot = await this.claim(skipUids, win, log) }
+      for (const id of joinSlots(this.me)) {
+        if (!this.searching) break
+        if (id === slot?.id) continue
+        const m = await this.knock(id, skipUids, log).catch(e => { log('knock ' + id.slice(16) + ': ' + (e?.type || e?.message)); return null })
+        if (m) win(m)
+      }
+      if (this.searching) await sleep(2000 + Math.random() * 3000)
     }
-    return null
+    const s = slot; setTimeout(() => s?.destroy(), 1500)
+    return won
   }
+  private async claim(skipUids: Set<string>, win: (m: Match) => void, log: (s: string) => void): Promise<Peer | null> {
+    for (let n = 0; n < LOBBY_SLOTS; n++) {
+      let slot: Peer
+      try { slot = await openPeer(slotId(this.me.iam, this.me.seek, n)) } catch { continue }
+      log('claimed ' + slot.id.slice(16))
+      slot.on('error', (e: any) => log('slot error ' + e?.type))
+      slot.on('connection', c => {
+        log('knock from ' + c.peer)
+        const h = onceData(c, 8000) // listen before 'open' so the hello can't be missed
+        c.on('open', async () => {
+          try {
+            const hi = await h
+            if (this.lock || !this.searching || hi?.t !== 'hello' || !okWith(this.me, hi.p, false) || skipUids.has(hi.p.uid)) { log('declined ' + (hi?.p?.uid === this.me.uid ? '(same uid)' : '')); c.send({ t: 'no' }); return }
+            this.lock = true; const g = onceData(c, 6000); c.send({ t: 'ok', p: this.me, id: this.peer.id })
+            if ((await g)?.t !== 'go') throw new Error('no go')
+            const conn = openConn(this.peer, hi.id, 8000); win({ conn: buffer(await conn), them: hi.p })
+          } catch (e: any) { this.lock = false; log('handshake failed ' + (e?.type || e?.message)) }
+        })
+      })
+      return slot
+    }
+    log('no free slot'); return null
+  }
+  private async knock(id: string, skipUids: Set<string>, log: (s: string) => void): Promise<Match | null> {
+    if (this.lock) return null
+    const c = await openConn(this.peer, id, 6000)
+    try {
+      const r = onceData(c, 5000); c.send({ t: 'hello', p: this.me, id: this.peer.id }); const a = await r
+      if (a?.t !== 'ok' || this.lock || !okWith(this.me, a.p, false) || skipUids.has(a.p.uid) || !this.searching) { log('knock ' + id.slice(16) + ': declined'); c.send({ t: 'bye' }); return null }
+      this.lock = true
+      try {
+        const conn = await new Promise<DataConnection>((ok, bad) => { this.pending.set(a.id, ok); c.send({ t: 'go' }); setTimeout(() => { this.pending.delete(a.id); bad(new Error('no callback')) }, 10000) })
+        return { conn, them: a.p }
+      } catch (e) { this.lock = false; throw e }
+    } finally { setTimeout(() => c.close(), 500) }
+  }
+
 }

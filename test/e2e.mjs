@@ -49,7 +49,7 @@ const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t
 await t(a, '[data-t=their-photo]'); await t(b, '[data-t=their-photo]'); log(`matched via lobby in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
 const nameA = await b.$eval('.plate', e => e.textContent); log('B sees', nameA)
 await sleep(1500)
-const pw = async p => p.evaluate(() => window.__pd.photoW)
+const pw = async p => p.evaluate(() => window.__pd?.photoW)
 log('received photo widths at Stranger:', await pw(a), await pw(b)); if (await pw(a) !== 8 || await pw(b) !== 8) throw 'photo not 8 px'
 await shot(b, '04-match-stranger')
 // chat

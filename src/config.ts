@@ -9,5 +9,5 @@ export const LEVELS = [
 /** Meter tuning: time together fills slowly; each card BOTH answer adds cardBonus %. */
 export const METER = { percentPerMinute: 4, cardBonus: 20 }
 export const REVEAL_MS = 600
-export const LOBBY_SLOTS = 2
+export const LOBBY_SLOTS = 3
 export const FULL_PHOTO_PX = 512

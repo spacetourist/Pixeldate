@@ -4,12 +4,13 @@ import { LEVELS, METER, VERSION } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { PixelCam } from './video'
-import { Net, block, store, type Profile, type Gender, type Seek, type Match } from './net'
+import { Net, block, type Profile, type Gender, type Seek, type Match } from './net'
 
 const B = import.meta.env.BASE_URL
 const deck: QuestionSource = localDeck
 const Ic = ({ n, s = 16 }: { n: string; s?: number }) => <i className="ic" style={{ width: s * 2, height: s * 2, WebkitMaskImage: `url(${B}px/icons/${s}/${n}.svg)`, maskImage: `url(${B}px/icons/${s}/${n}.svg)` }} />
-const uid = () => { let u = store.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); store.setItem('pd-uid', u) } return u }
+// per tab, so two tabs in one browser are different people
+const uid = () => { let u = sessionStorage.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); sessionStorage.setItem('pd-uid', u) } return u }
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -108,7 +109,7 @@ export default function App() {
 
   const find = async () => {
     setScreen('finding'); setNotice('')
-    const mm = await net.current!.find(skip.current, s => console.log('[lobby]', s))
+    const mm = await net.current!.find(skip.current)
     if (mm) beginMatch(mm); else setScreen(s => s === 'finding' ? 'lobby' : s)
   }
   const doJoin = async () => {
@@ -118,7 +119,7 @@ export default function App() {
     theirImgs.current = {}; shown.current = null
     setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null)
     setM(mm); setScreen('match')
-    mm.conn.on('data', onData); mm.conn.on('close', () => leave('They left the match.'))
+    mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
   }
   const leave = (why: string, again = false) => {
     endCall(false); const c = st.current.m; if (!c) return; st.current.m = null; setM(null)

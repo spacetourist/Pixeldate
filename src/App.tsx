@@ -4,6 +4,9 @@ import { LEVELS, METER, VERSION } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { PixelCam } from './video'
+type Kind = 'voice' | 'video'
+/** What we send on a call: pixelated video + mic, or mic only. */
+type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
 import { Net, block, type Profile, type Gender, type Seek, type Match } from './net'
 
 const B = import.meta.env.BASE_URL
@@ -79,8 +82,10 @@ export default function App() {
   const [answering, setAnswering] = useState<string | null>(null)
   const theirImgs = useRef<Record<number, HTMLImageElement>>({}); const shown = useRef<HTMLImageElement | null>(null)
   const cv = useRef<HTMLCanvasElement>(null)
-  const [call, setCall] = useState<{ cam: PixelCam; mc: MediaConnection; remote?: MediaStream } | null>(null)
-  const st = useRef({ level, taps, pct, call, m }); st.current = { level, taps, pct, call, m }
+  const [call, setCall] = useState<{ cam: Media; mc: MediaConnection; kind: Kind; remote?: MediaStream } | null>(null)
+  const [ring, setRing] = useState<{ dir: 'in' | 'out'; kind: Kind } | null>(null); const [muted, setMuted] = useState(false); const [camOff, setCamOff] = useState(false)
+  const ready = useRef<{ cam: Media; kind: Kind } | null>(null) // media grabbed on accept, used when their call arrives
+  const st = useRef({ level, taps, pct, call, m, ring }); st.current = { level, taps, pct, call, m, ring }
 
   const send = (d: any) => { try { st.current.m?.conn.send(d) } catch {} }
   const sendPhoto = (l: number) => { if (photo) send({ t: 'photo', level: l, data: pixelatePhoto(photo, l) }) }
@@ -91,20 +96,39 @@ export default function App() {
     n.onIncomingByCode = mm => beginMatch(mm)
     n.peer.on('call', async mc => {
       if (mc.peer !== st.current.m?.peer) { mc.close(); return }
-      const cam = await getCam(); if (!cam) { mc.close(); return }
-      (window as any).__pdCam = cam; cam.setLevel(st.current.level); mc.answer(withAudio(cam)); hookCall(cam, mc); setTab('call')
+      const r = ready.current; ready.current = null; if (!r) { mc.close(); return } // only calls we accepted
+      r.cam.setLevel(st.current.level); mc.answer(r.cam.out); hookCall(r.cam, mc, r.kind)
     })
   }
-  const getCam = async () => { try { return new PixelCam(await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: true })) } catch { alert('Camera unavailable'); return null } }
-  const withAudio = (cam: PixelCam) => new MediaStream([...cam.out.getVideoTracks(), ...cam.stream.getAudioTracks()])
-  const hookCall = (cam: PixelCam, mc: MediaConnection) => {
-    setCall({ cam, mc }); mc.on('stream', s => setCall(c => c && { ...c, remote: s })); mc.on('close', () => endCall(false))
+  // permissions are only requested here, when a call is accepted / answered
+  const getCam = async (kind: Kind): Promise<Media | null> => {
+    try {
+      if (kind === 'voice') { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); return { stream: s, out: s, setLevel() {}, stop: () => s.getTracks().forEach(t => t.stop()) } }
+      const c = new PixelCam(await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: true })); (window as any).__pdCam = c
+      return { stream: c.stream, out: new MediaStream([...c.out.getVideoTracks(), ...c.stream.getAudioTracks()]), setLevel: l => c.setLevel(l), stop: () => c.stop() }
+    } catch { alert(kind === 'voice' ? 'Microphone unavailable' : 'Camera unavailable'); return null }
   }
-  const startCall = async () => {
-    const cam = await getCam(); if (!cam || !m) return; cam.setLevel(level); (window as any).__pdCam = cam
-    hookCall(cam, net.current!.peer.call(m.peer, withAudio(cam)))
+  const hookCall = (cam: Media, mc: MediaConnection, kind: Kind) => {
+    setRing(null); setMuted(false); setCamOff(false); setTab('call')
+    setCall({ cam, mc, kind }); mc.on('stream', s => setCall(c => c && { ...c, remote: s })); mc.on('close', () => endCall(false))
   }
-  const endCall = (tell = true) => { const c = st.current.call; if (!c) return; c.cam.stop(); c.mc.close(); setCall(null); if (tell) send({ t: 'endcall' }) }
+  const requestCall = (kind: Kind) => { setRing({ dir: 'out', kind }); send({ t: 'callreq', kind }) }
+  const cancelRing = () => { setRing(null); send({ t: 'callcancel' }) }
+  const acceptCall = async () => {
+    const r = st.current.ring; if (!r) return; const cam = await getCam(r.kind)
+    if (!cam) { setRing(null); send({ t: 'callans', ok: false }); return }
+    ready.current = { cam, kind: r.kind }; setRing(null); send({ t: 'callans', ok: true }); setTab('call')
+  }
+  const declineCall = () => { setRing(null); send({ t: 'callans', ok: false }) }
+  const onCallAns = async (ok: boolean) => {
+    const r = st.current.ring; if (r?.dir !== 'out') return
+    if (!ok) { setRing(null); setMsgs(x => [...x, { from: 'sys', text: 'CALL DECLINED' }]); return }
+    const cam = await getCam(r.kind); if (!cam || !st.current.m) { setRing(null); send({ t: 'endcall' }); return }
+    cam.setLevel(st.current.level); hookCall(cam, net.current!.peer.call(st.current.m.peer, cam.out, { metadata: { kind: r.kind } }), r.kind)
+  }
+  const toggleMute = () => { const v = !muted; call?.cam.stream.getAudioTracks().forEach(t => t.enabled = !v); setMuted(v) }
+  const toggleCam = () => { const v = !camOff; call?.cam.out.getVideoTracks().forEach(t => t.enabled = !v); setCamOff(v) }
+  const endCall = (tell = true) => { setRing(null); const r = ready.current; ready.current = null; r?.cam.stop(); const c = st.current.call; if (!c) return; c.cam.stop(); c.mc.close(); setCall(null); if (tell) send({ t: 'endcall' }) }
   useEffect(() => { call?.cam.setLevel(level) }, [level, call])
 
   const find = async () => {
@@ -147,6 +171,9 @@ export default function App() {
       case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; if (d.level === st.current.level) paint(img) }); break
       case 'skip': leave('They moved on. Finding someone new.', true); break
       case 'endcall': endCall(false); break
+      case 'callreq': if (st.current.call) send({ t: 'callans', ok: false }); else setRing({ dir: 'in', kind: d.kind === 'voice' ? 'voice' : 'video' }); break
+      case 'callcancel': setRing(r => r?.dir === 'in' ? null : r); break
+      case 'callans': onCallAns(!!d.ok); break
     }
   }
   const paint = (img: HTMLImageElement) => {
@@ -166,7 +193,7 @@ export default function App() {
   const dropCard = (id: string) => { send({ t: 'card', id }); setMsgs(x => [...x, { from: 'me', card: id }]); setTab('chat') }
 
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
-  useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.cam.stream; localV.current.play().catch(() => {}) } }, [call, tab])
+  useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab])
 
   if (screen === 'onboard') return <div className="app px"><Onboard onDone={start} /></div>
 
@@ -188,6 +215,13 @@ export default function App() {
     </div>
   }
   const lv = LEVELS[level - 1], nx = LEVELS[level]
+  const them = m?.them.name || ''
+  const callBar = call ? <button className="px-frame px-btn-ghost callbar" data-t="to-call" onClick={() => setTab('call')}><Ic n="call" s={8} /> IN CALL · OPEN</button>
+    : ring?.dir === 'in' ? <div className="px-frame px-card ringin" data-t="ring-in"><p className="px-text"><b className="px-coral">{them}</b> wants a {ring.kind} call</p>
+      <div className="row2"><button className="px-frame px-btn-small" data-t="call-accept" onClick={acceptCall}>ACCEPT</button><button className="px-frame px-btn-ghost" data-t="call-decline" onClick={declineCall}>DECLINE</button></div></div>
+    : ring ? <div className="px-frame px-card ringin" data-t="ring-out"><p className="px-text">Calling {them} ({ring.kind})… waiting for them to accept</p><button className="px-frame px-btn-ghost" onClick={cancelRing}>CANCEL</button></div>
+    : <div className="row2 callbar"><button className="px-frame px-btn-small" data-t="call-voice" onClick={() => requestCall('voice')}><Ic n="call" s={8} /> VOICE CALL</button>
+      <button className="px-frame px-btn-small" data-t="call-video" onClick={() => requestCall('video')}><Ic n="call" s={8} /> VIDEO CALL</button></div>
   return <div className="app px">
     {screen !== 'match' ? <div className="screen">
       <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><span className="ver">{VERSION}</span></header>
@@ -211,6 +245,7 @@ export default function App() {
       <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" />
         <div className="acts"><button className="px-frame px-btn-ghost" data-t="skip" onClick={() => doSkip()}>SKIP</button>
           <button className="blockbtn" title="Block" data-t="block" onClick={() => confirm('Block and never match again?') && doSkip(true)}><Ic n="lock" s={8} /></button></div></header>
+      {(tab !== 'call' || ring?.dir === 'in') && (tab === 'chat' || ring?.dir === 'in' || call) && callBar}
       <div className="body scroll">
         {tab === 'profile' && <>
           <div className="px-frame px-card prof">
@@ -236,14 +271,22 @@ export default function App() {
         </div>}
         {tab === 'call' && <div className="call">
           {call ? <>
-            <div className="remote"><video ref={remoteV} playsInline data-t="remote-video" />{!call.remote && <p className="px-label">CONNECTING…</p>}
+            <div className="remote">{call.kind === 'video' ? <video ref={remoteV} playsInline data-t="remote-video" />
+              : <>{theirImgs.current[level] && <img className="avatar" src={theirImgs.current[level].src} />}<video ref={remoteV} playsInline data-t="remote-audio" className="hid" /></>}
+              {!call.remote && <p className="px-label">CONNECTING…</p>}
               <span className="px-frame px-chip chip">LV {level} · {lv.name.toUpperCase()}</span></div>
-            <video ref={localV} className="self" muted playsInline />
+            {call.kind === 'video' && <video ref={localV} className="self" muted playsInline />}
+            <div className="row3">
+              <button className="px-frame px-btn-small" data-t="mute" onClick={toggleMute}>{muted ? 'UNMUTE' : 'MUTE'}</button>
+              {call.kind === 'video' && <button className="px-frame px-btn-small" data-t="cam-off" onClick={toggleCam}>{camOff ? 'CAM ON' : 'CAM OFF'}</button>}
+              <button className="px-frame px-btn-small hang" data-t="hangup" onClick={() => endCall()}>HANG UP</button></div>
+            <div className="row2"><button className="px-frame px-btn-ghost" data-t="call-reveal" disabled={pct < 100 || level === 5 || taps.me} onClick={tapReveal}>REVEAL MORE {pct < 100 ? Math.floor(pct) + '%' : ''}</button>
+              <button className="px-frame px-btn-ghost" data-t="call-drop" disabled={level === 1} onClick={drop}>LOWER LEVEL</button></div>
+            {taps.them && !taps.me && <p className="px-text px-coral-l hint">{them} has tapped. Your turn</p>}
             {card && Q({ id: card.id })}
-            <button className="px-frame px-btn" onClick={() => endCall()}><span className="px-btn__label">End call</span></button>
           </> : <>
-            <div className="px-frame px-card pad"><p className="px-text">Video is pixelated on your phone before it is sent. {m!.them.name} sees you at {lv.name}, you see your own clear preview.</p></div>
-            <button className="px-frame px-btn" data-t="call" onClick={startCall}><Ic n="call" /><span className="px-btn__label">Start pixel call</span></button></>}
+            <div className="px-frame px-card pad"><p className="px-text">Video is pixelated on your phone before it is sent. {them} sees you at {lv.name}, you see your own clear preview. They have to accept first.</p></div>
+            {callBar}</>}
         </div>}
       </div>
       {tab === 'chat' && <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>

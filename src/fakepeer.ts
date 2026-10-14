@@ -9,6 +9,7 @@ bc.onmessage = ({ data: m }) => {
   if (m.k === 'claim' && live.has(m.id)) bc.postMessage({ k: 'taken', id: m.id, nonce: m.nonce })
   else if (m.k === 'taken') pendingClaims.get(m.nonce)?.()
   else if (m.k === 'conn' && live.has(m.to)) { const p = live.get(m.to)!; const c = new FakeConn(m.cid, m.from, p, true); bc.postMessage({ k: 'ack', cid: m.cid }); p.emit('connection', c); setTimeout(() => c.emit('open'), 10) }
+  else if (m.k === 'call' && live.has(m.to)) { const mc = new Em() as any; mc.peer = m.from; mc.metadata = m.meta; mc.close = () => {}; mc.answer = (s: MediaStream) => setTimeout(() => mc.emit('stream', s), 300); live.get(m.to)!.emit('call', mc) }
   else if (m.k === 'ack') pendingConns.get(m.cid)?.()
   else if (m.k === 'data') conns.get(m.cid + (m.side ? ':a' : ':b'))?.emit('data', m.d)
   else if (m.k === 'close') { const c = conns.get(m.cid + (m.side ? ':a' : ':b')); if (c && c.open) { c.open = false; c.emit('close') } }
@@ -33,6 +34,6 @@ export class FakePeer extends Em {
     setTimeout(() => { pendingConns.delete(cid); if (!ok) this.emit('error', { type: 'peer-unavailable', message: 'Could not connect to peer ' + to }) }, 400)
     return c
   }
-  call(to: string, s: MediaStream) { const mc = new Em() as any; mc.peer = to; mc.close = () => {}; setTimeout(() => mc.emit('stream', s), 300); return mc } // echoes the already-pixelated outgoing stream
+  call(to: string, s: MediaStream, o?: any) { bc.postMessage({ k: 'call', to, from: this.id, meta: o?.metadata }); const mc = new Em() as any; mc.peer = to; mc.close = () => {}; setTimeout(() => mc.emit('stream', s), 300); return mc } // echoes the already-pixelated outgoing stream
   reconnect() {} destroy() { this.destroyed = true; if (live.get(this.id) === this) live.delete(this.id) }
 }

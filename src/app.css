@@ -74,3 +74,9 @@ select.fld option { background: var(--plum-900); }
 .px-tag { white-space: nowrap; }
 .px-qcard__top { gap: 4px; }
 .px-qcard__meta { white-space: nowrap; }
+
+.row2, .row3 { display: flex; gap: 6px; } .row2 > *, .row3 > * { flex: 1; white-space: nowrap; }
+.callbar { flex: none; } .callbar .ic, .ringin .ic { vertical-align: middle; }
+.ringin { padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: none; }
+.remote .avatar { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; } .hid { display: none; }
+.hang { background: var(--coral) !important; }

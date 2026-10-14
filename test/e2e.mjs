@@ -79,7 +79,12 @@ await a.click('[data-t=drop]'); await sleep(1500)
 log('after A dropped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))
 if (await pw(b) !== 8) throw 'drop not applied'
 // call
-await tab(a, 'call'); await click(a, '[data-t=call]')
+// call: request from the chat screen, B accepts
+const shotW = async (p, n) => { for (const w of [360, 412]) { await p.setViewport({ width: w, height: 800, deviceScaleFactor: 2 }); await shot(p, `${n}-${w}`) } await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
+await tab(a, 'chat'); await tab(b, 'chat'); await click(a, '[data-t=call-video]'); await t(a, '[data-t=ring-out]'); await shotW(a, '09a-call-request')
+await t(b, '[data-t=ring-in]'); await shotW(b, '09b-incoming-request'); log('call request shown on B')
+await b.click('[data-t=call-accept]')
+await t(b, '[data-t=remote-video]'); log('accepted; call started')
 if (!LB) await b.waitForFunction(() => { const v = document.querySelector('[data-t=remote-video]'); return v && v.videoWidth > 0 }, { timeout: 30000 })
 await a.waitForFunction(() => { const v = document.querySelector('[data-t=remote-video]'); return v && v.videoWidth > 0 }, { timeout: 30000 })
 await sleep(3000)
@@ -92,7 +97,8 @@ if (out.w > 32 || (await vr(a)).w > 32 || (!LB && (await vr(b)).w > 32)) throw '
 // block-content check on the received frame: 4x4 px cells should be uniform
 const uni = await (LB ? a : b).evaluate(() => { const v = document.querySelector('[data-t=remote-video]'); const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; const x = c.getContext('2d'); x.drawImage(v, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let distinct = new Set(); for (let i = 0; i < d.length; i += 4) distinct.add(d[i] >> 3 << 10 | d[i + 1] >> 3 << 5 | d[i + 2] >> 3); return { px: c.width * c.height, colours: distinct.size } })
 log('received frame colour check', JSON.stringify(uni))
-await shot((LB ? a : b), '09-call-pixelated')
+await shotW((LB ? a : b), '09c-call-pixelated')
+await click(a, '[data-t=hangup]'); await b.waitForFunction(() => !document.querySelector('[data-t=remote-video]'), { timeout: 10000 }); await a.waitForFunction(() => !document.querySelector('[data-t=remote-video]')); log('hang up ended the call on both sides')
 // skip from B
 await b.click('[data-t=skip]'); await sleep(2000); for (const p of [a, b]) step('after skip: ' + (await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 120))))
 await t(a, '[data-t=finding]'); await t(b, '[data-t=finding]'); log('Skip ended match; both returned to lobby and auto-search for the next match')

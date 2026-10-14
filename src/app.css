@@ -136,3 +136,4 @@ select.fld option { background: var(--plum-900); }
 .reveal .hid, .rv-acts.hid { opacity: 0; pointer-events: none; }
 .rv-skip { position: fixed; left: 0; right: 0; bottom: 24px; margin: auto; width: 120px; padding: 8px; font: var(--t-label-b); color: var(--mauve); background: none; border: 0; cursor: pointer; z-index: 6; }
 .rv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.grid2 > div { display: flex; flex-direction: column; gap: 8px; }

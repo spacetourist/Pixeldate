@@ -54,6 +54,15 @@ function PhotoReveal({ src, onConfirm, onChange }: { src: string; onConfirm: () 
       <button className="ghost" type="button" data-t="photo-change" onClick={onChange}>CHANGE PHOTO</button></div>
   </div>
 }
+const clampAge = (n: number) => Math.max(18, Math.min(99, Math.round(n) || 18))
+/** Age field: free text while editing (can be empty), clamped to 18-99 on blur. */
+function AgeField({ value, onChange, t }: { value: number; onChange: (n: number) => void; t: string }) {
+  const [txt, setTxt] = useState(String(value))
+  useEffect(() => { if (txt !== '' && +txt !== value) setTxt(String(value)) }, [value])
+  return <input className="px-frame px-input fld" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={txt} data-t={t}
+    onChange={e => { const v = e.target.value.replace(/\D/g, ''); setTxt(v); if (v) onChange(+v) }}
+    onBlur={() => { const n = clampAge(+txt); setTxt(String(n)); onChange(n) }} />
+}
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -69,7 +78,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
   const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPhoto(c.toDataURL('image/jpeg', .9)); setOkPhoto(false); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => { setPhoto(String(r.result)); setOkPhoto(false) }; r.readAsDataURL(f) } }
-  const ok = name.trim() && photo && okPhoto && adult && age >= 18 && min <= max
+  const ok = name.trim() && photo && okPhoto && adult
   const input = <input ref={fileIn} type="file" accept="image/*" hidden data-t="gallery" onChange={e => { file(e.target.files?.[0]); e.target.value = '' }} />
   if (photo && !okPhoto) return <div className="screen scroll">{input}<PhotoReveal src={photo} onConfirm={() => setOkPhoto(true)} onChange={() => fileIn.current?.click()} /></div>
   return <div className="screen scroll">{input}
@@ -90,17 +99,17 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
       <div><label className="px-label lab">I AM</label>
         <select className="px-frame px-input fld" value={iam} onChange={e => setIam(e.target.value as Gender)} data-t="iam"><option value="man">A man</option><option value="woman">A woman</option></select></div>
       <div><label className="px-label lab">MY AGE</label>
-        <input className="px-frame px-input fld" type="number" min={18} max={99} value={age} onChange={e => setAge(+e.target.value)} data-t="age" /></div>
+        <AgeField value={age} onChange={setAge} t="age" /></div>
     </div>
     <label className="px-label lab">I'D LIKE TO MEET</label>
     <select className="px-frame px-input fld" value={seek} onChange={e => setSeek(e.target.value as Seek)} data-t="seek"><option value="men">Men</option><option value="women">Women</option><option value="everyone">Everyone</option></select>
     <label className="px-label lab">AGED</label>
     <div className="grid2">
-      <input className="px-frame px-input fld" type="number" min={18} max={99} value={min} onChange={e => setMin(+e.target.value)} data-t="min" />
-      <input className="px-frame px-input fld" type="number" min={18} max={99} value={max} onChange={e => setMax(+e.target.value)} data-t="max" />
+      <AgeField value={min} onChange={setMin} t="min" />
+      <AgeField value={max} onChange={setMax} t="max" />
     </div>
     <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box">{adult && <Ic n="check" s={8} />}</span> I am 18 or over</label>
-    <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => onDone({ name: name.trim(), age, min, max, iam, seek, uid: uid() }, photo)}><span className="px-btn__label">Continue</span></button>
+    <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => { const a = clampAge(age), [lo, hi] = [clampAge(min), clampAge(max)].sort((x, y) => x - y); setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
   </div>
 }
 

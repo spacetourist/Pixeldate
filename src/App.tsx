@@ -282,7 +282,7 @@ export default function App() {
         {tab === 'chat' && <div className="chat">
           {msgs.length === 0 && <p className="px-label">SAY HI TO {m!.them.name.toUpperCase()}. CARDS YOU DROP IN APPEAR HERE.</p>}
           {msgs.map((x, i) => x.from === 'sys' ? <p key={i} className="px-label sys">{x.text}</p>
-            : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div> : <div key={i} className={`px-frame px-bubble ${x.from === 'me' ? 'px-bubble--me me' : ''} bub`} data-t={'msg-' + x.from}>{x.text}</div>)}
+            : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div> : <div key={i} className={`px-frame px-bubble ${x.from === 'me' ? 'px-bubble--me me' : ''} bub msg`} data-t={'msg-' + x.from}>{x.text}</div>)}
         </div>}
         {tab === 'call' && <div className="call">
           {call ? <>

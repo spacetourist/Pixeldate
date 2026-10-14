@@ -8,8 +8,8 @@
 
 :root {
   --px: 2px;
-  --ink: #031113; --plum-900: #072226; --plum-800: #0d3136; --plum-700: #15434a; --plum-600: #21606a;
-  --mauve: #86b1b2; --cream: #f4f3ea; --coral-d: #dc7356; --coral: #ffa27b; --coral-l: #ffd2b0; --gold: #ffe38c;
+  --ink: #12081a; --plum-900: #1e0f24; --plum-800: #2b1533; --plum-700: #3e1f49; --plum-600: #5c3366;
+  --mauve: #a083a6; --cream: #fbf3e9; --coral-d: #c7385a; --coral: #ff5a6e; --coral-l: #ff9d8a; --gold: #ffd37a;
   /* type: 1 font px = 1 art px; line heights keep baselines on the art grid */
   --t-body: 22px/26px "Pixeldate Sans";      /* x-height 5, cap 7 art px */
   --t-tight: 22px/22px "Pixeldate Sans";
@@ -86,3 +86,31 @@
   box-shadow: inset 0 2px 0 var(--ink), inset 0 4px 0 var(--plum-700); }
 .px-nav a { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--mauve); font: var(--t-label-b); }
 .px-nav a.on { color: var(--coral); --px-icon-hi: var(--coral-l); }
+
+/* ==== v2.1 typography (opt-in: add class "type-v21" to <body>) ==========================
+   Pixel fonts stay on titles/logo, buttons, badges/tags, level labels, the meter, and
+   system messages (Spark question-card body, "Sam has tapped…", chat sys lines).
+   User-facing reading text (chat bubbles, bio, inputs/placeholders, timestamps)
+   switches to IBM Plex Sans (OFL, unmodified - see assets/fonts/OFL-IBMPlexSans.txt),
+   rendered smooth (image-rendering/anti-aliasing at normal resolution, not snapped). */
+@font-face { font-family: "IBM Plex Sans"; src: url("../fonts/IBMPlexSans-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 700; font-stretch: 85% 100%; }
+:root {
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --muted-text: color-mix(in srgb, var(--mauve) 80%, var(--cream)); /* brightened muted for small smooth text */
+  --t-read: 400 16px/1.45 var(--font-body);   /* body: >= 16 px, lh 1.45 */
+  --t-meta: 400 14px/1.45 var(--font-body);   /* timestamps / helper text */
+}
+body.type-v21 .px-read, body.type-v21 .msg, body.type-v21 .px-bio, body.type-v21 .px-input,
+body.type-v21 .px-input input, body.type-v21 .px-input::placeholder, body.type-v21 .px-meta, body.type-v21 .px-help, body.type-v21 .day {
+  image-rendering: auto; -webkit-font-smoothing: antialiased; font-kerning: normal; letter-spacing: 0;
+  font-synthesis: none; text-rendering: optimizeLegibility;
+}
+body.type-v21 .msg              { font: var(--t-read); padding: 2px 6px 3px; }
+body.type-v21 .px-bio           { font: var(--t-read); color: var(--cream); }
+body.type-v21 .px-input         { font: var(--t-read); color: var(--cream); }
+body.type-v21 .px-input .ph, body.type-v21 .px-input::placeholder, body.type-v21 .px-input input::placeholder { color: var(--muted-text); }
+body.type-v21 .px-read          { font: var(--t-read); }
+body.type-v21 .px-meta, body.type-v21 .px-help, body.type-v21 .day { font: var(--t-meta); color: var(--muted-text); }
+body.type-v21 .px-help .px-coral-l { color: var(--coral-l); }
+body.type-v21 .px-bio svg { flex: none; }

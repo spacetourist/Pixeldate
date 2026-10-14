@@ -3,10 +3,24 @@ import { LOBBY_SLOTS } from './config'
 import { FakePeer } from './fakepeer'
 export const LOOPBACK = location.search.includes('loopback')
 const P: any = LOOPBACK ? FakePeer : Peer
-// PeerJS's built-in TURN hosts (eu-0/us-0.turn.peerjs.com) no longer resolve, so set ICE ourselves.
-// Add a TURN server at build time with VITE_ICE_SERVERS='[{"urls":"turn:...","username":"..","credential":".."}]'.
-const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }, ...JSON.parse(import.meta.env.VITE_ICE_SERVERS || '[]')]
-const OPTS = { config: { iceServers: ICE } }
+// PeerJS's built-in TURN hosts are gone; TURN comes from Metered (key injected at build as VITE_METERED_KEY).
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }]
+const OPTS = { config: { iceServers: STUN as RTCIceServer[] } }
+let iceLoaded: Promise<void> | null = null
+/** Fetch TURN credentials once (4 s timeout); fall back to STUN only. */
+function loadIce() {
+  return iceLoaded ||= (async () => {
+    const key = import.meta.env.VITE_METERED_KEY
+    try {
+      if (!key || LOOPBACK) throw new Error('no key')
+      const r = await fetch('https://pixeldate.metered.live/api/v1/turn/credentials?apiKey=' + key, { signal: AbortSignal.timeout(4000) })
+      const t: RTCIceServer[] = await r.json(); if (!Array.isArray(t)) throw new Error('bad response')
+      OPTS.config.iceServers = [...STUN, ...t]
+    } catch (e: any) { dlog('turn fetch failed: ' + e?.message) }
+    const n = OPTS.config.iceServers, turn = n.some(x => String(x.urls).includes('turn'))
+    dlog(`ice servers: ${n.length} (turn ${turn ? 'yes' : 'no'})`)
+  })()
+}
 export const store = LOOPBACK ? sessionStorage : localStorage
 
 export type Gender = 'man' | 'woman'
@@ -79,6 +93,7 @@ export class Net {
   me: Profile
   constructor(me: Profile) { this.me = me }
   async start() {
+    await loadIce()
     for (;;) {
       this.code = Math.random().toString(36).slice(2, 8)
       try { this.peer = await openPeer('pd-' + this.code); break } catch { await sleep(500) }

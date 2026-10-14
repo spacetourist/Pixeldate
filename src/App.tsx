@@ -37,6 +37,7 @@ function Splash({ ready }: { ready: boolean }) {
     <div className="load">{[1, 2, 3, 4, 5].map(n => <i key={n} className={n <= lit ? 'on' : ''} />)}</div>
   </div>
 }
+const NoEntry = () => <svg className="noentry" viewBox="0 0 14 14" width={28} height={28} shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 0h1v1h-1zM7 0h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 1h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM1 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM1 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM12 6h1v1h-1zM13 6h1v1h-1zM0 7h1v1h-1zM1 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM8 7h1v1h-1zM12 7h1v1h-1zM13 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM1 9h1v1h-1zM2 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM11 9h1v1h-1zM12 9h1v1h-1zM1 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM5 11h1v1h-1zM8 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM8 12h1v1h-1zM9 12h1v1h-1zM10 12h1v1h-1zM6 13h1v1h-1zM7 13h1v1h-1z" /></svg>
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -288,7 +289,7 @@ export default function App() {
           <div className="sub"><span className="px-label-b px-coral" data-t="lvbadge" onPointerDown={press} onPointerUp={unpress} onPointerLeave={unpress} onContextMenu={e => e.preventDefault()}>{lv.name.toUpperCase()}{dev ? ' · DEV' : ''}</span>
             <span className="mini">{LEVELS.map((_, i) => <i key={i} className={i + 1 < level || level === 5 ? 'f' : i + 1 === level && pct >= 50 ? 'h' : ''} />)}</span></div></div>
         <button className="px-frame px-btn-ghost sk" data-t="skip" onClick={() => doSkip()}>SKIP</button>
-        <button className="px-frame px-iconbtn ib" title="Block" data-t="block" onClick={() => confirm('Block and never match again?') && doSkip(true)}><Ic n="lock" /></button>
+        <button className="px-frame px-iconbtn ib" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>
       </header>
       {ring?.dir === 'in' && tab !== 'call' ? callBar : call && tab !== 'call' ? callBar : null}
       {(tab !== 'profile' || skipReq === 'in') && skipBar}
@@ -336,6 +337,7 @@ export default function App() {
             <p className="meta">Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p></>}
         </div>}
       </div>
+      {tab === 'chat' && level === 1 && card && msgs.length === 0 && !Object.keys(ans).length && <div className="pinned" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
       {tab === 'chat' && <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>
         <input className="px-frame px-input fld" value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${them}`} data-t="chat-input" />
         <button className="px-frame px-iconbtn" data-t="chat-send"><Ic n="send" /></button></form>}

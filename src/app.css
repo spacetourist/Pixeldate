@@ -104,3 +104,5 @@ select.fld option { background: var(--plum-900); }
 .ib { width: 48px; height: 52px; display: grid; place-items: center; padding: 0; color: var(--cream); flex: none; } .sk { padding: 4px 6px; flex: none; }
 .day { align-self: center; } .sys { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .px-av { display: inline-block; } .px-av img { image-rendering: pixelated; }
+.ib { color: var(--coral); } .pinned { flex: none; }
+.noentry { display: block; }

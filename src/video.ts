@@ -7,8 +7,9 @@ void main(){ if (n <= 0.) { gl_FragColor = vec4(texture2D(t,v).rgb,1.); return; 
   vec3 a = bc(v,n); if (tr <= 0.) { gl_FragColor = vec4(a,1.); return; }
   vec3 b = bc(v,2.*n); float d = (v.x + v.y*.35)/1.35; float p = clamp((tr*1.3-d)/.3,0.,1.);
   vec3 col = p > .5 ? b : a; col = mix(col, vec3(1.,.94,.925), .4*sin(3.14159*p)); gl_FragColor = vec4(col,1.); }`
-/** Pixelates the camera on the SENDER. The canvas itself is only blocks*4 px wide below level 5,
- *  so canvas.captureStream() can never carry more detail than the level. */
+/** Pixelates the camera on the SENDER. The canvas is exactly `blocks` px wide (one pixel per block) below level 5,
+ *  so canvas.captureStream() can never carry more detail than the level. Until the camera's first frame the canvas
+ *  is blank, and the raw camera track is never sent (only its audio). */
 export class PixelCam {
   canvas = document.createElement('canvas'); video = document.createElement('video')
   private gl: WebGLRenderingContext; private u: Record<string, WebGLUniformLocation | null> = {}
@@ -29,7 +30,7 @@ export class PixelCam {
     setInterval(() => { if (document.hidden) this.draw() }, 100)
   }
   private resize() {
-    const b = LEVELS[this.level - 1].blocks, w = b ? b * 4 * (this.tr > 0 ? 2 : 1) : 480
+    const b = LEVELS[this.level - 1].blocks, w = b ? b * (this.tr > 0 ? 2 : 1) : 480 // 1 px per block: the stream itself is 8x6, 16x12…
     this.canvas.width = w; this.canvas.height = Math.round(w * 3 / 4); this.gl.viewport(0, 0, this.canvas.width, this.canvas.height)
   }
   setLevel(level: number) {

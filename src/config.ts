@@ -9,5 +9,7 @@ export const LEVELS = [
 /** Meter tuning: time together fills slowly; each card BOTH answer adds cardBonus %. */
 export const METER = { percentPerMinute: 4, cardBonus: 20 }
 export const REVEAL_MS = 600
+/** Dev phase: 'Skip to next level' request (needs the other person's accept). Set false to remove. */
+export const DEV_SKIP_STAGE = true
 export const LOBBY_SLOTS = 3
 export const FULL_PHOTO_PX = 512

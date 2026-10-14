@@ -50,7 +50,8 @@ await t(a, '[data-t=their-photo]'); await t(b, '[data-t=their-photo]'); log(`mat
 const nameA = await b.$eval('.plate', e => e.textContent); log('B sees', nameA)
 await sleep(1500)
 const pw = async p => p.evaluate(() => window.__pd?.photoW)
-log('received photo widths at Stranger:', await pw(a), await pw(b)); if (await pw(a) !== 8 || await pw(b) !== 8) throw 'photo not 8 px'
+const ph = async p => p.evaluate(() => window.__pd?.photoH)
+log('received photo widths at Stranger:', await pw(a), await pw(b)); if (await pw(a) !== 8 || await pw(b) !== 8 || await ph(a) !== 8 || await ph(b) !== 8) throw 'photo payload not 8x8'
 await shot(b, '04-match-stranger')
 // chat
 await tab(a, 'chat'); await tab(b, 'chat')
@@ -93,12 +94,19 @@ const out = await a.evaluate(() => { const t = window.__pdCam.out.getVideoTracks
 log('outgoing call track (what the peer receives):', JSON.stringify(out), 'raw camera stays local')
 log('video element fed by call stream:', JSON.stringify(await vr(a)), LB ? '(loopback echo of the outgoing track)' : '')
 if (!LB) log('B receives', JSON.stringify(await vr(b)))
+if (out.w !== 8 || out.h !== 6) throw 'outgoing track not capped to 8x6 at Stranger: ' + JSON.stringify(out)
+log('outgoing video track is exactly 8x6 at level 1')
 if (out.w > 32 || (await vr(a)).w > 32 || (!LB && (await vr(b)).w > 32)) throw 'video too detailed'
 // block-content check on the received frame: 4x4 px cells should be uniform
 const uni = await (LB ? a : b).evaluate(() => { const v = document.querySelector('[data-t=remote-video]'); const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; const x = c.getContext('2d'); x.drawImage(v, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let distinct = new Set(); for (let i = 0; i < d.length; i += 4) distinct.add(d[i] >> 3 << 10 | d[i + 1] >> 3 << 5 | d[i + 2] >> 3); return { px: c.width * c.height, colours: distinct.size } })
 log('received frame colour check', JSON.stringify(uni))
 await shotW((LB ? a : b), '09c-call-pixelated')
 await click(a, '[data-t=hangup]'); await b.waitForFunction(() => !document.querySelector('[data-t=remote-video]'), { timeout: 10000 }); await a.waitForFunction(() => !document.querySelector('[data-t=remote-video]')); log('hang up ended the call on both sides')
+// dev skip-stage: A asks, B accepts, both move to Spark immediately
+await tab(a, 'chat'); await tab(b, 'chat'); await click(a, '[data-t=skip-stage]'); await t(b, '[data-t=skip-in]'); await shotW(b, '11-skip-request')
+await b.click('[data-t=skip-accept]'); await sleep(1500)
+if (await pw(a) !== 16 || await pw(b) !== 16 || await ph(a) !== 16) throw 'skip did not raise to 16x16 photo'
+log('skip accepted: both at', await a.$eval('.chip, [data-t=tab-profile]', e => e.textContent), 'photo payload 16x16')
 // skip from B
 await b.click('[data-t=skip]'); await sleep(2000); for (const p of [a, b]) step('after skip: ' + (await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 120))))
 await t(a, '[data-t=finding]'); await t(b, '[data-t=finding]'); log('Skip ended match; both returned to lobby and auto-search for the next match')

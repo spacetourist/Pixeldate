@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MediaConnection } from 'peerjs'
-import { LEVELS, METER, VERSION } from './config'
+import { LEVELS, METER, VERSION, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { PixelCam } from './video'
@@ -85,9 +85,15 @@ export default function App() {
   const [call, setCall] = useState<{ cam: Media; mc: MediaConnection; kind: Kind; remote?: MediaStream } | null>(null)
   const [ring, setRing] = useState<{ dir: 'in' | 'out'; kind: Kind } | null>(null); const [muted, setMuted] = useState(false); const [camOff, setCamOff] = useState(false)
   const ready = useRef<{ cam: Media; kind: Kind } | null>(null) // media grabbed on accept, used when their call arrives
-  const st = useRef({ level, taps, pct, call, m, ring }); st.current = { level, taps, pct, call, m, ring }
+  const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
+  const st = useRef({ level, taps, pct, call, m, ring, skipReq }); st.current = { level, taps, pct, call, m, ring, skipReq }
 
   const send = (d: any) => { try { st.current.m?.conn.send(d) } catch {} }
+  /* PRIVACY GUARANTEE: everything leaving this device is already reduced to the shared level.
+   - Photo: pixelatePhoto() sends a `blocks` x `blocks` image (never the original), re-sent when the level changes.
+   - Video: the only video track sent is PixelCam's canvas.captureStream(), whose canvas is `blocks` px wide.
+   - Levels: my level rises only after I consented locally (my tap / my skip request or my accept) AND the
+     other side did; a remote message alone can never raise it. 'drop' messages are only accepted if lower. */
   const sendPhoto = (l: number) => { if (photo) send({ t: 'photo', level: l, data: pixelatePhoto(photo, l) }) }
 
   const start = async (p: Profile, ph: string) => {
@@ -141,7 +147,7 @@ export default function App() {
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
-    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null)
+    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null)
     setM(mm); setScreen('match')
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
   }
@@ -167,9 +173,11 @@ export default function App() {
       case 'card': setMsgs(x => [...x, { from: 'them', card: d.id }]); break
       case 'ans': setAns(a => ({ ...a, [d.id]: { ...a[d.id], them: d.text } })); break
       case 'tap': if (d.level === s.level) setTaps(t => ({ ...t, them: true })); break
-      case 'drop': setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} LOWERED TO ${LEVELS[d.level - 1].name.toUpperCase()}` }]); break
+      case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} LOWERED TO ${LEVELS[d.level - 1].name.toUpperCase()}` }]); break
       case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; if (d.level === st.current.level) paint(img) }); break
       case 'skip': leave('They moved on. Finding someone new.', true); break
+      case 'skipreq': if (DEV_SKIP_STAGE && d.level === s.level && s.level < 5) setSkip('in'); break
+      case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) setMsgs(x => [...x, { from: 'sys', text: 'SKIP DECLINED' }]); break
       case 'endcall': endCall(false); break
       case 'callreq': if (st.current.call) send({ t: 'callans', ok: false }); else setRing({ dir: 'in', kind: d.kind === 'voice' ? 'voice' : 'video' }); break
       case 'callcancel': setRing(r => r?.dir === 'in' ? null : r); break
@@ -215,6 +223,12 @@ export default function App() {
     </div>
   }
   const lv = LEVELS[level - 1], nx = LEVELS[level]
+  const askSkip = () => { setSkip('out'); send({ t: 'skipreq', level }) }
+  const ansSkip = (ok: boolean) => { setSkip(null); send({ t: 'skipans', ok, level }); if (ok) raise(level) } // my accept = my consent
+  const skipBar = !DEV_SKIP_STAGE || level >= 5 ? null : skipReq === 'in' ? <div className="px-frame px-card ringin" data-t="skip-in"><p className="px-text"><b className="px-coral">{m?.them.name}</b> wants to skip to {nx?.name}</p>
+      <div className="row2"><button className="px-frame px-btn-small" data-t="skip-accept" onClick={() => ansSkip(true)}>ACCEPT</button><button className="px-frame px-btn-ghost" data-t="skip-decline" onClick={() => ansSkip(false)}>DECLINE</button></div></div>
+    : skipReq === 'out' ? <p className="px-label" data-t="skip-out">ASKED TO SKIP TO {nx?.name.toUpperCase()}… WAITING</p>
+    : <button className="px-frame px-btn-ghost callbar" data-t="skip-stage" onClick={askSkip}>SKIP TO NEXT LEVEL (DEV)</button>
   const them = m?.them.name || ''
   const callBar = call ? <button className="px-frame px-btn-ghost callbar" data-t="to-call" onClick={() => setTab('call')}><Ic n="call" s={8} /> IN CALL · OPEN</button>
     : ring?.dir === 'in' ? <div className="px-frame px-card ringin" data-t="ring-in"><p className="px-text"><b className="px-coral">{them}</b> wants a {ring.kind} call</p>
@@ -246,6 +260,7 @@ export default function App() {
         <div className="acts"><button className="px-frame px-btn-ghost" data-t="skip" onClick={() => doSkip()}>SKIP</button>
           <button className="blockbtn" title="Block" data-t="block" onClick={() => confirm('Block and never match again?') && doSkip(true)}><Ic n="lock" s={8} /></button></div></header>
       {(tab !== 'call' || ring?.dir === 'in') && (tab === 'chat' || ring?.dir === 'in' || call) && callBar}
+      {(tab !== 'profile' || skipReq === 'in') && skipBar}
       <div className="body scroll">
         {tab === 'profile' && <>
           <div className="px-frame px-card prof">

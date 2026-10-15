@@ -25,12 +25,24 @@ export const store = LOOPBACK ? sessionStorage : localStorage
 
 export type Gender = 'man' | 'woman'
 export type Seek = 'men' | 'women' | 'everyone'
-export interface Profile { name: string; age: number; min: number; max: number; iam: Gender; seek: Seek; uid: string }
+/** Local profile. by/bm (birth year/month) and the exact age NEVER leave this device. */
+export interface Profile { name: string; age: number; by: number; bm: number; min: number; max: number; iam: Gender; seek: Seek; uid: string }
+/** What a peer receives: the age bracket only (no year, month or exact age). */
+export interface PeerProfile { name: string; br: [number, number]; min: number; max: number; iam: Gender; seek: Seek; uid: string }
+export const BRACKETS: [number, number][] = [[18, 24], [25, 29], [30, 34], [35, 39], [40, 49], [50, 59], [60, 999]]
+export const bracketOf = (age: number) => BRACKETS.find(([lo, hi]) => age >= lo && age <= hi) || BRACKETS[0]
+export const bracketLabel = ([lo, hi]: [number, number]) => hi >= 999 ? `${lo}+` : `${lo}–${hi}`
+/** The only profile shape ever sent over the wire. */
+export const wire = (p: Profile): PeerProfile => ({ name: p.name, br: bracketOf(Math.min(p.age, 70)), min: p.min, max: p.max, iam: p.iam, seek: p.seek, uid: p.uid })
 
 const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman'] }
 const SEEKS: Seek[] = ['men', 'women', 'everyone']
-export const wants = (a: Profile, b: Profile) => G[a.seek].includes(b.iam) && b.age >= a.min && (a.max >= 70 || b.age <= a.max) // max 70 = "70+", no upper limit
-export const compatible = (a: Profile, b: Profile) => wants(a, b) && wants(b, a)
+const top = (max: number) => max >= 70 ? 999 : max // max 70 = "70+", no upper limit
+/** Do they want me? Exact: my own computed age (capped at 70) against their range. */
+const theyWant = (me: Profile, t: PeerProfile) => G[t.seek].includes(me.iam) && Math.min(me.age, 70) >= t.min && Math.min(me.age, 70) <= top(t.max)
+/** Do I want them? I only know their bracket, so it must overlap my range. */
+const iWant = (me: Profile, t: PeerProfile) => G[me.seek].includes(t.iam) && Array.isArray(t.br) && t.br[1] >= me.min && t.br[0] <= top(me.max)
+export const compatible = (me: Profile, t: PeerProfile) => iWant(me, t) && theyWant(me, t)
 const slotId = (g: Gender, s: Seek, n: number) => `pixeldate-lobby-${g}-${s}-${n}`
 /** Every slot I could match with (including my own combo), shuffled. */
 function joinSlots(me: Profile) {
@@ -47,7 +59,7 @@ export function dlog(s: string) {
 }
 export const blocked = (): string[] => JSON.parse(store.getItem('pd-blocked') || '[]')
 export const block = (uid: string) => store.setItem('pd-blocked', JSON.stringify([...new Set([...blocked(), uid])]))
-const okWith = (me: Profile, them: Profile, byCode: boolean) => !blocked().includes(them.uid) && them.uid !== me.uid && (byCode || compatible(me, them))
+const okWith = (me: Profile, them: PeerProfile, byCode: boolean) => !blocked().includes(them.uid) && them.uid !== me.uid && (byCode || compatible(me, them))
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 function openPeer(id?: string): Promise<Peer> {
@@ -83,7 +95,7 @@ function openConn(p: Peer, id: string, ms = 15000): Promise<DataConnection> {
 /** Queue data until the app attaches its listener (App replays conn.q), so early messages aren't lost. */
 const buffer = (c: DataConnection) => { const x = c as any; x.q = []; x.qf = (d: any) => x.q.push(d); c.on('data', x.qf); return c }
 /** peer = their personal peer id (for calls); conn may be a lobby-slot connection. */
-export interface Match { conn: DataConnection; them: Profile; peer: string }
+export interface Match { conn: DataConnection; them: PeerProfile; peer: string }
 
 /** The personal peer: has id pd-<code>, receives the match connection and calls. */
 export class Net {
@@ -105,14 +117,14 @@ export class Net {
         try {
           const h = await onceData(c, 10000)
           if (h?.t !== 'hello' || this.busy || !okWith(this.me, h.p, true)) { c.send({ t: 'no' }); setTimeout(() => c.close(), 300); return }
-          this.busy = true; this.searching = false; c.send({ t: 'ok', p: this.me }); this.onIncomingByCode?.({ conn: c, them: h.p, peer: c.peer })
+          this.busy = true; this.searching = false; c.send({ t: 'ok', p: wire(this.me) }); this.onIncomingByCode?.({ conn: c, them: h.p, peer: c.peer })
         } catch { c.close() }
       })
     })
   }
   async joinCode(code: string): Promise<Match> {
     const c = await openConn(this.peer, 'pd-' + code.trim().toLowerCase(), 8000)
-    c.send({ t: 'hello', p: this.me }); const r = await onceData(c, 10000)
+    c.send({ t: 'hello', p: wire(this.me) }); const r = await onceData(c, 10000)
     if (r?.t !== 'ok') { c.close(); throw new Error('They are busy or unavailable') }
     this.busy = true; return { conn: c, them: r.p, peer: c.peer }
   }
@@ -152,7 +164,7 @@ export class Net {
         ;(async () => {
           const hi = await h
           if (this.lock || !this.searching || hi?.t !== 'hello' || !okWith(this.me, hi.p, false) || skipUids.has(hi.p.uid)) { log('declined ' + (hi?.p?.uid === this.me.uid ? '(same uid)' : '')); c.send({ t: 'no' }); setTimeout(() => c.close(), 500); return }
-          this.lock = true; const g = onceData(c, 8000); c.send({ t: 'ok', p: this.me, id: this.peer.id })
+          this.lock = true; const g = onceData(c, 8000); c.send({ t: 'ok', p: wire(this.me), id: this.peer.id })
           if ((await g)?.t !== 'go') throw new Error('no go')
           win({ conn: buffer(c), them: hi.p, peer: hi.id })
         })().catch((e: any) => { this.lock = false; log('handshake failed ' + (e?.type || e?.message)); c.close() })
@@ -166,7 +178,7 @@ export class Net {
     const c = await openConn(this.peer, id)
     log('open to ' + id.slice(16))
     try {
-      const r = onceData(c, 10000); c.send({ t: 'hello', p: this.me, id: this.peer.id }); const a = await r
+      const r = onceData(c, 10000); c.send({ t: 'hello', p: wire(this.me), id: this.peer.id }); const a = await r
       if (a?.t !== 'ok' || this.lock || !this.searching || !okWith(this.me, a.p, false) || skipUids.has(a.p.uid)) { log('knock ' + id.slice(16) + ': declined'); c.send({ t: 'bye' }); throw 0 }
       this.lock = true; c.send({ t: 'go' }) // this connection becomes the match connection
       return { conn: buffer(c), them: a.p, peer: a.id }

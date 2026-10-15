@@ -8,7 +8,7 @@ import { PixelCam } from './video'
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
 type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
-import { Net, block, type Profile, type Gender, type Seek, type Match } from './net'
+import { Net, block, store, bracketOf, bracketLabel, type Profile, type Gender, type Seek, type Match } from './net'
 
 const B = import.meta.env.BASE_URL
 const deck: QuestionSource = localDeck
@@ -59,15 +59,6 @@ function PhotoReveal({ src, onConfirm, onChange }: { src: string; onConfirm: () 
 }
 /** Inline pixel tick: no mask-image fetch, so it paints in the same frame as the state change (Android Chrome bug). */
 const TickMark = () => <svg className="tickmark" width="16" height="16" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 1h1v2H6zM5 3h1v1H5zM4 4h1v1H4zM3 5h1v1H3zM1 3h1v2H1zM2 5h1v1H2zM2 4h1v1H2z" /></svg>
-const clampAge = (n: number) => Math.max(18, Math.min(99, Math.round(n) || 18))
-/** Age field: free text while editing (can be empty), clamped to 18-99 on blur. */
-function AgeField({ value, onChange, t }: { value: number; onChange: (n: number) => void; t: string }) {
-  const [txt, setTxt] = useState(String(value))
-  useEffect(() => { if (txt !== '' && +txt !== value) setTxt(String(value)) }, [value])
-  return <input className="px-frame px-input fld" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={txt} data-t={t}
-    onChange={e => { const v = e.target.value.replace(/\D/g, ''); setTxt(v); if (v) onChange(+v) }}
-    onBlur={() => { const n = clampAge(+txt); setTxt(String(n)); onChange(n) }} />
-}
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string; pair?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -132,15 +123,53 @@ function Minis({ src, onChange }: { src: string; onChange: () => void }) {
     </div>}
   </div>
 }
+const MONTHS = 'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ')
+type Season = 'winter' | 'spring' | 'summer' | 'autumn'
+const seasonOf = (m: number): Season => m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'autumn'
+const SEASON_PX: Record<Season, string[]> = { winter: ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'], spring: ['.#.#.', '#####', '.###.', '..#..', '.##..'], summer: ['#.#.#', '.###.', '#####', '.###.', '#.#.#'], autumn: ['...##', '..###', '.###.', '###..', '#....'] }
+const SeasonIc = ({ s, px = 3 }: { s: Season; px?: number }) => <svg className={'sic s-' + s} width={px * 5} height={px * 5} viewBox="0 0 5 5" shapeRendering="crispEdges" aria-hidden="true">
+  {SEASON_PX[s].flatMap((row, y) => [...row].map((ch, x) => ch === '#' ? <rect key={x + '-' + y} x={x} y={y} width="1" height="1" fill="currentColor" /> : null))}</svg>
+/** Age on the 1st of the birth month. */
+const ageFrom = (by: number, bm: number, now = new Date()) => now.getFullYear() - by - (now.getMonth() + 1 < bm ? 1 : 0)
+const NOW_Y = new Date().getFullYear(), Y_MIN = NOW_Y - 70, Y_MAX = NOW_Y - 18, ROW = 32
+/** GD birthday picker: month tiles + scroll-snap year reel. The year/month stay on this device. */
+function Birthday({ by, bm, onChange }: { by: number; bm: number; onChange: (by: number, bm: number) => void }) {
+  const reel = useRef<HTMLDivElement>(null), years = useMemo(() => Array.from({ length: Y_MAX - Y_MIN + 1 }, (_, i) => Y_MIN + i), [])
+  const t = useRef(0)
+  useEffect(() => { const r = reel.current; if (r) r.scrollTop = (by - Y_MIN) * ROW }, []) // initial position only
+  const onScroll = () => { clearTimeout(t.current); t.current = window.setTimeout(() => { const r = reel.current; if (!r) return; const y = Y_MIN + Math.round(r.scrollTop / ROW); if (y !== by && y >= Y_MIN && y <= Y_MAX) onChange(y, bm) }, 60) }
+  const go = (y: number) => { const v = Math.max(Y_MIN, Math.min(Y_MAX, y)); reel.current?.scrollTo({ top: (v - Y_MIN) * ROW, behavior: 'smooth' }); onChange(v, bm) }
+  const age = bm ? ageFrom(by, bm) : null, br = age !== null && age >= 18 ? bracketLabel(bracketOf(Math.min(age, 70))) : null
+  return <div className="bday" data-t="bday">
+    <p className="px-label lab">WHEN DID YOUR STORY START?</p>
+    <h2 className="h2 bday-h">Your birthday</h2>
+    <p className="px-meta bday-sub">Matches only ever see your age bracket.</p>
+    <span className="px-label lab" id="lab-month">MONTH</span>
+    <div className="months" role="radiogroup" aria-labelledby="lab-month">{MONTHS.map((m, i) => <button key={m} type="button" role="radio" aria-checked={bm === i + 1}
+      className={'px-frame mtile' + (bm === i + 1 ? ' on' : '')} data-t={'month-' + (i + 1)} onClick={() => onChange(by, i + 1)}><SeasonIc s={seasonOf(i + 1)} /><span>{m}</span></button>)}</div>
+    <span className="px-label lab" id="lab-year">YEAR</span>
+    <div className="reel-box"><div className="reel-sel" aria-hidden="true" />
+      <div className="reel" ref={reel} onScroll={onScroll} tabIndex={0} role="listbox" aria-labelledby="lab-year" aria-activedescendant={'yr-' + by} data-t="year-reel"
+        onKeyDown={e => { if (e.key === 'ArrowUp') { e.preventDefault(); go(by - 1) } if (e.key === 'ArrowDown') { e.preventDefault(); go(by + 1) } }}>
+        {years.map(y => <div key={y} id={'yr-' + y} role="option" aria-selected={y === by} className={'yr' + (y === by ? ' on' : '')} onClick={() => go(y)}>{y}</div>)}</div></div>
+    <div className="px-frame px-card youare" data-t="bday-readout" aria-live="polite">
+      <div><span className="px-label">YOU ARE</span><b>{age === null ? 'Pick your month' : `${Math.min(age, 70)}${age >= 70 ? '+' : ''} · ${seasonOf(bm)}-born`}</b></div>
+      <div className="ms"><span className="px-label">MATCHES SEE</span><b className="px-coral" data-t="bracket">{br || '—'}</b></div></div>
+    {age !== null && age < 18 && <p className="under18" role="alert" data-t="under18">You need to be 18 or over to use Pixeldate.</p>}
+    <p className="px-meta bday-sub">Your birth season badge unlocks at Spark as an icebreaker.</p>
+  </div>
+}
 function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const [name, setName] = useState(''); const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const fileIn = useRef<HTMLInputElement>(null); const [adult, setAdult] = useState(false)
   const [iam, setIam] = useState<Gender>('man'); const [seek, setSeek] = useState<Seek>('women')
-  const [age, setAge] = useState(30); const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP)
+  const saved = (() => { try { return JSON.parse(store.getItem('pd-bday') || '') } catch { return null } })()
+  const [by, setBy] = useState<number>(saved?.by || NOW_Y - 25); const [bm, setBm] = useState<number>(saved?.bm || 0); const age = bm ? ageFrom(by, bm) : 0
+  const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP)
   const [cam, setCam] = useState<MediaStream | null>(null); const vid = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
   const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPhoto(c.toDataURL('image/jpeg', .9)); setOkPhoto(false); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => { setPhoto(String(r.result)); setOkPhoto(false) }; r.readAsDataURL(f) } }
-  const ok = name.trim() && photo && okPhoto && adult
+  const ok = name.trim() && photo && okPhoto && adult && bm > 0 && age >= 18
   const input = <input ref={fileIn} type="file" accept="image/*" hidden data-t="gallery" onChange={e => { file(e.target.files?.[0]); e.target.value = '' }} />
   if (photo && !okPhoto) return <div className="screen scroll">{input}<PhotoReveal src={photo} onConfirm={() => setOkPhoto(true)} onChange={() => fileIn.current?.click()} /></div>
   return <div className="screen scroll">{input}
@@ -157,18 +186,15 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
         <button className="px-frame px-btn-ghost pbtn" onClick={() => fileIn.current?.click()}>Gallery</button>
       </div>
     </div>}
-    <div className="grid2">
-      <div><span className="px-label lab" id="lab-iam">I AM</span>
-        <Seg label="lab-iam" name="iam" value={iam} onChange={v => setIam(v as Gender)} opts={[['man', 'Man'], ['woman', 'Woman']]} /></div>
-      <div><label className="px-label lab">MY AGE</label>
-        <AgeField value={age} onChange={setAge} t="age" /></div>
-    </div>
+    <span className="px-label lab" id="lab-iam">I AM</span>
+    <Seg label="lab-iam" name="iam" value={iam} onChange={v => setIam(v as Gender)} opts={[['man', 'Man'], ['woman', 'Woman']]} />
+    <Birthday by={by} bm={bm} onChange={(y, m) => { setBy(y); setBm(m) }} />
     <fieldset className="meet"><legend className="px-label lab" id="lab-seek">I WANT TO MEET</legend>
       <Seg label="lab-seek" name="seek" value={seek} onChange={v => setSeek(v as Seek)} opts={[['men', 'Men'], ['women', 'Women']]} />
       <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
     </fieldset>
     <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box" data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <TickMark />}</span> I am 18 or over</label>
-    <button className="px-frame px-btn" disabled={!ok} data-t="start" style={{ marginTop: 16 }} onClick={() => { const a = clampAge(age), [lo, hi] = [Math.max(18, Math.min(min, max)), Math.min(AGE_TOP, Math.max(min, max))]; setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
+    <button className="px-frame px-btn" disabled={!ok} data-t="start" style={{ marginTop: 16 }} onClick={() => { const a = Math.min(age, 70), [lo, hi] = [Math.max(18, Math.min(min, max)), Math.min(AGE_TOP, Math.max(min, max))]; if (a < 18) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
   </div>
 }
 
@@ -194,11 +220,15 @@ export default function App() {
   const [dev, setDev] = useState(isDev); const matchedAt = useRef(''); const lp = useRef(0) // long-press on the level badge toggles dev tools
   const myAv = useMemo(() => photo ? pixelatePhoto(photo, 1) : AV('a'), [photo])
   const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
+  const [themSeason, setThemSeason] = useState<Season | null>(null); const seasonSent = useRef(false)
   const [readyOpen, setReadyOpen] = useState(false); const [lvup, setLvup] = useState<{ from: number; to: number } | null>(null); const prevLv = useRef(1); const lvCv = useRef<HTMLCanvasElement>(null); const [photoV, setPhotoV] = useState(0)
   const [evt, setEvt] = useState<{ id: string; kind: 'turn' | 'pair'; from: number } | null>(null); const [unread, setUnread] = useState(0)
   const st = useRef({ level, taps, pct, call, m, ring, skipReq, ans, tab }); st.current = { level, taps, pct, call, m, ring, skipReq, ans, tab }
 
   const send = (d: any) => { try { st.current.m?.conn.send(d) } catch {} }
+  useEffect(() => { (window as any).__pdThem = m?.them }, [m]) // test hook: what the peer actually sent
+  // birth season is shared only once Spark (level 2) is reached; year/month never leave the device
+  useEffect(() => { if (m && me && level >= 2 && !seasonSent.current && me.bm) { seasonSent.current = true; send({ t: 'season', s: seasonOf(me.bm) }) } }, [level, m])
   /* PRIVACY GUARANTEE: everything leaving this device is already reduced to the shared level.
    - Photo: pixelatePhoto() sends a `blocks` x `blocks` image (never the original), re-sent when the level changes.
    - Video: the only video track sent is PixelCam's canvas.captureStream(), whose canvas is `blocks` px wide.
@@ -257,7 +287,7 @@ export default function App() {
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
-    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
+    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
     setM(mm); setScreen('match')
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
   }
@@ -293,6 +323,7 @@ export default function App() {
         if (!s.ans[d.id]?.me) { setEvt({ id: d.id, kind: 'turn', from: 0 }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} ANSWERED ${qn(d.id)} · YOUR TURN` }]); if (s.tab !== 'chat') setUnread(n => n + 1) }
         break
       case 'tap': if (d.level === s.level) setTaps(t => ({ ...t, them: true })); break
+      case 'season': if (['winter', 'spring', 'summer', 'autumn'].includes(d.s)) setThemSeason(d.s); break
       case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} LOWERED TO ${LEVELS[d.level - 1].name.toUpperCase()}` }]); break
       case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break
       case 'skip': leave('They moved on. Finding someone new.', true); break
@@ -391,8 +422,8 @@ export default function App() {
     </div> : <div className="screen">
       <header className="top">
         <img className="av l" src={theirAv} alt="" />
-        <div className="who"><div className="px-text">{them}, {m!.them.age}</div>
-          <div className="sub"><span className="px-label-b px-coral" data-t="lvbadge" onPointerDown={press} onPointerUp={unpress} onPointerLeave={unpress} onContextMenu={e => e.preventDefault()}>{lv.name.toUpperCase()}{dev ? ' · DEV' : ''}</span>
+        <div className="who"><div className="px-text">{them}, <span data-t="them-bracket">{bracketLabel(m!.them.br)}</span></div>
+          <div className="sub"><span className="px-label-b px-coral" data-t="lvbadge" onPointerDown={press} onPointerUp={unpress} onPointerLeave={unpress} onContextMenu={e => e.preventDefault()}>{lv.name.toUpperCase()}{dev && <span className="devsfx"> · DEV</span>}</span>
             <span className="mini">{LEVELS.map((_, i) => <i key={i} className={i + 1 < level || level === 5 ? 'f' : i + 1 === level && pct >= 50 ? 'h' : ''} />)}</span></div></div>
         <button className="px-frame px-btn-ghost sk" data-t="skip" onClick={() => doSkip()}>SKIP</button>
         {SHOW_BLOCK && <button className="px-frame px-iconbtn ib" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>}
@@ -404,7 +435,7 @@ export default function App() {
           <div className="px-frame px-card prof">
             <div className="photo"><canvas ref={cv} width={480} height={480} data-t="their-photo" />
               <span className="px-frame px-chip chip"><Ic n="heart" s={8} /> LV {level} · {lv.name.toUpperCase()}</span>
-              <div className="px-frame px-plate plate"><span className="px-title">{m!.them.name}, {m!.them.age}</span></div></div>
+              <div className="px-frame px-plate plate"><span className="px-title">{m!.them.name}, {bracketLabel(m!.them.br)}</span>{themSeason && <span className="px-frame px-tag sbadge" data-t="season-badge"><SeasonIc s={themSeason} px={2} /> {themSeason.toUpperCase()}-BORN</span>}</div></div>
             <div className="meterrow">
               <div className="mtop"><b className="px-label-b px-cream">{lv.name.toUpperCase()}</b>{nx && <span className="px-label">{Math.floor(pct)}% TO <b className="px-coral">{nx.name.toUpperCase()}</b></span>}</div>
               <div className="mtop"><Meter level={level} pct={pct} /><button className="px-label linkbtn" data-t="drop" disabled={level === 1} onClick={drop}>LOWER LEVEL <Ic n="chevron" s={8} /></button></div>

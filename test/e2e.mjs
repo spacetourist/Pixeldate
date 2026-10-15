@@ -11,9 +11,14 @@ const log = (...a) => console.log('✔', ...a); const T0 = Date.now(); const ste
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 90000,
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--disable-features=WebRtcHideLocalIpsWithMdns,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
 // review shots: hide dev-only UI (dev-skip bar, '· DEV' badge suffix) just for the capture
-const clean = p => p.evaluate(() => { document.querySelectorAll('[data-t=skip-stage]').forEach(e => e.style.display = 'none'); const b = document.querySelector('[data-t=lvbadge]'); if (b) b.textContent = b.textContent.replace(' · DEV', '') })
+const clean = p => p.evaluate(() => { document.querySelectorAll('[data-t=skip-stage]').forEach(e => e.style.display = 'none'); document.querySelectorAll('.devsfx').forEach(e => e.style.display = 'none') })
 async function shotV(p, n, full = true) { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await sleep(250); await clean(p); await p.screenshot({ path: S(n), fullPage: full }); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 const setR = (p, sel, v) => p.$eval(sel, (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(v))
+async function pickBday(p, y, m) {
+  await p.click(`[data-t=month-${m}]`)
+  await p.$eval('[data-t=year-reel]', (r, y) => { r.querySelector('#yr-' + y).click() }, y); await sleep(700)
+  const sel = await p.$eval('.yr.on', e => +e.textContent); if (sel !== y) throw 'year reel ' + sel + ' != ' + y
+}
 async function page(name, iam, seek, age, face) {
   const ctx = LB ? (shared ||= await browser.createBrowserContext()) : await browser.createBrowserContext(); const p = await ctx.newPage()
   await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
@@ -27,7 +32,14 @@ async function page(name, iam, seek, age, face) {
   await p.click(`[data-t=iam-${iam}]`); await p.click(`[data-t=seek-${seek}]`)
   await p.waitForSelector('[data-t=mini-5] img'); if ((await p.$$('[data-t=minis] img')).length !== 5) throw '5 minis missing'
   if (!(await p.$eval(`[data-t=iam-${iam}] input`, e => e.checked)) || (await p.$$('[data-t^=iam-].on')).length !== 1) throw 'iam radio state'
-  await p.$eval('[data-t=age]', (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(age))
+  if (name === 'Sam') { // under-18 block: born this month next year-boundary -> 17
+    const now = new Date(), m = now.getMonth() + 2
+    if (m <= 12) { await pickBday(p, now.getFullYear() - 18, m); await p.$eval('[data-t=adult]', e => e.click()); await p.waitForSelector('[data-t=under18]')
+      if (!(await p.$eval('[data-t=start]', e => e.disabled))) throw 'under-18 not blocked'; await p.$eval('[data-t=adult]', e => e.click()); log('under-18 birthday blocks Continue (with 18+ ticked) and shows the message') }
+    await shotV(p, 'v3.9-birthday-under18-412', true) }
+  await pickBday(p, new Date().getFullYear() - age, 1)
+  if (await p.$('[data-t=under18]')) throw 'under18 shown for adult'
+  if (name === 'Sam') { const r = await p.$eval('[data-t=bday-readout]', e => e.textContent); if (!r.includes(age + ' · winter-born') || !r.includes('25–29')) throw 'readout ' + r; log('birthday readout:', r) }
   await p.$eval('[data-t=adult]', e => e.click())
   if (name === 'Sam') { await shotV(p, 'v3.6-signup-filled-412'); await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); const w = await p.$eval('[data-t=viewer] img', e => e.naturalWidth); if (w !== 32) throw 'viewer not 32 blocks: ' + w
     await shotV(p, 'v3.6-viewer-412', false); await p.click('[aria-label="Next level"]'); if (!(await p.$eval('[data-t=viewer-name]', e => e.textContent)).includes('LV 4')) throw 'viewer next'
@@ -62,6 +74,7 @@ await shot(a, '01-onboarding')
 { const st = () => a.evaluate(() => ({ c: document.querySelector('[data-t=adult]').checked, svg: !!document.querySelector('[data-t=adult-box] svg'), btn: !document.querySelector('[data-t=start]').disabled }))
   const lab = async () => { const r = await a.evaluate(() => { const b = document.querySelector('label.tick').getBoundingClientRect(); return [b.right - 30, b.top + b.height / 2] }); await a.mouse.click(...r) }
   const box = async () => { const r = await a.evaluate(() => { const b = document.querySelector('[data-t=adult-box]').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2] }); await a.mouse.click(...r) }
+  await a.$eval('label.tick', e => e.scrollIntoView({ block: 'center' })); await sleep(200)
   const seq = [lab, lab, lab, box, box, lab, box, box, box]  // 9 taps, no waits: ends unchecked->checked toggles; initial checked
   for (const f of seq) await f()
   await sleep(100); const r = await st(); if (r.c !== r.svg || r.c !== r.btn || r.c !== false) throw 'tick desync ' + JSON.stringify(r)
@@ -73,7 +86,8 @@ for (const p of [a, b]) { await p.bringToFront(); await click(p, '[data-t=start]
 await shot(a, '02-lobby')
 const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t(a, '[data-t=finding]'); await shot(a, '03-finding'); await b.click('[data-t=find]')
 await t(a, '[data-t=their-photo]'); await t(b, '[data-t=their-photo]'); log(`matched via lobby in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
-const nameA = await b.$eval('.plate', e => e.textContent); log('B sees', nameA)
+const nameA = await b.$eval('.plate', e => e.textContent); log('B sees', nameA); if (await b.$('[data-t=season-badge]')) throw 'season shown at Stranger'; if (!nameA.includes('Sam, 25–29')) throw 'bracket not shown'
+{ const th = await b.evaluate(() => window.__pdThem); const bad = ['age', 'by', 'bm'].filter(k => k in th); if (bad.length || JSON.stringify(th).includes(String(new Date().getFullYear() - 29))) throw 'birthday leaked: ' + JSON.stringify(th); log('peer received only the bracket:', JSON.stringify(th.br), 'keys', Object.keys(th).join(',')) }
 await sleep(1500)
 const pw = async p => p.evaluate(() => window.__pd?.photoW)
 const ph = async p => p.evaluate(() => window.__pd?.photoH)
@@ -122,6 +136,8 @@ log('level-up event on both:', await a.$eval('[data-t=lvup-name]', e => e.textCo
 for (const p of [a, b]) await p.click('[data-t=lvup-close]'); await sleep(500)
 log('after both tapped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))
 if (await pw(a) !== 16) throw 'not 16'
+await tab(b, 'profile'); await t(b, '[data-t=season-badge]'); log('season badge at Spark:', await b.$eval('[data-t=season-badge]', e => e.textContent))
+await b.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await sleep(300); await clean(b); await shot(b, 'v3.9-match-bracket-412'); await b.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
 await shot(b, '08-after-reveal-spark')
 // drop from A
 await a.click('[data-t=drop]'); await sleep(1500)

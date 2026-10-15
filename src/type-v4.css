@@ -56,8 +56,9 @@ body.type-v4 .h1 { font: var(--t-title); -webkit-font-smoothing: none; }
 body.type-v4 .who .px-text { font: var(--t-body); -webkit-font-smoothing: none; }   /* partner name = screen heading */
 body.type-v4 .cardback b { font: 28px/28px "Pixeldate Sans"; }                        /* card-back glyph is art */
 
-/* v3.8: pixel type only on logo, landing H1, LV stamp and level names. Everything else Plex. */
-body.type-v4 .h1, body.type-v4 .h2, body.type-v4 .who .px-text { font: 700 26px/1.2 var(--font-ui); -webkit-font-smoothing: antialiased; }
+/* v3.9.1 (Callum): pixel font for screen/section titles (.h1/.h2, from v3.css), clean Plex for everything else.
+   GD exceptions: the banner title (.cp-h) and the home greeting (.h1.hi) are Plex. */
+body.type-v4 .h1, body.type-v4 .h2 { -webkit-font-smoothing: none; }
 body.type-v4 .h1.hi { font: 600 26px/1.2 var(--font-ui); }
 body.type-v4 .who .px-text { font: 600 17px/1.2 var(--font-ui); }
 body.type-v4 .h1.stamp { font: 40px/44px "Pixeldate Sans"; -webkit-font-smoothing: none; }

@@ -87,13 +87,21 @@ function Seg({ name, value, opts, onChange, label }: { name: string; value: stri
       <input type="radio" name={name} value={v} checked={value === v} onChange={() => onChange(v)} /><span>{l}</span></label>)}</div>
 }
 /** One track, two thumbs (two native ranges stacked). Thumbs can't cross; 70 = 70+. */
+/** Range stops = bracket edges. Lower thumb picks a bracket start, upper thumb the next start (max = edge - 1). 70 = "70+". */
+const EDGES = [18, 25, 30, 35, 40, 50, 60, 70]
+const snapEdge = (n: number) => EDGES.reduce((b, e) => Math.abs(e - n) < Math.abs(b - n) ? e : b, EDGES[0])
+/** Migrate any min/max (old saved or non-edge) to bracket edges: min -> edge, max -> edge - 1 (or 70+). */
+export const snapRange = (min: number, max: number): [number, number] => {
+  let i = EDGES.indexOf(snapEdge(min)), j = max >= 70 ? 7 : EDGES.indexOf(snapEdge(max + 1)); if (i > 6) i = 6; if (j <= i) j = i + 1
+  return [EDGES[i], j === 7 ? 70 : EDGES[j] - 1] }
 function AgeRange({ min, max, onChange }: { min: number; max: number; onChange: (a: number, b: number) => void }) {
-  const f = (n: number) => (n - 18) / (AGE_TOP - 18) * 100, show = (n: number) => n >= AGE_TOP ? AGE_TOP + '+' : String(n)
-  return <div className="range" style={{ ['--lo' as any]: f(min) + '%', ['--hi' as any]: f(max) + '%' }}>
+  const i = EDGES.indexOf(min), j = max >= 70 ? 7 : EDGES.indexOf(max + 1), f = (k: number) => k / 7 * 100
+  const val = (k: number) => k === 7 ? 70 : EDGES[k] - 1, show = (n: number) => n >= AGE_TOP ? AGE_TOP + '+' : String(n)
+  return <div className="range" style={{ ['--lo' as any]: f(i) + '%', ['--hi' as any]: f(j) + '%' }}>
     <div className="range-h"><span className="px-label">AGED</span><span className="px-label-b px-coral" data-t="range-val" aria-live="polite">{show(min)} – {show(max)}</span></div>
     <div className="range-t"><i />
-      <input type="range" min={18} max={AGE_TOP} value={min} aria-label="Minimum age" data-t="min" onChange={e => onChange(Math.min(+e.target.value, max), max)} />
-      <input type="range" min={18} max={AGE_TOP} value={max} aria-label="Maximum age" aria-valuetext={show(max)} data-t="max" onChange={e => onChange(min, Math.max(+e.target.value, min))} /></div>
+      <input type="range" min={0} max={7} step={1} value={i} aria-label="Minimum age" aria-valuetext={String(min)} data-t="min" onChange={e => { const k = Math.min(+e.target.value, j - 1); onChange(EDGES[k], max) }} />
+      <input type="range" min={0} max={7} step={1} value={j} aria-label="Maximum age" aria-valuetext={show(max)} data-t="max" onChange={e => { const k = Math.max(+e.target.value, i + 1); onChange(min, val(k)) }} /></div>
   </div>
 }
 /** After upload: the photo at each level, pre-pixelated (same pixelateCanvas as what's sent), tap for full screen. */
@@ -194,7 +202,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
       <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
     </fieldset>
     <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box" data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <TickMark />}</span> I am 18 or over</label>
-    <button className="px-frame px-btn" disabled={!ok} data-t="start" style={{ marginTop: 16 }} onClick={() => { const a = Math.min(age, 70), [lo, hi] = [Math.max(18, Math.min(min, max)), Math.min(AGE_TOP, Math.max(min, max))]; if (a < 18) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
+    <button className="px-frame px-btn" disabled={!ok} data-t="start" style={{ marginTop: 16 }} onClick={() => { const a = Math.min(age, 70), [lo, hi] = snapRange(min, max); if (a < 18) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
   </div>
 }
 

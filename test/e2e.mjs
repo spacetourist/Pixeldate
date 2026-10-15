@@ -58,7 +58,7 @@ if (mode === 'incompat') {
   // man seeking women vs man seeking women: must NOT match
   const AGE = process.argv[3] === 'age'
   const a = AGE ? await page('Ann', 'woman', 'men', 30, 'alex') : await page('Ann', 'man', 'women', 30, 'alex'), b = AGE ? await page('Ben', 'man', 'women', 41, 'robin') : await page('Ben', 'man', 'women', 30, 'robin')
-  if (AGE) { console.log('  age case: Ann (woman, 30) wants men 25-30; Ben (man, 41) wants everyone 18-99'); await a.$eval('[data-t=max]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '30'); e.dispatchEvent(new Event('input', { bubbles: true })) }) }
+  if (AGE) { console.log('  age case: Ann (woman, 30) wants men 18-34; Ben (man, 41) wants everyone 18-99'); await a.$eval('[data-t=max]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '3'); e.dispatchEvent(new Event('input', { bubbles: true })) }) }
   for (const p of [a, b]) { await click(p, '[data-t=start]'); await t(p, '[data-t=code]'); await sleep(1000) }
   await a.click('[data-t=find]'); await sleep(1500); await b.click('[data-t=find]'); for (let i = 0; i < 10; i++) { await a.evaluate(() => 1); await sleep(1000); await b.evaluate(() => 1); await sleep(1000) }
   const matched = (await a.$('[data-t=their-photo]')) || (await b.$('[data-t=their-photo]'))
@@ -66,10 +66,10 @@ if (mode === 'incompat') {
 }
 // compatible: woman 29 seeking men 25-40 and man 31 seeking everyone 18-99
 const a = await page('Sam', 'woman', 'men', 29, 'sam'), b = await page('Alex', 'man', 'women', 31, 'alex')
-await setR(a, '[data-t=min]', 25); await setR(a, '[data-t=max]', 40)
-{ const v = await a.$eval('[data-t=range-val]', e => e.textContent); if (v !== '25 – 40') throw 'range ' + v
-  await setR(a, '[data-t=min]', 50); if (await a.$eval('[data-t=range-val]', e => e.textContent) !== '40 – 40') throw 'thumbs crossed'; await setR(a, '[data-t=min]', 25)
-  if (await b.$eval('[data-t=range-val]', e => e.textContent) !== '18 – 70+') throw 'default range'; log('age range slider: 25 – 40, thumbs cannot cross, default 18 – 70+') }
+await setR(a, '[data-t=min]', 1); await setR(a, '[data-t=max]', 4) // stops: 25 .. (40 edge) -> 25 – 39
+{ const v = await a.$eval('[data-t=range-val]', e => e.textContent); if (v !== '25 – 39') throw 'range ' + v
+  await setR(a, '[data-t=min]', 6); if (await a.$eval('[data-t=range-val]', e => e.textContent) !== '35 – 39') throw 'thumbs crossed'; await setR(a, '[data-t=min]', 1)
+  if (await b.$eval('[data-t=range-val]', e => e.textContent) !== '18 – 70+') throw 'default range'; log('age range slider snaps to bracket edges: 25 – 39, thumbs cannot cross, default 18 – 70+') }
 await shot(a, '01-onboarding')
 { const st = () => a.evaluate(() => ({ c: document.querySelector('[data-t=adult]').checked, svg: !!document.querySelector('[data-t=adult-box] svg'), btn: !document.querySelector('[data-t=start]').disabled }))
   const lab = async () => { const r = await a.evaluate(() => { const b = document.querySelector('label.tick').getBoundingClientRect(); return [b.right - 30, b.top + b.height / 2] }); await a.mouse.click(...r) }

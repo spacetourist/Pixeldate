@@ -37,11 +37,16 @@ export const wire = (p: Profile): PeerProfile => ({ name: p.name, br: bracketOf(
 
 const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman'] }
 const SEEKS: Seek[] = ['men', 'women', 'everyone']
-const top = (max: number) => max >= 70 ? 999 : max // max 70 = "70+", no upper limit
-/** Do they want me? Exact: my own computed age (capped at 70) against their range. */
-const theyWant = (me: Profile, t: PeerProfile) => G[t.seek].includes(me.iam) && Math.min(me.age, 70) >= t.min && Math.min(me.age, 70) <= top(t.max)
-/** Do I want them? I only know their bracket, so it must overlap my range. */
-const iWant = (me: Profile, t: PeerProfile) => G[me.seek].includes(t.iam) && Array.isArray(t.br) && t.br[1] >= me.min && t.br[0] <= top(me.max)
+/** Ranges are bracket-aligned (18/25/30/35/40/50/60/70+), so both directions use the same rule:
+ *  a bracket is wanted iff it lies inside the range. Old/non-edge ranges are snapped first. */
+const EDGES = [18, 25, 30, 35, 40, 50, 60, 70]
+const near = (n: number) => EDGES.reduce((b, e) => Math.abs(e - n) < Math.abs(b - n) ? e : b, 18)
+const norm = (min: number, max: number): [number, number] => { const lo = Math.min(near(min), 60); let hi = max >= 70 ? 70 : near(max + 1); if (hi <= lo) hi = EDGES[EDGES.indexOf(lo) + 1]; return [lo, hi >= 70 ? 999 : hi - 1] }
+const inRange = (br: [number, number], min: number, max: number) => { const [lo, hi] = norm(min, max); return br[0] >= lo && br[1] <= hi }
+/** Do they want me? My bracket inside their range. */
+const theyWant = (me: Profile, t: PeerProfile) => G[t.seek].includes(me.iam) && inRange(bracketOf(Math.min(me.age, 70)), t.min, t.max)
+/** Do I want them? Their bracket inside my range. */
+const iWant = (me: Profile, t: PeerProfile) => G[me.seek].includes(t.iam) && Array.isArray(t.br) && inRange(t.br, me.min, me.max)
 export const compatible = (me: Profile, t: PeerProfile) => iWant(me, t) && theyWant(me, t)
 const slotId = (g: Gender, s: Seek, n: number) => `pixeldate-lobby-${g}-${s}-${n}`
 /** Every slot I could match with (including my own combo), shuffled. */

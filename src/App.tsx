@@ -87,7 +87,7 @@ function Banner() {
   const set = (e: string) => `${u('', e)} 1x, ${u('@2x', e)} 2x, ${u('@3x', e)} 3x`
   return <div className="px-frame cp-banner" data-t="banner"><picture>
     <source type="image/webp" srcSet={set('webp')} /><img src={u('', 'png')} srcSet={set('png')} width={412} height={200} alt="" /></picture>
-    <p className="h2 cp-title">Your story starts here</p></div>
+    <div className="cp-ov"><h1 className="cp-h">Create your profile</h1><p className="cp-s">Stay pixelated until you choose.</p></div></div>
 }
 /** Segmented radio pair: real radio inputs, so arrow keys / screen readers work natively. */
 function Seg({ name, value, opts, onChange, label }: { name: string; value: string; opts: [string, string][]; onChange: (v: string) => void; label: string }) {
@@ -144,7 +144,6 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   if (photo && !okPhoto) return <div className="screen scroll">{input}<PhotoReveal src={photo} onConfirm={() => setOkPhoto(true)} onChange={() => fileIn.current?.click()} /></div>
   return <div className="screen scroll">{input}
     <Banner />
-    <h1 className="h2">Create your profile</h1>
     <label className="px-label lab" htmlFor="pd-name">NAME</label>
     <input id="pd-name" className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Your first name" data-t="name" />
     <label className="px-label lab">PHOTO</label>

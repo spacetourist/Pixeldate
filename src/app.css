@@ -224,7 +224,7 @@ img.px { image-rendering: crisp-edges; image-rendering: pixelated; }
 .vnav { display: flex; align-items: center; gap: 12px; }
 
 /* v3.8 polish (GD) */
-.cp-ov { position: absolute; inset: 4px; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px; background: linear-gradient(90deg, rgba(3,17,19,.75) 0%, rgba(3,17,19,0) 55%); pointer-events: none; }
+.cp-ov { position: absolute; inset: 4px; padding: 48px 16px 20px; display: flex; flex-direction: column; gap: 4px; background: linear-gradient(90deg, rgba(3,17,19,.75) 0%, rgba(3,17,19,0) 55%); pointer-events: none; }
 .cp-h { margin: 0; max-width: 36%; font: 700 22px/1.12 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -0.01em; color: var(--cream); text-shadow: 0 1px 2px rgba(0,0,0,.55); }
 .cp-s { margin: 0; white-space: nowrap; font: 400 13px/1.3 "IBM Plex Sans", system-ui, sans-serif; color: #9cbebd; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 @media (max-width: 370px) { .cp-h { font-size: 19px; } }
@@ -242,4 +242,4 @@ img.px { image-rendering: crisp-edges; image-rendering: pixelated; }
 .stamp2, .rv-stage .blk { font: 600 12px/1.2 "IBM Plex Sans", system-ui, sans-serif !important; letter-spacing: .06em; }
 .lvup .tick-meter, .pairbox .tick-meter { align-self: center; justify-content: center; }
 .ansrow { align-items: stretch; } .ansrow .join { min-height: 0; height: auto; display: grid; place-items: center; }
-@media (max-width: 370px) { .cp-s { white-space: normal; max-width: 110px; } } /* 190px still fits one line at 13px, so it never wrapped */
+.cp-s { white-space: normal; max-width: 110px; } /* two lines at every width */

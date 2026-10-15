@@ -10,18 +10,27 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const log = (...a) => console.log('✔', ...a); const T0 = Date.now(); const step = s => console.log('  ..', ((Date.now()-T0)/1000).toFixed(1), s)
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 90000,
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--disable-features=WebRtcHideLocalIpsWithMdns,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
+async function shotV(p, n, full = true) { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await sleep(250); await p.screenshot({ path: S(n), fullPage: full }); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
+const setR = (p, sel, v) => p.$eval(sel, (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(v))
 async function page(name, iam, seek, age, face) {
   const ctx = LB ? (shared ||= await browser.createBrowserContext()) : await browser.createBrowserContext(); const p = await ctx.newPage()
   await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
   p.on('console', m => { if (!/404/.test(m.text())) console.log(`  [${name}]`, m.text().slice(0, 150)) })
   p.on('dialog', d => d.accept()); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
+  if (name === 'Sam') await shotV(p, 'v3.6-signup-empty-412')
   await p.type('[data-t=name]', name); await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
   await p.waitForSelector('[data-t=reveal-skip]:not(.hid)', { timeout: 10000 }); await p.click('[data-t=reveal-skip]') // skip the onboarding reveal
   await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]'); await p.click('[data-t=photo-confirm]')
-  await p.select('[data-t=iam]', iam); await p.select('[data-t=seek]', seek)
+  await p.click(`[data-t=iam-${iam}]`); await p.click(`[data-t=seek-${seek}]`)
+  await p.waitForSelector('[data-t=mini-5] img'); if ((await p.$$('[data-t=minis] img')).length !== 5) throw '5 minis missing'
+  if (!(await p.$eval(`[data-t=iam-${iam}] input`, e => e.checked)) || (await p.$$('[data-t^=iam-].on')).length !== 1) throw 'iam radio state'
   await p.$eval('[data-t=age]', (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(age))
-  await p.$eval('[data-t=adult]', e => e.click()); step('filled ' + name); return wrap(p)
+  await p.$eval('[data-t=adult]', e => e.click())
+  if (name === 'Sam') { await shotV(p, 'v3.6-signup-filled-412'); await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); const w = await p.$eval('[data-t=viewer] img', e => e.naturalWidth); if (w !== 32) throw 'viewer not 32 blocks: ' + w
+    await shotV(p, 'v3.6-viewer-412', false); await p.click('[aria-label="Next level"]'); if (!(await p.$eval('[data-t=viewer-name]', e => e.textContent)).includes('LV 4')) throw 'viewer next'
+    await p.click('[data-t=viewer-close]'); await sleep(200); if (await p.$('[data-t=viewer]')) throw 'viewer did not close'; log('5 minis; viewer opens at 32 blocks, next works, X closes') }
+  step('filled ' + name); return wrap(p)
 }
 const t = (p, sel) => p.waitForSelector(sel, { timeout: 60000 })
 const click = async (p, sel) => { await t(p, sel); await p.click(sel) }
@@ -34,7 +43,7 @@ const mode = process.argv[2] || 'full'
 if (mode === 'incompat') {
   // man seeking women vs man seeking women: must NOT match
   const AGE = process.argv[3] === 'age'
-  const a = AGE ? await page('Ann', 'woman', 'men', 30, 'alex') : await page('Ann', 'man', 'women', 30, 'alex'), b = AGE ? await page('Ben', 'man', 'everyone', 41, 'robin') : await page('Ben', 'man', 'women', 30, 'robin')
+  const a = AGE ? await page('Ann', 'woman', 'men', 30, 'alex') : await page('Ann', 'man', 'women', 30, 'alex'), b = AGE ? await page('Ben', 'man', 'women', 41, 'robin') : await page('Ben', 'man', 'women', 30, 'robin')
   if (AGE) { console.log('  age case: Ann (woman, 30) wants men 25-30; Ben (man, 41) wants everyone 18-99'); await a.$eval('[data-t=max]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '30'); e.dispatchEvent(new Event('input', { bubbles: true })) }) }
   for (const p of [a, b]) { await click(p, '[data-t=start]'); await t(p, '[data-t=code]'); await sleep(1000) }
   await a.click('[data-t=find]'); await sleep(1500); await b.click('[data-t=find]'); for (let i = 0; i < 10; i++) { await a.evaluate(() => 1); await sleep(1000); await b.evaluate(() => 1); await sleep(1000) }
@@ -42,9 +51,11 @@ if (mode === 'incompat') {
   console.log(matched ? '✘ incompatible pair matched' : '✔ incompatible pair did not match in 25 s'); await browser.close(); process.exit(matched ? 1 : 0)
 }
 // compatible: woman 29 seeking men 25-40 and man 31 seeking everyone 18-99
-const a = await page('Sam', 'woman', 'men', 29, 'sam'), b = await page('Alex', 'man', 'everyone', 31, 'alex')
-await a.$eval('[data-t=min]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '25'); e.dispatchEvent(new Event('input', { bubbles: true })) })
-await a.$eval('[data-t=max]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '40'); e.dispatchEvent(new Event('input', { bubbles: true })) })
+const a = await page('Sam', 'woman', 'men', 29, 'sam'), b = await page('Alex', 'man', 'women', 31, 'alex')
+await setR(a, '[data-t=min]', 25); await setR(a, '[data-t=max]', 40)
+{ const v = await a.$eval('[data-t=range-val]', e => e.textContent); if (v !== '25 – 40') throw 'range ' + v
+  await setR(a, '[data-t=min]', 50); if (await a.$eval('[data-t=range-val]', e => e.textContent) !== '40 – 40') throw 'thumbs crossed'; await setR(a, '[data-t=min]', 25)
+  if (await b.$eval('[data-t=range-val]', e => e.textContent) !== '18 – 70+') throw 'default range'; log('age range slider: 25 – 40, thumbs cannot cross, default 18 – 70+') }
 await shot(a, '01-onboarding')
 { const st = () => a.evaluate(() => ({ c: document.querySelector('[data-t=adult]').checked, svg: !!document.querySelector('[data-t=adult-box] svg'), btn: !document.querySelector('[data-t=start]').disabled }))
   const lab = async () => { const r = await a.evaluate(() => { const b = document.querySelector('label.tick').getBoundingClientRect(); return [b.right - 30, b.top + b.height / 2] }); await a.mouse.click(...r) }

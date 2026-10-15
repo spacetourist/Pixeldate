@@ -29,7 +29,7 @@ export interface Profile { name: string; age: number; min: number; max: number; 
 
 const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman'] }
 const SEEKS: Seek[] = ['men', 'women', 'everyone']
-export const wants = (a: Profile, b: Profile) => G[a.seek].includes(b.iam) && b.age >= a.min && b.age <= a.max
+export const wants = (a: Profile, b: Profile) => G[a.seek].includes(b.iam) && b.age >= a.min && (a.max >= 70 || b.age <= a.max) // max 70 = "70+", no upper limit
 export const compatible = (a: Profile, b: Profile) => wants(a, b) && wants(b, a)
 const slotId = (g: Gender, s: Seek, n: number) => `pixeldate-lobby-${g}-${s}-${n}`
 /** Every slot I could match with (including my own combo), shuffled. */

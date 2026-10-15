@@ -81,10 +81,60 @@ function TickMeter({ level, from, to }: { level: number; from: number; to: numbe
   useEffect(() => { setP(from); let v = from; const t0 = setTimeout(() => { const i = setInterval(() => { v = Math.min(to, v + 10); setP(v); if (v >= to) clearInterval(i) }, 90) }, 450); return () => clearTimeout(t0) }, [from, to])
   return <div className="tick-meter"><Meter level={level} pct={p} /><span className="px-label-b px-coral">+{METER.cardBonus}%</span></div>
 }
+const AGE_TOP = 70 // slider top; 70 means "70+" (no upper limit, see wants() in net.ts)
+function Banner() {
+  const u = (x: string, e: string) => `${B}px/img/create-profile-banner${x}.${e}`
+  const set = (e: string) => `${u('', e)} 1x, ${u('@2x', e)} 2x, ${u('@3x', e)} 3x`
+  return <div className="px-frame cp-banner" data-t="banner"><picture>
+    <source type="image/webp" srcSet={set('webp')} /><img src={u('', 'png')} srcSet={set('png')} width={412} height={200} alt="" /></picture>
+    <p className="h2 cp-title">Your story starts here</p></div>
+}
+/** Segmented radio pair: real radio inputs, so arrow keys / screen readers work natively. */
+function Seg({ name, value, opts, onChange, label }: { name: string; value: string; opts: [string, string][]; onChange: (v: string) => void; label: string }) {
+  return <div className="seg" role="radiogroup" aria-labelledby={label}>{opts.map(([v, l]) =>
+    <label key={v} className={'px-frame seg-o' + (value === v ? ' on' : '')} data-t={name + '-' + v}>
+      <input type="radio" name={name} value={v} checked={value === v} onChange={() => onChange(v)} /><span>{l}</span></label>)}</div>
+}
+/** One track, two thumbs (two native ranges stacked). Thumbs can't cross; 70 = 70+. */
+function AgeRange({ min, max, onChange }: { min: number; max: number; onChange: (a: number, b: number) => void }) {
+  const f = (n: number) => (n - 18) / (AGE_TOP - 18) * 100, show = (n: number) => n >= AGE_TOP ? AGE_TOP + '+' : String(n)
+  return <div className="range" style={{ ['--lo' as any]: f(min) + '%', ['--hi' as any]: f(max) + '%' }}>
+    <div className="range-h"><span className="px-label">AGED</span><span className="px-label-b px-coral" data-t="range-val" aria-live="polite">{show(min)} – {show(max)}</span></div>
+    <div className="range-t"><i />
+      <input type="range" min={18} max={AGE_TOP} value={min} aria-label="Minimum age" data-t="min" onChange={e => onChange(Math.min(+e.target.value, max), max)} />
+      <input type="range" min={18} max={AGE_TOP} value={max} aria-label="Maximum age" aria-valuetext={show(max)} data-t="max" onChange={e => onChange(min, Math.max(+e.target.value, min))} /></div>
+  </div>
+}
+/** After upload: the photo at each level, pre-pixelated (same pixelateCanvas as what's sent), tap for full screen. */
+function Minis({ src, onChange }: { src: string; onChange: () => void }) {
+  const [urls, setUrls] = useState<string[]>([]); const [open, setOpen] = useState<number | null>(null)
+  useEffect(() => { let live = true; loadImage(src).then(im => { if (live) setUrls(LEVELS.map((_, i) => pixelatePhoto(im, i + 1))) }); return () => { live = false } }, [src])
+  useEffect(() => { if (open === null) return
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); if (e.key === 'ArrowRight') setOpen(o => Math.min(4, (o ?? 0) + 1)); if (e.key === 'ArrowLeft') setOpen(o => Math.max(0, (o ?? 0) - 1)) }
+    history.pushState({ pdViewer: 1 }, ''); const pop = () => setOpen(null)
+    addEventListener('keydown', k); addEventListener('popstate', pop)
+    return () => { removeEventListener('keydown', k); removeEventListener('popstate', pop) } }, [open === null])
+  const close = () => { if (history.state?.pdViewer) history.back(); else setOpen(null) }
+  let x0 = 0
+  return <div className="minis-wrap">
+    <div className="minis" data-t="minis">{LEVELS.map((L, i) => <button key={i} className="mini-b" data-t={'mini-' + (i + 1)} aria-label={`Preview at ${L.name}`} onClick={() => setOpen(i)}>
+      {urls[i] && <img src={urls[i]} alt="" className={i < 4 ? 'px' : ''} />}<span className="px-label">{L.blocks || "FULL"}</span></button>)}</div>
+    <button className="px-frame px-btn-ghost" onClick={onChange}>CHANGE</button>
+    {open !== null && <div className="viewer" data-t="viewer" role="dialog" aria-label={`Photo at ${LEVELS[open].name}`} onClick={close}
+      onTouchStart={e => { x0 = e.touches[0].clientX }} onTouchEnd={e => { const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 50) { e.preventDefault(); setOpen(o => Math.max(0, Math.min(4, (o ?? 0) + (d < 0 ? 1 : -1)))) } }}>
+      <button className="px-frame px-iconbtn vx" aria-label="Close" data-t="viewer-close" onClick={e => { e.stopPropagation(); close() }}>✕</button>
+      <img src={urls[open]} alt="" className={open < 4 ? 'px' : ''} onClick={e => e.stopPropagation()} />
+      <div className="vnav" onClick={e => e.stopPropagation()}>
+        <button className="px-frame px-btn-ghost" disabled={open === 0} aria-label="Previous level" onClick={() => setOpen(open - 1)}>◀</button>
+        <span className="px-label-b px-cream" data-t="viewer-name">LV {open + 1} · {LEVELS[open].name.toUpperCase()} · {LEVELS[open].blocks ? LEVELS[open].blocks + ' BLOCKS' : 'FULL'}</span>
+        <button className="px-frame px-btn-ghost" disabled={open === 4} aria-label="Next level" onClick={() => setOpen(open + 1)}>▶</button></div>
+    </div>}
+  </div>
+}
 function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const [name, setName] = useState(''); const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const fileIn = useRef<HTMLInputElement>(null); const [adult, setAdult] = useState(false)
-  const [iam, setIam] = useState<Gender>('man'); const [seek, setSeek] = useState<Seek>('everyone')
-  const [age, setAge] = useState(30); const [min, setMin] = useState(18); const [max, setMax] = useState(99)
+  const [iam, setIam] = useState<Gender>('man'); const [seek, setSeek] = useState<Seek>('women')
+  const [age, setAge] = useState(30); const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP)
   const [cam, setCam] = useState<MediaStream | null>(null); const vid = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
   const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPhoto(c.toDataURL('image/jpeg', .9)); setOkPhoto(false); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
@@ -93,34 +143,31 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const input = <input ref={fileIn} type="file" accept="image/*" hidden data-t="gallery" onChange={e => { file(e.target.files?.[0]); e.target.value = '' }} />
   if (photo && !okPhoto) return <div className="screen scroll">{input}<PhotoReveal src={photo} onConfirm={() => setOkPhoto(true)} onChange={() => fileIn.current?.click()} /></div>
   return <div className="screen scroll">{input}
-    <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /></header>
+    <Banner />
     <h1 className="h2">Create your profile</h1>
-    <label className="px-label lab">NAME</label>
-    <input className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Your first name" data-t="name" />
+    <label className="px-label lab" htmlFor="pd-name">NAME</label>
+    <input id="pd-name" className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Your first name" data-t="name" />
     <label className="px-label lab">PHOTO</label>
-    <div className="photo-row">
-      <div className="thumb">{cam ? <video ref={vid} muted playsInline /> : photo ? <img src={photo} /> : <img src={AV('a', true)} className="ph" />}</div>
+    {photo && !cam ? <Minis src={photo} onChange={() => fileIn.current?.click()} /> : <div className="photo-row">
+      <div className="thumb">{cam ? <video ref={vid} muted playsInline /> : <img src={AV('a', true)} className="ph" alt="" />}</div>
       <div className="col">
         {cam ? <button className="px-frame px-btn-small" onClick={snap}>SNAP</button>
           : <button className="px-frame px-btn-ghost" onClick={async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera') } }}>CAMERA</button>}
-        <button className="px-frame px-btn-ghost" onClick={() => fileIn.current?.click()}>{photo ? 'CHANGE' : 'GALLERY'}</button>
+        <button className="px-frame px-btn-ghost" onClick={() => fileIn.current?.click()}>GALLERY</button>
       </div>
-    </div>
+    </div>}
     <div className="grid2">
-      <div><label className="px-label lab">I AM</label>
-        <select className="px-frame px-input fld" value={iam} onChange={e => setIam(e.target.value as Gender)} data-t="iam"><option value="man">A man</option><option value="woman">A woman</option></select></div>
+      <div><span className="px-label lab" id="lab-iam">I AM</span>
+        <Seg label="lab-iam" name="iam" value={iam} onChange={v => setIam(v as Gender)} opts={[['man', 'Man'], ['woman', 'Woman']]} /></div>
       <div><label className="px-label lab">MY AGE</label>
         <AgeField value={age} onChange={setAge} t="age" /></div>
     </div>
-    <label className="px-label lab">I'D LIKE TO MEET</label>
-    <select className="px-frame px-input fld" value={seek} onChange={e => setSeek(e.target.value as Seek)} data-t="seek"><option value="men">Men</option><option value="women">Women</option><option value="everyone">Everyone</option></select>
-    <label className="px-label lab">AGED</label>
-    <div className="grid2">
-      <AgeField value={min} onChange={setMin} t="min" />
-      <AgeField value={max} onChange={setMax} t="max" />
-    </div>
+    <fieldset className="meet"><legend className="px-label lab" id="lab-seek">I WANT TO MEET</legend>
+      <Seg label="lab-seek" name="seek" value={seek} onChange={v => setSeek(v as Seek)} opts={[['men', 'Men'], ['women', 'Women']]} />
+      <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
+    </fieldset>
     <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box" data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <TickMark />}</span> I am 18 or over</label>
-    <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => { const a = clampAge(age), [lo, hi] = [clampAge(min), clampAge(max)].sort((x, y) => x - y); setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
+    <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => { const a = clampAge(age), [lo, hi] = [Math.max(18, Math.min(min, max)), Math.min(AGE_TOP, Math.max(min, max))]; setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
   </div>
 }
 
@@ -325,7 +372,7 @@ export default function App() {
       <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><img className="av" src={myAv} alt="" /></header>
       <div className="stage">
         <img src={`${B}px/hero/hero-dusk@2x.png`} width={390} height={300} alt="" />
-        <span className="px-frame px-chip chip"><Ic n="heart" s={8} /> {me!.seek === 'everyone' ? 'EVERYONE' : me!.seek.toUpperCase()} · {me!.min}–{me!.max}</span>
+        <span className="px-frame px-chip chip"><Ic n="heart" s={8} /> {me!.seek === 'everyone' ? 'EVERYONE' : me!.seek.toUpperCase()} · {me!.min}–{me!.max >= AGE_TOP ? AGE_TOP + '+' : me!.max}</span>
         {screen === 'finding' && <div className="sprite" data-t="finding" />}
       </div>
       <div className="copy">{screen === 'finding' ? <><h1 className="h1">Finding someone…</h1><p className="read m">Hang tight. As soon as someone is free, you'll both start as Strangers.</p></>

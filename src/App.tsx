@@ -87,7 +87,7 @@ function Banner() {
   const set = (e: string) => `${u('', e)} 1x, ${u('@2x', e)} 2x, ${u('@3x', e)} 3x`
   return <div className="px-frame cp-banner" data-t="banner"><picture>
     <source type="image/webp" srcSet={set('webp')} /><img src={u('', 'png')} srcSet={set('png')} width={412} height={200} alt="" /></picture>
-    <div className="cp-ov"><h1 className="cp-h">Create your profile</h1><p className="cp-s">Stay pixelated until you choose.</p></div></div>
+    <div className="cp-ov"><h1 className="cp-h">Create your profile</h1><p className="cp-s">Blurry until you both choose.</p></div></div>
 }
 /** Segmented radio pair: real radio inputs, so arrow keys / screen readers work natively. */
 function Seg({ name, value, opts, onChange, label }: { name: string; value: string; opts: [string, string][]; onChange: (v: string) => void; label: string }) {

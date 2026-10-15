@@ -242,3 +242,4 @@ img.px { image-rendering: crisp-edges; image-rendering: pixelated; }
 .stamp2, .rv-stage .blk { font: 600 12px/1.2 "IBM Plex Sans", system-ui, sans-serif !important; letter-spacing: .06em; }
 .lvup .tick-meter, .pairbox .tick-meter { align-self: center; justify-content: center; }
 .ansrow { align-items: stretch; } .ansrow .join { min-height: 0; height: auto; display: grid; place-items: center; }
+@media (max-width: 370px) { .cp-s { white-space: normal; max-width: 110px; } } /* 190px still fits one line at 13px, so it never wrapped */

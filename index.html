@@ -68,7 +68,20 @@ html,body{width:auto} .land{width:100%;max-width:480px;margin:0 auto} .land .her
 .land .lvrow .tile{width:min(256px,60vw);height:auto} img{image-rendering:pixelated} .dl{display:none;width:100%;max-width:1440px;margin:0 auto}
 @media (min-width:900px){ .land{display:none} .dl{display:block} }
 @media (min-width:900px) and (max-width:1300px){ .dl .dhero{grid-template-columns:1fr 1fr} .dl .dhero .art{width:100%;height:auto} .dl .big{font-size:56px;line-height:56px} .dl .strip{flex-wrap:wrap} .dl .sgrid{grid-template-columns:1fr 1fr} }
-</style></head>
+</style><style>
+/* type-v4 on the landing: pixel only on logo (image), the H1 and section titles (.h1/.h2); everything else Plex */
+@font-face { font-family: "IBM Plex Sans"; src: url("/Pixeldate/px/fonts/IBMPlexSans-VariableFont_wdth,wght.ttf") format("truetype"); font-weight: 100 700; font-stretch: 85% 100%; }
+body.type-v4 { --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --muted-text: #9cbebd; -webkit-font-smoothing: antialiased; }
+body.type-v4 .read, body.type-v4 .meta, body.type-v4 .px-qcard__q { font: 400 16px/1.45 var(--font-ui); }
+body.type-v4 .dl .lead { font: 400 20px/1.45 var(--font-ui); }
+body.type-v4 .px-qcard__q { font-weight: 500; font-size: 17px; }
+body.type-v4 .px-btn, body.type-v4 .px-btn__label { font: 600 17px/1 var(--font-ui); letter-spacing: 0; text-transform: none; }
+body.type-v4 .px-btn-ghost, body.type-v4 .px-btn-small { font: 600 13px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+body.type-v4 .kicker, body.type-v4 .px-label, body.type-v4 .px-label-b, body.type-v4 .px-label b, body.type-v4 .px-tag, body.type-v4 .px-qcard__meta, body.type-v4 .px-qcard__foot, body.type-v4 .dnav nav { font: 600 12px/1.2 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; }
+body.type-v4 .px-label { color: var(--muted-text); }
+body.type-v4 .h1, body.type-v4 .h2 { -webkit-font-smoothing: none; }
+</style>
+</head>
 <body class="px type-v21 type-v4">
 <div class="land">
 <header class="lnav"><img src="/Pixeldate/px/logo/logo-2.svg" width="244" height="36" alt="pixeldate"><a class="px-frame px-btn-small" href="./app/">SIGN UP</a></header>

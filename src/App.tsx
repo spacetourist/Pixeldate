@@ -146,7 +146,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   return <div className="screen scroll">{input}
     <Banner />
     <label className="px-label lab" htmlFor="pd-name">NAME</label>
-    <input id="pd-name" className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Your first name" data-t="name" />
+    <input id="pd-name" className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Username" data-t="name" />
     <label className="px-label lab">PHOTO</label>
     {photo && !cam ? <Minis src={photo} onChange={() => fileIn.current?.click()} /> : <div className="photo-row">
       {cam ? <div className="thumb"><video ref={vid} muted playsInline /></div>

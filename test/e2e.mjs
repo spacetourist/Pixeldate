@@ -10,7 +10,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const log = (...a) => console.log('✔', ...a); const T0 = Date.now(); const step = s => console.log('  ..', ((Date.now()-T0)/1000).toFixed(1), s)
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 90000,
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--disable-features=WebRtcHideLocalIpsWithMdns,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
-async function shotV(p, n, full = true) { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await sleep(250); await p.screenshot({ path: S(n), fullPage: full }); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
+// review shots: hide dev-only UI (dev-skip bar, '· DEV' badge suffix) just for the capture
+const clean = p => p.evaluate(() => { document.querySelectorAll('[data-t=skip-stage]').forEach(e => e.style.display = 'none'); const b = document.querySelector('[data-t=lvbadge]'); if (b) b.textContent = b.textContent.replace(' · DEV', '') })
+async function shotV(p, n, full = true) { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await sleep(250); await clean(p); await p.screenshot({ path: S(n), fullPage: full }); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 const setR = (p, sel, v) => p.$eval(sel, (e, v) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, v); e.dispatchEvent(new Event('input', { bubbles: true })) }, String(v))
 async function page(name, iam, seek, age, face) {
   const ctx = LB ? (shared ||= await browser.createBrowserContext()) : await browser.createBrowserContext(); const p = await ctx.newPage()
@@ -82,7 +84,7 @@ await tab(a, 'chat'); await tab(b, 'call')
 await click(a, '[data-t=pinned-card] [data-t=answer]'); await a.type('[data-t=ans-input]', 'Toast and coffee'); await a.click('[data-t=ans-send]')
 await t(b, '[data-t=ans-turn]'); if ((await b.content()).includes('Toast and coffee')) throw 'partner answer leaked before B answered'
 log('B (on call tab) sees "your turn"; answer text not in the DOM')
-const shotW412 = async (p, n) => { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await shot(p, n); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
+const shotW412 = async (p, n) => { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await clean(p); await shot(p, n); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 await shotW412(b, 'v3.4-their-turn-412')
 if (!(await a.$eval('.chat', e => e.textContent)).includes('YOU ANSWERED Q1')) throw 'A chat log missing Q1'
 await b.click('[data-t=ans-turn]'); await t(b, '[data-t=ans-input]'); await b.type('[data-t=ans-input]', 'Porridge'); await b.click('[data-t=ans-send]')
@@ -115,7 +117,7 @@ await sleep(300); await a.click('[data-t=reveal]'); await t(a, '[data-t=ready-wa
 await t(b, '[data-t=ready] [data-t=ready-reveal]'); await shot(b, '07-reveal-unlocked-their-turn'); log('B nudged with the Ready modal')
 const lvlB = await b.$eval('.chip', e => e.textContent); if (!lvlB.includes('LV 1')) throw 'level rose on one tap'
 await b.click('[data-t=ready-reveal]'); await t(a, '[data-t=lvup]'); await t(b, '[data-t=lvup]'); await sleep(1300)
-await b.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await shot(b, 'v3.4-levelup-412'); await b.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
+await b.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await clean(b); await shot(b, 'v3.4-levelup-412'); await b.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
 log('level-up event on both:', await a.$eval('[data-t=lvup-name]', e => e.textContent), '/', await b.$eval('[data-t=lvup-name]', e => e.textContent))
 for (const p of [a, b]) await p.click('[data-t=lvup-close]'); await sleep(500)
 log('after both tapped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))

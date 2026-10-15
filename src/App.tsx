@@ -107,7 +107,8 @@ function AgeRange({ min, max, onChange }: { min: number; max: number; onChange: 
 }
 /** After upload: the photo at each level, pre-pixelated (same pixelateCanvas as what's sent), tap for full screen. */
 function Minis({ src, onChange }: { src: string; onChange: () => void }) {
-  const [urls, setUrls] = useState<string[]>([]); const [open, setOpen] = useState<number | null>(null)
+  const [urls, setUrls] = useState<string[]>([]); const [open, setOpen] = useState<number | null>(null); const [sel, setSel] = useState(0)
+  useEffect(() => { if (open !== null) setSel(open) }, [open])
   useEffect(() => { let live = true; loadImage(src).then(im => { if (live) setUrls(LEVELS.map((_, i) => pixelatePhoto(im, i + 1))) }); return () => { live = false } }, [src])
   useEffect(() => { if (open === null) return
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); if (e.key === 'ArrowRight') setOpen(o => Math.min(4, (o ?? 0) + 1)); if (e.key === 'ArrowLeft') setOpen(o => Math.max(0, (o ?? 0) - 1)) }
@@ -117,16 +118,16 @@ function Minis({ src, onChange }: { src: string; onChange: () => void }) {
   const close = () => { if (history.state?.pdViewer) history.back(); else setOpen(null) }
   let x0 = 0
   return <div className="minis-wrap">
-    <div className="minis" data-t="minis">{LEVELS.map((L, i) => <button key={i} className="mini-b" data-t={'mini-' + (i + 1)} aria-label={`Preview at ${L.name}`} onClick={() => setOpen(i)}>
+    <div className="minis" data-t="minis">{LEVELS.map((L, i) => <button key={i} className={'mini-b' + (sel === i ? ' sel' : '')} aria-pressed={sel === i} data-t={'mini-' + (i + 1)} aria-label={`Preview at ${L.name}`} onClick={() => setOpen(i)}>
       {urls[i] && <img src={urls[i]} alt="" className={i < 4 ? 'px' : ''} />}<span className="px-label">{L.blocks || "FULL"}</span></button>)}</div>
-    <button className="px-frame px-btn-ghost" onClick={onChange}>CHANGE</button>
+    <button type="button" className="tlink" data-t="photo-change-link" onClick={onChange}>Change photo</button>
     {open !== null && <div className="viewer" data-t="viewer" role="dialog" aria-label={`Photo at ${LEVELS[open].name}`} onClick={close}
       onTouchStart={e => { x0 = e.touches[0].clientX }} onTouchEnd={e => { const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 50) { e.preventDefault(); setOpen(o => Math.max(0, Math.min(4, (o ?? 0) + (d < 0 ? 1 : -1)))) } }}>
       <button className="px-frame px-iconbtn vx" aria-label="Close" data-t="viewer-close" onClick={e => { e.stopPropagation(); close() }}>✕</button>
       <img src={urls[open]} alt="" className={open < 4 ? 'px' : ''} onClick={e => e.stopPropagation()} />
       <div className="vnav" onClick={e => e.stopPropagation()}>
         <button className="px-frame px-btn-ghost" disabled={open === 0} aria-label="Previous level" onClick={() => setOpen(open - 1)}>◀</button>
-        <span className="px-label-b px-cream" data-t="viewer-name">LV {open + 1} · {LEVELS[open].name.toUpperCase()} · {LEVELS[open].blocks ? LEVELS[open].blocks + ' BLOCKS' : 'FULL'}</span>
+        <span className="vstep" data-t="viewer-name">LV {open + 1} · {LEVELS[open].name.toUpperCase()} · {LEVELS[open].blocks ? LEVELS[open].blocks + ' BLOCKS' : 'FULL'}</span>
         <button className="px-frame px-btn-ghost" disabled={open === 4} aria-label="Next level" onClick={() => setOpen(open + 1)}>▶</button></div>
     </div>}
   </div>
@@ -148,11 +149,12 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
     <input id="pd-name" className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Your first name" data-t="name" />
     <label className="px-label lab">PHOTO</label>
     {photo && !cam ? <Minis src={photo} onChange={() => fileIn.current?.click()} /> : <div className="photo-row">
-      <div className="thumb">{cam ? <video ref={vid} muted playsInline /> : <img src={AV('a', true)} className="ph" alt="" />}</div>
+      {cam ? <div className="thumb"><video ref={vid} muted playsInline /></div>
+        : <button type="button" className="addself" data-t="add-selfie" onClick={() => fileIn.current?.click()}><svg width="24" height="24" viewBox="0 0 12 12" shapeRendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M4 2h4v1h2v1h1v6H1V4h1V3h2zM2 4v5h8V4zM5 5h2v1h1v2H7v1H5V8H4V6h1zM5 6v2h2V6z" /></svg><span>Add a selfie</span></button>}
       <div className="col">
         {cam ? <button className="px-frame px-btn-small" onClick={snap}>SNAP</button>
-          : <button className="px-frame px-btn-ghost" onClick={async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera') } }}>CAMERA</button>}
-        <button className="px-frame px-btn-ghost" onClick={() => fileIn.current?.click()}>GALLERY</button>
+          : <button className="px-frame px-btn-ghost pbtn" onClick={async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera') } }}>Camera</button>}
+        <button className="px-frame px-btn-ghost pbtn" onClick={() => fileIn.current?.click()}>Gallery</button>
       </div>
     </div>}
     <div className="grid2">
@@ -166,7 +168,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
       <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
     </fieldset>
     <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box" data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <TickMark />}</span> I am 18 or over</label>
-    <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => { const a = clampAge(age), [lo, hi] = [Math.max(18, Math.min(min, max)), Math.min(AGE_TOP, Math.max(min, max))]; setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
+    <button className="px-frame px-btn" disabled={!ok} data-t="start" style={{ marginTop: 16 }} onClick={() => { const a = clampAge(age), [lo, hi] = [Math.max(18, Math.min(min, max)), Math.min(AGE_TOP, Math.max(min, max))]; setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
   </div>
 }
 
@@ -375,7 +377,7 @@ export default function App() {
         {screen === 'finding' && <div className="sprite" data-t="finding" />}
       </div>
       <div className="copy">{screen === 'finding' ? <><h1 className="h1">Finding someone…</h1><p className="read m">Hang tight. As soon as someone is free, you'll both start as Strangers.</p></>
-        : <><h1 className="h1">Hi {me!.name},<br />ready to meet?</h1><p className="read m">We'll pair you with someone at random. You both start as Strangers: 8 blocks.</p></>}</div>
+        : <><h1 className="h1 hi">Hi {me!.name}, ready to meet?</h1><p className="read m">We'll pair you with someone at random. You both start as Strangers: 8 blocks.</p></>}</div>
       {notice && <p className="px-label px-coral-l">{notice.toUpperCase()}</p>}
       {screen === 'finding' ? <button className="px-frame px-btn big" data-t="cancel" onClick={() => { net.current!.cancel(); setScreen('lobby') }}><span className="px-btn__label">Cancel</span></button>
         : <button className="px-frame px-btn big" data-t="find" disabled={!code} onClick={find}><Ic n="matches" /><span className="px-btn__label">{code ? 'Find someone' : 'Connecting…'}</span></button>}
@@ -383,7 +385,7 @@ export default function App() {
       <div className="px-frame px-card codecard">
         <p className="px-label">MEETING A FRIEND? <b className="px-cream" data-t="code">{code ? code.toUpperCase() : '…'}</b></p>
         <div className="ansrow"><input className="px-frame px-input fld" value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Friend's code" data-t="joincode" />
-          <button className="px-frame px-btn-small" onClick={doJoin} data-t="join">JOIN</button></div>
+          <button className="px-frame px-btn-small join" onClick={doJoin} data-t="join">JOIN</button></div>
       </div>
       <p className="px-label safe"><Ic n="lock" s={8} /> 18+ · SKIP OR BLOCK ANYTIME</p>
     </div> : <div className="screen">

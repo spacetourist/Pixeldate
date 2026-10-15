@@ -46,6 +46,16 @@ const a = await page('Sam', 'woman', 'men', 29, 'sam'), b = await page('Alex', '
 await a.$eval('[data-t=min]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '25'); e.dispatchEvent(new Event('input', { bubbles: true })) })
 await a.$eval('[data-t=max]', e => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(e, '40'); e.dispatchEvent(new Event('input', { bubbles: true })) })
 await shot(a, '01-onboarding')
+{ const st = () => a.evaluate(() => ({ c: document.querySelector('[data-t=adult]').checked, svg: !!document.querySelector('[data-t=adult-box] svg'), btn: !document.querySelector('[data-t=start]').disabled }))
+  const lab = async () => { const r = await a.evaluate(() => { const b = document.querySelector('label.tick').getBoundingClientRect(); return [b.right - 30, b.top + b.height / 2] }); await a.mouse.click(...r) }
+  const box = async () => { const r = await a.evaluate(() => { const b = document.querySelector('[data-t=adult-box]').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2] }); await a.mouse.click(...r) }
+  const seq = [lab, lab, lab, box, box, lab, box, box, box]  // 9 taps, no waits: ends unchecked->checked toggles; initial checked
+  for (const f of seq) await f()
+  await sleep(100); const r = await st(); if (r.c !== r.svg || r.c !== r.btn || r.c !== false) throw 'tick desync ' + JSON.stringify(r)
+  await box(); await sleep(50); const r2 = await st(); if (!r2.c || !r2.svg || !r2.btn) throw 'tick desync2 ' + JSON.stringify(r2)
+  log('18+ tick: 10 rapid label/box taps, tick, input and Continue stay in sync')
+  for (const [w, n] of [[412, 'v3.5-signup-412'], [360, 'v3.5-signup-360']]) { await a.setViewport({ width: w, height: 915, deviceScaleFactor: 2 }); await sleep(200); await a.screenshot({ path: S(n), fullPage: true }) }
+  await a.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 for (const p of [a, b]) { await p.bringToFront(); await click(p, '[data-t=start]'); step('started'); await p.waitForFunction(() => document.querySelector('[data-t=find]') && !document.querySelector('[data-t=find]').disabled, { timeout: 15000 }).catch(async e => { await p.screenshot({path: S('dbg')}); console.log(await p.evaluate(() => document.body.innerText.slice(0,200))); throw e }) }
 await shot(a, '02-lobby')
 const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t(a, '[data-t=finding]'); await shot(a, '03-finding'); await b.click('[data-t=find]')

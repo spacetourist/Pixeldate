@@ -57,6 +57,8 @@ function PhotoReveal({ src, onConfirm, onChange }: { src: string; onConfirm: () 
       <button className="ghost" type="button" data-t="photo-change" onClick={onChange}>CHANGE PHOTO</button></div>
   </div>
 }
+/** Inline pixel tick: no mask-image fetch, so it paints in the same frame as the state change (Android Chrome bug). */
+const TickMark = () => <svg className="tickmark" width="16" height="16" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 1h1v2H6zM5 3h1v1H5zM4 4h1v1H4zM3 5h1v1H3zM1 3h1v2H1zM2 5h1v1H2zM2 4h1v1H2z" /></svg>
 const clampAge = (n: number) => Math.max(18, Math.min(99, Math.round(n) || 18))
 /** Age field: free text while editing (can be empty), clamped to 18-99 on blur. */
 function AgeField({ value, onChange, t }: { value: number; onChange: (n: number) => void; t: string }) {
@@ -117,7 +119,7 @@ function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
       <AgeField value={min} onChange={setMin} t="min" />
       <AgeField value={max} onChange={setMax} t="max" />
     </div>
-    <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box">{adult && <Ic n="check" s={8} />}</span> I am 18 or over</label>
+    <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box" data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <TickMark />}</span> I am 18 or over</label>
     <button className="px-frame px-btn" disabled={!ok} data-t="start" onClick={() => { const a = clampAge(age), [lo, hi] = [clampAge(min), clampAge(max)].sort((x, y) => x - y); setAge(a); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
   </div>
 }
@@ -369,7 +371,7 @@ export default function App() {
         </>}
         {tab === 'chat' && <div className="chat">
           <p className="px-meta day">MATCHED · {matchedAt.current}</p>
-          {<p className="px-label sys"><Ic n="sparkle" s={8} /> NOW AT <b className="px-coral">{lv.name.toUpperCase()}</b> · {lv.blocks || 'FULL'}{lv.blocks ? ' BLOCKS' : ''}</p>}
+
           {msgs.map((x, i) => x.pair ? <div key={i} className="px-frame px-card px-qcard px-card--hot pair" data-t="pair-log">
               <div className="px-qcard__top"><span className="px-frame px-tag">{qn(x.pair)}</span><span className="px-qcard__meta"><Ic n="sparkle" s={8} />+{METER.cardBonus}%</span></div>
               <p className="px-qcard__q">{qn(x.pair)} · {cardById(x.pair)!.text}</p>

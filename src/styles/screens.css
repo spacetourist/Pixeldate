@@ -139,7 +139,6 @@ h1.px,h2.px{font-weight:400}
 @container app (min-width:768px){ .hud .lvdesc{display:block} .app[data-tab=chat] .hud .lower{display:inline-flex} }
 @container app (max-width:380px){ .hud .stage-name{font-size:68px} .mhead .btn--sm{padding-inline:12px} }
 .chat .chatlog{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 32px);mask-image:linear-gradient(180deg,transparent 0,#000 32px)}
-.is-event .hud,.is-event .chat,.is-event .mhead,.is-event .m>.tabbar{opacity:0;pointer-events:none}
 .is-event .stage .scrim-l{opacity:.35}
 .stage .newlv{clip-path:polygon(0 0,var(--front,62%) 0,calc(var(--front,62%) - 30%) 100%,0 100%)}
 .stage .shimmer{position:absolute;inset:0;background:linear-gradient(100deg,transparent calc(var(--front,62%) - 22%),rgb(255 230 138 / .0) calc(var(--front,62%) - 18%),rgb(255 230 138 / .35) calc(var(--front,62%) - 15%),transparent calc(var(--front,62%) - 11%));mix-blend-mode:screen}
@@ -289,13 +288,6 @@ h1.px,h2.px{font-weight:400}
 .event .lvphoto canvas{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated;clip-path:var(--step-path);--s:4px}
 .app[data-stage] .event .lvphoto{display:none}
 .app[data-stage] .event{background:linear-gradient(180deg,transparent 30%,rgb(8 4 26 / .8))}
-.event .burst i{transform:rotate(var(--a)) translateY(-38cqmin);left:50%;top:45%}
-@media (prefers-reduced-motion:no-preference){
-  .event .stamp,.mwrap>.stamp{animation:pd-stamp .32s steps(4,end) both}
-  .event .burst i{animation:pd-burst .7s steps(6,end) both}
-}
-@keyframes pd-stamp{from{transform:scale(1.6) rotate(-6deg);opacity:0}to{transform:none;opacity:1}}
-@keyframes pd-burst{from{transform:rotate(var(--a)) translateY(0);opacity:1}to{transform:rotate(var(--a)) translateY(-38cqmin);opacity:0}}
 
 /* Solid fallbacks: no translucency at all when the user asks for it, or in forced colours */
 @media (prefers-reduced-transparency:reduce){
@@ -320,5 +312,95 @@ h1.px,h2.px{font-weight:400}
   .app[data-view=compact] .hud .revealrow{display:flex;width:100%}
   .app[data-view=compact] .hud .revealrow .btn{flex:1;justify-content:center}
   .app[data-view=compact] .hud .lower,.app[data-view=compact] .hud .hint{align-self:flex-start;margin-top:0}
+}
+
+/* ───────── R3 · moments (timings from motion/*.png) ───────── */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+/* chrome steps aside for an event or a call: out over 220 ms; back in slides up 12 px, 220 ms ease-out */
+.app .hud,.app .chat,.app .mhead,.app .m>.tabbar{transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--ease-out)}
+.is-event .hud,.is-event .chat,.is-event .mhead,.is-event .m>.tabbar,
+.in-call .hud,.in-call .chat,.in-call .mhead,.in-call .m>.tabbar{opacity:0;transform:translateY(12px);pointer-events:none;visibility:hidden;transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--ease-out),visibility 0s var(--dur-base)}
+.burst i{opacity:var(--o,1)}
+/* combo stage clarity rises with the meter, 500–1100 */
+.app[data-ev=combo] .stage .tint,.app[data-ev=combo] .stage::after{transition-delay:500ms}
+.layer .mmeter{text-align:left}
+.layer .modal p b{color:var(--text)}
+.modal .acts--row{flex-direction:row}.modal .acts--row .btn{flex:1;width:auto}
+.modal .ring-av{display:flex;justify-content:center;margin-bottom:12px}
+.modal .ring-t{margin:8px 0 6px;text-wrap:balance}
+.modal .hp--lg{margin:18px 0 14px}
+.ev-up .flash{position:absolute;inset:0;background:var(--c-butter-hi);mix-blend-mode:screen;opacity:0;pointer-events:none}
+.event .lvl{color:var(--text)}
+.app[data-stage] .event--bottom{background:none}
+.ev-full .eyebrow{margin-bottom:10px}
+.ev-full .ev-who{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;margin-top:10px;font:var(--t-display)}
+.ev-full .ev-who .px{font-size:40px}
+.ev-full .lvphoto{grid-column:1/-1}
+/* Level 5 rests with no filter: the purple wash and scanlines are gone ("Face to face, no filter.") */
+.app[data-level="5"] .stage .tint{background:transparent}
+.app[data-level="5"] .stage::after{opacity:0}
+@media (prefers-reduced-motion:no-preference){
+  /* combo, 1100 ms: card flip 0–220 · backdrop 0–140 · modal .9→1.04 (300)→1, 140–500 · stamp 220–580 · burst + meter 500–1100 */
+  .qcard--both{animation:pd-flip var(--dur-base) steps(4,end) both}
+  .ml-combo,.ml-ready{animation:pd-fade 140ms linear both}
+  .ml-combo .modal,.ml-ready .modal{animation:pd-pop 360ms var(--ease-out) 140ms both}
+  .ml-combo .mwrap>.stamp{animation:pd-stamp-in 360ms var(--ease-pop) 220ms both}
+  .ml-combo .burst i{animation:pd-fly 600ms var(--ease-out) 500ms both}
+  .ml-combo .lights{animation:pd-lights 600ms steps(6,end) 500ms both}
+  /* level-up, 2000 ms: chrome out 0–220 · flash 220–360 · stamp 220–580 · blocks 400–1400 (shader) · "LV n" by 1000 ·
+     name + panel by 1400 · meter resets 1400–2000 in 6 steps · burst 1400–2000 */
+  .ev-up .flash{animation:pd-flash 140ms linear 220ms both}
+  .ev-up .stamp{animation:pd-stamp-in 360ms var(--ease-pop) 220ms both}
+  .ev-up .lvl{animation:pd-in 140ms steps(3,end) 860ms both}
+  .ev-up .lvn{animation:pd-in 140ms steps(3,end) 1260ms both}
+  .ev-up .blocks,.ev-up .evpanel,.ev-up .ev-in>.btn{animation:pd-rise 220ms var(--ease-out) 1180ms both}
+  .ev-up .burst i{animation:pd-fly 600ms var(--ease-out) 1400ms both}
+  /* full reveal, 2400 ms: tint .45→.15 / scanlines .28→.12 over 0–600 then off by 2400 · blocks 400–2400 (shader) · panel 2180–2400 */
+  .app[data-ev=full] .stage .tint{animation:pd-tint 2400ms linear both}
+  .app[data-ev=full] .stage::after{animation:pd-scan 2400ms linear both}
+  .ev-full .ev-in{animation:pd-rise 220ms var(--ease-out) 2180ms both}
+  .ev-full .burst{animation:pd-in 220ms linear 2180ms both}
+  .callui .ringing .av{animation:pd-ring 1.2s steps(2,end) infinite}
+}
+@media (prefers-reduced-motion:reduce){
+  /* modal fades in over 140 ms, meter jumps, no burst; level-up / full reveal: one 300 ms crossfade, nothing moves */
+  .ml-combo,.ml-ready{animation:pd-fade 140ms linear both}
+  .ml-combo .burst{display:none}
+  .event{animation:pd-fade 300ms linear both}
+  .app[data-ev=full] .stage .tint{animation:pd-tint 300ms linear both}
+  .app[data-ev=full] .stage::after{animation:pd-scan 300ms linear both}
+}
+@keyframes pd-fade{from{opacity:0}}
+@keyframes pd-in{from{opacity:0}}
+@keyframes pd-rise{from{opacity:0;transform:translateY(12px)}}
+@keyframes pd-pop{0%{transform:scale(.9);opacity:0}44%{transform:scale(1.04);opacity:1}100%{transform:none;opacity:1}}
+@keyframes pd-stamp-in{from{transform:scale(0) rotate(0)}to{transform:rotate(-6deg)}}
+@keyframes pd-fly{from{transform:translate(var(--dx),var(--dy)) scale(.4);opacity:0}25%{opacity:1}to{transform:none;opacity:var(--o,1)}}
+@keyframes pd-lights{from{filter:saturate(0) brightness(.7)}}
+@keyframes pd-flip{from{transform:perspective(600px) rotateX(90deg)}}
+@keyframes pd-flash{0%,100%{opacity:0}50%{opacity:.6}}
+@keyframes pd-tint{0%{background:rgb(12 7 34 / .45)}25%{background:rgb(12 7 34 / .15)}100%{background:rgb(12 7 34 / 0)}}
+@keyframes pd-scan{0%{opacity:1}25%{opacity:.46}100%{opacity:0}}
+@keyframes pd-ring{50%{transform:scale(1.06)}}
+
+/* ───────── R3 · calls (19, 19b, 19c + request / ended) ───────── */
+.in-call .callui{position:absolute;inset:0;z-index:3;grid-area:auto;grid-row:auto;display:grid;grid-template-rows:auto 1fr auto;padding:16px;gap:12px}
+.in-call .callui .pip{top:60px}
+.callui .cremote{--s:var(--step-lg);padding:3px;max-width:420px;margin-bottom:10px}
+.callui .cremote video{display:block;width:100%}
+.callui .callerr{position:absolute;left:16px;right:16px;top:auto;bottom:200px;z-index:4}
+.callui .cbtns .btn{justify-content:center}
+.callui .cbtns .btn .meta{font:var(--t-micro);opacity:.75;margin-left:4px}
+.callui .cidle-name{font-size:56px;line-height:.9}
+.callui .ringcard{gap:14px}
+.callui .ringcard .rc-h{display:flex;gap:14px;align-items:center}
+.callui .ringcard .eyebrow{margin-bottom:6px}
+.callui .rc-t{font-family:var(--font-px);font-weight:400;font-size:32px;line-height:.95;text-wrap:balance}
+.callui .rc-p{font:var(--t-body);color:var(--text-muted)}
+.callui .ringcard .acts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@container app (min-width:768px){
+  .in-call .callui{inset:0 0 0 var(--rail-w);padding:28px 32px 32px}
+  .in-call .callui .pip{top:28px}
+  .callui .idle{max-width:560px}
 }
 }}

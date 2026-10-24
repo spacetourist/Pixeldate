@@ -29,7 +29,9 @@ h1.px,h2.px{font-weight:400}
 .hud .hint{font:var(--t-small);color:var(--c-coral-hi);display:flex;gap:8px;align-items:center}
 .chat{grid-area:chat;display:flex;flex-direction:column;min-height:0;padding:0 12px 10px;gap:10px}
 .chat .chead{display:none}
-.chat .chatlog{flex:1;min-height:0;overflow:hidden;justify-content:flex-end;padding:4px 2px}
+.chat .chatlog{flex:1;min-height:0;overflow:hidden;padding:4px 2px}
+/* bottom-anchored without justify-content:flex-end, which made overflowing history unscrollable */
+.chat .chatlog>:first-child{margin-top:auto}
 .chat .sys .ico{vertical-align:-1px;margin-right:6px}
 .chat .sys b{color:var(--text);font-weight:600}
 .app[data-stage] .chat .sys{background:rgb(5 2 15 / .72);--s:2px;clip-path:var(--step-path)}
@@ -59,7 +61,7 @@ h1.px,h2.px{font-weight:400}
 .layer{position:absolute;inset:0;z-index:var(--z-modal);display:grid;place-items:center;padding:16px}
 .toastwrap{position:absolute;z-index:var(--z-toast);left:12px;right:12px;top:70px}
 
-/* ── TABLET 768+ : 2 panes, rail, floating chat ── */
+/* ── TABLET 768+ : 2 panes, rail, floating chat (20px inset; 24px from 1200) ── */
 @container app (min-width:768px){
   .m{grid-template:"rail head chat" auto "rail hud chat" 1fr / var(--rail-w) 1fr minmax(340px,min(var(--chat-w),50cqi));}
   .m>.rail{display:flex;grid-area:rail;background:rgb(5 2 15 / .92);border-right:3px solid var(--edge)}
@@ -73,7 +75,7 @@ h1.px,h2.px{font-weight:400}
   .hud .hudq{display:none!important}
   .hud .meterpanel{max-width:720px;padding:calc(var(--edge-w) + 18px) calc(var(--edge-w) + 22px) calc(var(--edge-w) + 20px);display:flex;flex-direction:column;gap:16px}
   .app[data-tab] .chat{display:flex}
-  .chat{--s:var(--step-lg);margin:16px 16px 16px 0;padding:0;background:var(--edge);clip-path:var(--step-path);position:relative;gap:0}
+  .chat{--s:var(--step-lg);margin:20px 20px 20px 0;padding:0;background:var(--edge);clip-path:var(--step-path);position:relative;gap:0}
   .chat>.cin{position:absolute;inset:3px;background:var(--panel-glassless);clip-path:var(--step-path);z-index:-1}
   .chat{isolation:isolate}
   .chat .chead{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:3px solid var(--edge);margin:3px 3px 0}
@@ -136,7 +138,7 @@ h1.px,h2.px{font-weight:400}
 .stage .tint2{background:radial-gradient(130% 100% at 50% 25%,transparent 40%,rgb(8 4 26 / .5) 100%)}
 @container app (min-width:768px){ .hud .lvdesc{display:block} .app[data-tab=chat] .hud .lower{display:inline-flex} }
 @container app (max-width:380px){ .hud .stage-name{font-size:68px} .mhead .btn--sm{padding-inline:12px} }
-.chat .chatlog{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 48px);mask-image:linear-gradient(180deg,transparent 0,#000 48px)}
+.chat .chatlog{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px);mask-image:linear-gradient(180deg,transparent 0,#000 24px)}
 .is-event .hud,.is-event .chat,.is-event .mhead,.is-event .m>.tabbar{opacity:0;pointer-events:none}
 .is-event .stage .scrim-l{opacity:.35}
 .stage .newlv{clip-path:polygon(0 0,var(--front,62%) 0,calc(var(--front,62%) - 30%) 100%,0 100%)}
@@ -304,4 +306,19 @@ h1.px,h2.px{font-weight:400}
   .app[data-stage] .mhead{background:var(--c-surface-1)}
 }
 @media (forced-colors:active){ .layer,.event{background:Canvas} }
+
+/* R1 review fixes */
+/* Compact side panel reuses the stage HUD stack: label row, full-width meter, map, full-width Reveal more.
+   (the 1200+ stage grid's align-items:end was shrink-wrapping and right-aligning these) */
+@container app (min-width:768px){
+  .app[data-view=compact] .hud .meterpanel{display:flex;flex-direction:column;align-items:stretch;gap:16px;max-width:none}
+  .app[data-view=compact] .hud .meterpanel .mp-meter{display:flex;flex-direction:column;gap:10px}
+  .app[data-view=compact] .hud .map{justify-content:space-between}
+  .app[data-view=compact] .hud .map .nd{flex:0 0 50px;width:50px;font-size:11px;line-height:1.2}
+  .app[data-view=compact] .hud .map .nd i{width:34px;height:34px}
+  .app[data-view=compact] .hud .map .ln{flex:1;min-width:6px;margin-top:14px}
+  .app[data-view=compact] .hud .revealrow{display:flex;width:100%}
+  .app[data-view=compact] .hud .revealrow .btn{flex:1;justify-content:center}
+  .app[data-view=compact] .hud .lower,.app[data-view=compact] .hud .hint{align-self:flex-start;margin-top:0}
+}
 }}

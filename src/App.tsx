@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MediaConnection } from 'peerjs'
 import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
@@ -231,6 +231,10 @@ export default function App() {
   const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
   const [themSeason, setThemSeason] = useState<Season | null>(null); const seasonSent = useRef(false)
   const [readyOpen, setReadyOpen] = useState(false); const [lvup, setLvup] = useState<{ from: number; to: number } | null>(null); const prevLv = useRef(1); const lvCv = useRef<HTMLCanvasElement>(null); const [photoV, setPhotoV] = useState(0)
+  // Chat log sticks to the newest message unless the reader has scrolled up (>80px from the bottom).
+  const logEl = useRef<HTMLDivElement>(null), stick = useRef(true)
+  const onLogScroll = () => { const l = logEl.current; if (l) stick.current = l.scrollHeight - l.scrollTop - l.clientHeight < 80 }
+  useLayoutEffect(() => { const l = logEl.current; if (l && stick.current) l.scrollTop = l.scrollHeight }, [msgs, tab, view])
   const [evt, setEvt] = useState<{ id: string; kind: 'turn' | 'pair'; from: number } | null>(null); const [unread, setUnread] = useState(0)
   const st = useRef({ level, taps, pct, call, m, ring, skipReq, ans, tab }); st.current = { level, taps, pct, call, m, ring, skipReq, ans, tab }
 
@@ -495,7 +499,7 @@ export default function App() {
           <div style={{ flex: 1, minWidth: 0 }}><div className="nm">{them}, {bracketLabel(m.them.br)}</div><div className="sub">Matched · {matchedAt.current} · LV {level} {lv.name}</div></div>
           <button className="btn fx btn--secondary btn--icon btn--sm" aria-label="Voice call" data-t="chead-voice" onClick={() => { go('call'); if (!call && !ring) requestCall('voice') }}><Icon n="call" /></button>
           <button className="btn fx btn--secondary btn--icon btn--sm" aria-label="Video call" data-t="chead-video" onClick={() => { go('call'); if (!call && !ring) requestCall('video') }}><Icon n="cam" /></button></div>
-        <div className="chatlog" role="log" aria-live="polite">
+        <div className="chatlog" role="log" aria-live="polite" ref={logEl} onScroll={onLogScroll}>
           <p className="day">Matched · {matchedAt.current}</p>
           {msgs.map((x, i) => x.pair ? <div key={i} className="pairlog fx" data-t="pair-log">
               <div className="ph"><Icon n="cards" c="var(--c-mint)" /> {LEVELS[cardById(x.pair)!.level - 1].name} · {qn(x.pair)} · both answered<span className="combo-k">Combo +{METER.cardBonus}%</span></div>

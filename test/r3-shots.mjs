@@ -39,9 +39,9 @@ for (const [sz, w, h] of SIZES) {
   // 14 · ready: we tapped, waiting for them
   { const p = await open(b, w, h, { level: 2, pct: 100, tab: 'chat' }, MOTION)
     await api(p, 'setTaps', [{ me: true, them: false }]); await api(p, 'setReadyOpen', [true]); await p.waitForTimeout(700); await shot(p, `ready-waiting-${sz}`); await p.context().close() }
-  // 15 · full reveal 4 -> 5: mid-shader (~1400 ms) and settled (after 2400 ms)
+  // 15 · full reveal 4 -> 5: mid-shader (1100 ms, a motion/reveal.png frame) and settled (after 2400 ms)
   { const p = await open(b, w, h, { level: 4, pct: 100, tab: 'chat' }, MOTION)
-    const t0 = await levelUp(p, 4); await at(p, t0, 1400); await shot(p, `reveal-mid-${sz}`, '(t=1400ms)')
+    const t0 = await levelUp(p, 4); await at(p, t0, 1100); await shot(p, `reveal-mid-${sz}`, '(t=1100ms)')
     await at(p, t0, 2700); await shot(p, `reveal-full-${sz}`, '(t=2700ms)'); await p.context().close() }
   // call request (ring out), 19 incoming, 19b in-call, 19c camera unavailable, call ended
   { const p = await open(b, w, h, { level: 3, pct: 40, tab: 'call' }, MOTION)

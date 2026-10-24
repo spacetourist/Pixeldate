@@ -1,4 +1,5 @@
-/* 2b: the photo ladder. Hero canvas loops 8 → full; five figures fill in as each level lands; tap one for full screen. */
+/* 2b: the photo ladder. Hero canvas plays 8 → full once (≈2.5 s) and holds; five figures pop in as each level lands;
+   tap one for full screen. Replay re-runs the pass, so nothing moves on its own after it (WCAG 2.2.2). */
 import { useEffect, useRef, useState } from 'react'
 import { LEVELS } from '../config'
 import { loadImage, pixelatePhoto } from '../pixel'
@@ -8,14 +9,15 @@ import { reduceMotion } from './shared'
 
 /** Thumbnail captions use the short level name (GD R2 fix 1); the viewer and chip keep the full one. */
 const SHORT = (n: string) => n === 'Crystal clear' ? 'Clear' : n
+/** Pixel replay arrow, drawn on the same 1-unit art-pixel grid as the generated icons. */
+const REPLAY = 'M2 0h3v1h-3zM6 0h1v1h-1zM1 1h1v1h-1zM5 1h2v1h-2zM0 2h1v1h-1zM4 2h3v1h-3zM0 3h1v1h-1zM0 4h1v1h-1zM6 4h1v1h-1zM1 5h1v1h-1zM5 5h1v1h-1zM2 6h3v1h-3z'
 const blocksLabel = (i: number) => LEVELS[i].blocks ? LEVELS[i].blocks + ' blocks' : 'Full photo'
 
 export function Ladder({ src, name, intro, onCtas }: { src: string; name: string; intro: boolean; onCtas: (on: boolean) => void }) {
   const cv = useRef<HTMLCanvasElement>(null), ctl = useRef<ReturnType<typeof mountLadder> | null>(null)
   const reduce = useRef(reduceMotion()).current
   const [urls, setUrls] = useState<string[]>([])
-  const [st, setSt] = useState<LadderState>({ cur: intro ? -1 : 0, landed: intro ? 0 : 5, ctas: !intro })
-  const [playing, setPlaying] = useState(!reduce)
+  const [st, setSt] = useState<LadderState>({ cur: intro ? -1 : 4, landed: intro ? 0 : 5, ctas: !intro, done: !intro })
   const [open, setOpen] = useState<number | null>(null)
   useEffect(() => { onCtas(st.ctas) }, [st.ctas])
   useEffect(() => {
@@ -28,8 +30,8 @@ export function Ladder({ src, name, intro, onCtas }: { src: string; name: string
     })
     return () => { live = false; ctl.current?.destroy(); ctl.current = null }
   }, [src])
-  // pause the loop while the full-screen viewer is open
-  useEffect(() => { if (open !== null) ctl.current?.pause(); else if (playing) ctl.current?.play() }, [open, playing])
+  // pause the first pass while the full-screen viewer is open; it resumes (if unfinished) on close
+  useEffect(() => { if (open !== null) ctl.current?.pause(); else ctl.current?.play() }, [open])
   const cur = st.cur, n = name.trim() || 'You'
   return <div className="ladder-wrap">
     <div className="hero-photo">
@@ -38,10 +40,9 @@ export function Ladder({ src, name, intro, onCtas }: { src: string; name: string
         ? <><Icon n="lock" c="var(--text-muted)" /><span className="ct">Your photo · only on this device</span></>
         : <><Icon n="heart" c={LV_COLOR(cur + 1)} /><span className="ct">LV {cur + 1} · <span className="nm">{n}</span> · {blocksLabel(cur)}</span></>}</span>
       <div className="cap2">
-        <span className="chip chip--edge">{reduce ? 'Tap a level to preview it' : 'Plays 8 → full, then loops'}</span>
-        {!st.ctas ? <button type="button" className="chip chip--edge cbtn" data-t="reveal-skip" onClick={() => ctl.current?.skip()}>Skip</button>
-          : !reduce && <button type="button" className="chip chip--edge cbtn" data-t="ladder-play" aria-pressed={!playing} aria-label={playing ? 'Pause the preview' : 'Play the preview'}
-            onClick={() => setPlaying(p => !p)}>{playing ? <i className="pz" aria-hidden="true" /> : <i className="pl" aria-hidden="true" />}{playing ? 'Pause' : 'Play'}</button>}
+        <span className="chip chip--edge">{reduce || st.done ? 'Tap a level to preview it' : 'Plays 8 → full'}</span>
+        {!reduce && st.ctas && <button type="button" className="chip chip--edge cbtn" data-t="ladder-replay" aria-label="Replay the preview"
+          onClick={() => ctl.current?.replay()}><svg className="ico" viewBox="0 0 7 7" width={14} height={14} fill="currentColor" shapeRendering="crispEdges" aria-hidden="true"><path d={REPLAY} /></svg>Replay</button>}
       </div>
     </div>
     <p className="vh" aria-live="polite">{cur >= 0 && st.landed > 0 ? `Level ${cur + 1}, ${LEVELS[cur].name}` : ''}</p>

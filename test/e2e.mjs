@@ -32,8 +32,9 @@ async function page(name, iam, seek, age, face) {
   await p.click('[data-t=next]')
   await p.waitForSelector('[data-t=add-selfie]'); if (!(await p.$eval('[data-t=next]', e => e.disabled))) throw 'photo step continues without a photo'
   await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
-  await p.waitForSelector('[data-t=reveal-skip]:not(.hid)', { timeout: 10000 }); await p.click('[data-t=reveal-skip]') // skip the ladder's first pass
-  await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]')
+  const t0 = Date.now(); await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]', { timeout: 6000 }) // the ≈2.5 s first pass (no Skip)
+  if (Date.now() - t0 > 4500) throw 'ladder first pass too slow: ' + (Date.now() - t0) + ' ms'
+  await p.waitForSelector('[data-t=ladder-replay]'); if (await p.$('[data-t=reveal-skip]') || await p.$('[data-t=ladder-play]')) throw 'old Skip/Pause controls still present'
   await p.waitForSelector('[data-t=mini-5] img'); if ((await p.$$('[data-t=minis] img')).length !== 5) throw '5 minis missing'
   if (name === 'Sam') { await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); const w = await p.$eval('[data-t=viewer] img', e => e.naturalWidth); if (w !== 32) throw 'viewer not 32 blocks: ' + w
     await shotV(p, 'v3.6-viewer-412', false); await p.click('[aria-label="Next level"]'); if (!(await p.$eval('[data-t=viewer-name]', e => e.textContent)).includes('LV 4')) throw 'viewer next'

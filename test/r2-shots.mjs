@@ -6,7 +6,7 @@ import { copyFileSync } from 'node:fs'
 const URL = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const PHOTO = '/tmp/r2-kofi.webp'; copyFileSync('/workspace/design/pixeldate/player-two/assets/photos/kofi-full.webp', PHOTO)
 const OUT = n => `/workspace/pixeldate/shots/r2-${n}.png`
-const LADDER_T = 12000 // second pass, LV 2 · Spark held (u = t − 700 mod 8100 = 3200)
+const LADDER_T = 3000 // after the ≈2.5 s first pass: holding on full, CTAs + Replay shown (no loop since ladder-snappy)
 const now = new Date(), UM = now.getMonth() + 2 <= 12 ? now.getMonth() + 2 : 12, UY = now.getMonth() + 2 <= 12 ? now.getFullYear() - 18 : now.getFullYear() - 17
 
 async function run(b, w, h, tag) {

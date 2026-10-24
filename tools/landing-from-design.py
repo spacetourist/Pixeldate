@@ -23,7 +23,7 @@ s = re.sub(r'<svg([^>]*)>(.*?)</svg>', svg, s, flags=re.S)
 
 A = '/Pixeldate/'
 s = s.replace('<img src="../../assets/art/landing-hero-wide.webp"',
-  f'<picture><source media="(min-width: 768px)" srcset="{A}art/landing-hero-wide.webp" width="1280" height="720"><img src="{A}art/landing-hero-tall.webp" width="864" height="1152" decoding="async"')
+  f'<picture><source media="(min-width: 768px)" srcset="{A}art/landing-hero-wide.webp" width="1280" height="720"><img src="{A}art/landing-hero-tall.webp" width="864" height="1152"')
 s = re.sub(r'(fetchpriority="high">)', r'\1</picture>', s, count=1)
 for n in ('8', '16', '32', '64', 'full'):
     s = s.replace(f'../../assets/photos/juno-{n}.webp"', f'{A}art/ld/juno-{n}.webp" width="480" height="480" decoding="async"')
@@ -53,6 +53,8 @@ print(f'''<!doctype html>
 <meta name="theme-color" content="#0C0722">
 <title>Pixeldate · Dating, one pixel at a time</title>
 <meta name="description" content="Pixeldate pairs you with someone at random. Photos and video calls start as 8 blurry blocks and get sharper as you both answer questions.">
+<link rel="preload" as="image" href="{A}art/landing-hero-tall.webp" media="(max-width: 767px)" fetchpriority="high">
+<link rel="preload" as="image" href="{A}art/landing-hero-wide.webp" media="(min-width: 768px)" fetchpriority="high">
 <link rel="preload" href="{A}fonts/BricolageGrotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./src/styles/landing.css">

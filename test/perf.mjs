@@ -27,5 +27,5 @@ async function run(name, path, mock) {
   await ctx.close(); return { lcp, cls, gz }
 }
 const r = [await run('landing /', '', false), await run('app /app/ (onboard)', 'app/', false), await run('app match (mock)', 'app/', true)]
-const ok = r[0].lcp < 2000 && r[1].lcp < 2000 && r.every(x => x.cls < 0.05) && r[1].gz <= 120 * 1024
+const ok = r.every(x => x.lcp < 2000) && r.every(x => x.cls < 0.05) && r[1].gz <= 120 * 1024
 console.log(ok ? 'BUDGETS OK' : 'BUDGET MISS'); await b.close(); process.exit(ok ? 0 : 1)

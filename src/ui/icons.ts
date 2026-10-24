@@ -27,5 +27,9 @@ export const ICONS = {
   back: [4, 5, 'M2 0h2v1h-2zM1 1h2v1h-2zM0 2h2v1h-2zM1 3h2v1h-2zM2 4h2v1h-2z'],
   next: [4, 5, 'M0 0h2v1h-2zM1 1h2v1h-2zM2 2h2v1h-2zM1 3h2v1h-2zM0 4h2v1h-2z'],
   image: [7, 6, 'M0 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM6 2h1v1h-1zM0 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM0 4h1v1h-1zM2 4h5v1h-5zM0 5h7v1h-7z'],
+  search: [6, 6, 'M1 0h3v1h-3zM0 1h1v1h-1zM4 1h1v1h-1zM0 2h1v1h-1zM4 2h1v1h-1zM0 3h1v1h-1zM4 3h1v1h-1zM1 4h4v1h-4zM4 5h2v1h-2z'],
+  plug: [7, 7, 'M2 0h1v1h-1zM4 0h1v1h-1zM2 1h1v1h-1zM4 1h1v1h-1zM1 2h5v1h-5zM1 3h5v1h-5zM2 4h3v1h-3zM3 5h1v1h-1zM3 6h1v1h-1z'],
+  block: [7, 7, 'M2 0h3v1h-3zM1 1h1v1h-1zM5 1h1v1h-1zM0 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM0 3h1v1h-1zM3 3h1v1h-1zM6 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM6 4h1v1h-1zM1 5h1v1h-1zM5 5h1v1h-1zM2 6h3v1h-3z'],
+  gear: [7, 7, 'M2 0h1v1h-1zM4 0h1v1h-1zM1 1h5v1h-5zM0 2h2v1h-2zM5 2h2v1h-2zM1 3h1v1h-1zM5 3h1v1h-1zM0 4h2v1h-2zM5 4h2v1h-2zM1 5h5v1h-5zM2 6h1v1h-1zM4 6h1v1h-1z'],
 } as const satisfies Record<string, readonly [number, number, string]>
 export type IconName = keyof typeof ICONS

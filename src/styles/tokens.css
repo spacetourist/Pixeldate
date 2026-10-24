@@ -11,6 +11,15 @@
 @font-face{font-family:"Bricolage Grotesque";src:url("/Pixeldate/fonts/BricolageGrotesque-latin-ext.woff2") format("woff2");font-weight:200 800;font-display:swap;
   unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
+/* Spec §8 fallback metrics: system faces scaled to the webfonts' weighted average advance (English letter frequency) and
+   vertical metrics, so the font-display:swap reflow is near zero (spec: CLS < 0.01). Values computed with fontTools from
+   the shipped WOFF2s: Arial/Liberation (desktop, avg 0.441em) and Roboto (Android, avg 0.449em). A face whose local() isn't
+   installed just fails and the stack moves on. */
+@font-face{font-family:"Jersey 15 Fallback";src:local("Arial"),local("ArialMT"),local("Liberation Sans"),local("Helvetica");size-adjust:86.5%;ascent-override:89.9%;descent-override:25.7%;line-gap-override:0%}
+@font-face{font-family:"Jersey 15 Fallback R";src:local("Roboto"),local("Roboto-Regular");size-adjust:84.9%;ascent-override:91.6%;descent-override:26.2%;line-gap-override:0%}
+@font-face{font-family:"Bricolage Fallback";src:local("Arial"),local("ArialMT"),local("Liberation Sans"),local("Helvetica");size-adjust:102.8%;ascent-override:90.5%;descent-override:26.3%;line-gap-override:0%}
+@font-face{font-family:"Bricolage Fallback R";src:local("Roboto"),local("Roboto-Regular");size-adjust:100.9%;ascent-override:92.2%;descent-override:26.8%;line-gap-override:0%}
+
 @layer tokens{
 :root{
   /* ── Palette: deep aubergine base (Callum: dark, near-black purples) ── */
@@ -50,8 +59,8 @@
   --lv-1:#FF6F59; --lv-2:#FF8A5C; --lv-3:#FFB14E; --lv-4:#FFD84D; --lv-5:#48E5C2;
 
   /* ── Type ── Jersey 15 = titles, names, logo ONLY. Bricolage = everything else. */
-  --font-px:"Jersey 15",ui-monospace,monospace;
-  --font-ui:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-px:"Jersey 15","Jersey 15 Fallback","Jersey 15 Fallback R",ui-monospace,monospace;
+  --font-ui:"Bricolage Grotesque","Bricolage Fallback","Bricolage Fallback R",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   /* display (Jersey; sizes are multiples of 4 for crisp pixels) */
   --px-hero:clamp(64px,6vw + 28px,120px); --px-xl:64px; --px-lg:48px; --px-md:36px; --px-sm:28px; --px-lh:.92;
   /* ui (Bricolage, opsz auto) */

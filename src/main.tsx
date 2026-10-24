@@ -9,7 +9,9 @@ import './styles/index.css'
 const KBD = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', 'Enter', ' ', 'Home', 'End', 'PageUp', 'PageDown'])
 addEventListener('keydown', e => { if (KBD.has(e.key)) document.documentElement.dataset.kbd = '' }, true)
 addEventListener('pointerdown', () => { delete document.documentElement.dataset.kbd }, true)
-const App = lazy(() => import('./App'))
+// R4 perf: the mock match view used to load main -> App -> mock -> first paint, one round trip each. The mock harness
+// now fetches App and mock in parallel (App's own import('./mock') then resolves from cache).
+const App = lazy(() => { if ((window as any).__pdMock) import('./mock'); return import('./App') })
 function Root() {
   const [done, setDone] = useState<{ p: Profile; photo: string } | null>(null)
   if (done || (window as any).__pdMock) return <Suspense fallback={null}><App initial={done ?? undefined} /></Suspense>

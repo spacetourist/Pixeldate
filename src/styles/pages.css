@@ -56,7 +56,7 @@ button.toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px;cl
 .modal .rtext textarea{width:100%;min-height:96px;padding:10px 12px;font:var(--t-body);color:var(--text);background:none;border:0;resize:vertical}
 .modal .rblock{display:flex;align-items:center;gap:12px;margin-top:14px;font:var(--t-ui);text-align:left}
 /* one column: the on-device note goes last, after Safety and Account (17 order) */
-@container app (max-width:1199px){ .cols2 .col{display:contents} .cols2 [data-t=on-device]{order:9} }
+@container app (max-width:1199px){ .cols2 .col{display:contents} .cols2 [data-t=on-device],.cols2 .ondev{order:9} }
 @container app (min-width:1200px){
   .cols2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
   .ptitle h1{font-size:64px}

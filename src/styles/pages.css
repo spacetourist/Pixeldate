@@ -1,0 +1,61 @@
+/* R5 · Matches (09), You (16), Settings (17). Ported from design css/screens.css 260-293; lazy with src/ui/pages.tsx */
+@layer screens{
+.app:has(>.shell--page){height:auto;min-height:100dvh;overflow:visible}
+.shell--page .rail .sp{flex:1}
+.shell--page .rail .ri{cursor:pointer}
+.shell .rail .ri:focus-visible,.shell .stop .btn:focus-visible,.shell .stop .logo:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.shell--page .stop button.logo{border:0;background:none;padding:0;cursor:pointer}
+.shell--page .stop .btn.is-on{box-shadow:inset 0 -3px 0 var(--cta)}
+.pgmain{max-width:1280px}
+.ptitle{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ptitle h1{font-size:44px;line-height:.9;margin-top:8px;outline:0}
+.pgmain .lede{margin:0;max-width:640px}
+.cols2{display:grid;gap:18px;min-width:0}
+.cols2 .col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.mlist{display:grid;gap:10px;align-content:start}
+.mlist .mrow{grid-template-columns:auto 1fr auto}
+.mrow.on{--bev:inset 4px 0 0 var(--cta),var(--bevel-dark-hi)}
+.mrow .hp{grid-column:2/4}
+.mlist .empty{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.mlist .empty h2{font-size:32px;line-height:.95;font-weight:400}
+.mlist .empty p,.rules p,.ondev p{font:var(--t-body);color:var(--text-muted)}
+.rules,.ondev,.seecard{display:flex;flex-direction:column;gap:12px}
+.seecard .row{display:flex;gap:10px;flex-wrap:wrap}
+.seecard .ladder{margin:0}
+.seecard .ladder .lf{cursor:default}
+.ondevice{display:flex;gap:8px;align-items:center;font:var(--t-small);color:var(--c-mint)}
+.setgrp{--s:var(--step-md);--fill:var(--panel);padding:calc(var(--edge-w) + 6px) calc(var(--edge-w) + 16px)}
+.setgrp h3{font:var(--t-label);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding:12px 0 6px}
+.setgrp>.help{padding:0 0 12px}
+.setrow{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:12px 0;border-top:2px solid var(--edge)}
+.setgrp>h3+.setrow{border-top:0}
+.setrow .tx{flex:1;min-width:170px}
+.setrow .tx b{display:block;font:var(--t-ui)}
+.setrow .tx span{font:var(--t-small);color:var(--text-muted)}
+.setrow .toggle,.setrow .btn,.setrow .chip,.setrow .seg{flex:none}
+button.setrow{width:100%;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;border-left:0;border-right:0;border-bottom:0}
+button.setrow:hover .tx b{color:var(--cta)}
+button.setrow:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+button.toggle{border:0;cursor:pointer;flex:none}
+button.toggle.is-disabled{cursor:default}
+button.toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px;clip-path:none}
+.setrow .efield{flex:1 1 180px;min-width:0}
+.setrow .efield input,.setrow select{width:100%;height:40px;padding:0 12px;font:var(--t-ui);color:var(--text);background:none;border:0}
+.setrow select option{background:var(--raised)}
+.setrow .eacts{display:flex;gap:8px}
+.setrow .eseek{display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:100%}
+.setrow .range{display:flex;gap:8px;align-items:center;font:var(--t-small);color:var(--text-muted)}
+.setrow .range .field{width:84px}
+/* dialogs over a scrolling page */
+.app:has(>.shell--page) .layer,.shell--page~.layer{position:fixed}
+.layer:has(>.modal .mbody){background:rgb(5 2 15 / .72)}
+.modal .mbody{margin-top:10px}
+.modal .rtext{display:block;margin-top:14px}
+.modal .rtext textarea{width:100%;min-height:96px;padding:10px 12px;font:var(--t-body);color:var(--text);background:none;border:0;resize:vertical}
+.modal .rblock{display:flex;align-items:center;gap:12px;margin-top:14px;font:var(--t-ui);text-align:left}
+@container app (min-width:1200px){
+  .cols2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+  .ptitle h1{font-size:64px}
+}
+}
+@media (prefers-reduced-transparency:reduce){ .layer:has(>.modal .mbody){background:var(--bg)} }

@@ -11,4 +11,4 @@ export const snapRange = (min: number, max: number): [number, number] => {
   return [EDGES[i], j === 7 ? 70 : EDGES[j] - 1] }
 /** Age on the 1st of the birth month. */
 export const ageFrom = (by: number, bm: number, now = new Date()) => now.getFullYear() - by - (now.getMonth() + 1 < bm ? 1 : 0)
-export const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+export { reducedMotion as reduceMotion } from '../prefs'

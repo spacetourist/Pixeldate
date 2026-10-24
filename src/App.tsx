@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { prefs, setPref, saveHist, blockUser, sound, saveProfile, logOut, wipeAll, history, type Hist } from './prefs'
+import type { PageId } from './ui/pages'
+const Pages = lazy(() => import('./ui/pages'))
 import type { MediaConnection } from 'peerjs'
 import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
@@ -10,7 +13,7 @@ import { Icon, Hp, MeterHead, LevelMap, Av, LvBadge, LV_DESC, LV_COLOR, AV_BLOCK
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
 type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
-import { Net, block, bracketLabel, type Profile, type Match } from './net'
+import { Net, bracketLabel, type Profile, type Match } from './net'
 import { toast, dismiss, clearToasts, Toast, Toasts } from './ui/toast'
 import { Lobby } from './ui/lobby'
 
@@ -76,7 +79,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const [credited, setCredited] = useState<string[]>([]); const [msgs, setMsgs] = useState<Msg[]>([])
   const [tab, setTab] = useState<'profile' | 'chat' | 'call'>('profile'); const [draft, setDraft] = useState('')
   const [answering, setAnswering] = useState<string | null>(null)
-  const [view, setView] = useState<'stage' | 'compact'>(() => { try { return localStorage.getItem('pd.view') === 'compact' ? 'compact' : 'stage' } catch { return 'stage' } })
+  const [view, setView] = useState<'stage' | 'compact'>(prefs.view)
+  const [page, setPage] = useState<PageId | null>(null); const hist = useRef<Hist | null>(null)
   const theirImgs = useRef<Record<number, HTMLImageElement>>({}); const shown = useRef<HTMLImageElement | null>(null)
   const cv = useRef<HTMLCanvasElement>(null)
   const [call, setCall] = useState<{ cam: Media; mc: MediaConnection; kind: Kind; remote?: MediaStream } | null>(null)
@@ -183,29 +187,35 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
     setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); setEnded(null); setCamErr(''); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
-    setM(mm); setScreen('match'); clearToasts('page'); clearToasts('match')
+    setM(mm); setScreen('match'); setPage(null); clearToasts('page'); clearToasts('match')
+    hist.current = { id: mm.them.uid + '-' + Date.now(), uid: mm.them.uid, name: mm.them.name, br: mm.them.br, lv: 1, pct: 0, at: Date.now() }; saveHist(hist.current)
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('left', true))
   }
   const leave = (why: keyof typeof NOTICE, again = false) => {
     endCall(false); const c = st.current.m; if (!c) return; st.current.m = null; setM(null)
+    const h = hist.current; if (h) { hist.current = null; saveHist({ ...h, lv: st.current.level, pct: Math.floor(st.current.pct), end: Date.now(), how: why }) }
     setTimeout(() => { try { c.conn.close() } catch {} }, 300); net.current!.busy = false; net.current!.release()
     clearToasts('match'); clearToasts('call'); const n = NOTICE[why]; toast({ id: 'left', role: n[3], icon: n[2], t: 'notice-' + why, title: n[0], body: again ? n[1] : undefined })
     setScreen('lobby'); if (again) setTimeout(find, 50)
   }
-  const doSkip = (blk = false) => { const t = st.current.m?.them; if (!t) return; if (blk) block(t.uid); skip.current.add(t.uid); send({ t: 'skip' }); leave(blk ? 'blocked' : 'skipped', true) }
+  const doSkip = (blk = false) => { const t = st.current.m?.them; if (!t) return; if (blk) blockUser({ uid: t.uid, name: t.name, br: t.br, av: hist.current?.av }); skip.current.add(t.uid); send({ t: 'skip' }); leave(blk ? 'blocked' : 'skipped', true) }
 
-  useEffect(() => { if (m) sendPhoto(level) }, [m, level])
+  useEffect(() => { if (m) sendPhoto(level) }, [m, level, photo])
+  // matches history (09): the level reached and a coarse avatar at that level, kept on this device only
+  useEffect(() => { const h = hist.current; if (!h || !m) return; const av = coarse(theirImgs.current[level], AV_BLOCKS[level - 1]) || h.av
+    hist.current = { ...h, lv: level, pct: Math.floor(pct), av }; saveHist(hist.current) }, [level, photoV, m])
+  useEffect(() => { const f = () => { const h = hist.current; if (h) saveHist({ ...h, lv: st.current.level, pct: Math.floor(st.current.pct) }) }; addEventListener('pagehide', f); return () => removeEventListener('pagehide', f) }, [])
   // meter: time together
   useEffect(() => { if (!m || level === 5) return; const t = setInterval(() => setPct(p => Math.min(100, p + METER.percentPerMinute / 60)), 1000); return () => clearInterval(t) }, [m, level])
   // card credit when BOTH answered
-  useEffect(() => { for (const [id, a] of Object.entries(ans)) if (a.me && a.them && !credited.includes(id)) { setCredited(c => [...c, id]); setEvt({ id, kind: 'pair', from: pct }); setPct(p => Math.min(100, p + METER.cardBonus)); setMsgs(x => [...x, { from: 'sys', pair: id }]) } }, [ans])
+  useEffect(() => { for (const [id, a] of Object.entries(ans)) if (a.me && a.them && !credited.includes(id)) { sound('blip'); setCredited(c => [...c, id]); setEvt({ id, kind: 'pair', from: pct }); setPct(p => Math.min(100, p + METER.cardBonus)); setMsgs(x => [...x, { from: 'sys', pair: id }]) } }, [ans])
   const raise = (from: number) => { setLevel(l => l === from && l < 5 ? l + 1 : l); setPct(0); setTaps({ me: false, them: false }) }
   useEffect(() => { if (taps.me && taps.them) raise(level) }, [taps])
   useEffect(() => { if (pct >= 100 && level < 5 && m) setReadyOpen(true) }, [pct >= 100])
   useEffect(() => { if (taps.them || taps.me) setReadyOpen(true) }, [taps.them, taps.me])
   // level-up event (both consented): overlay on any tab + a system card in the chat; drops are silent here
   useEffect(() => { const p = prevLv.current; prevLv.current = level
-    if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); S.begin(); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
+    if (level > p && m) { sound('chime'); setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); S.begin(); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
   useEffect(() => { const c = lvCv.current, to = theirImgs.current[lvup?.to ?? 0]; if (!lvup || !c || !to) return
     const from = theirImgs.current[lvup.from] || null; if (RM()) animateReveal(c, null, to); else animateReveal(c, from, to, undefined, lvup.to === 5 ? { delay: 400, dur: 2000 } : { delay: 400, dur: 1000 }) }, [lvup, photoV])
 
@@ -296,7 +306,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const press = () => { lp.current = window.setTimeout(() => { const v = !dev; sessionStorage.setItem('pd-dev', v ? '1' : ''); setDev(v) }, 800) }
   const unpress = () => clearTimeout(lp.current)
   const devPress = { onPointerDown: press, onPointerUp: unpress, onPointerLeave: unpress, onContextMenu: (e: React.MouseEvent) => e.preventDefault() }
-  const setViewP = (v: 'stage' | 'compact') => { setView(v); try { localStorage.setItem('pd.view', v) } catch {} }
+  const setViewP = (v: 'stage' | 'compact') => { setView(v); setPref('view', v) }
   const go = (t: 'profile' | 'chat' | 'call') => setTab(t)
   // chat system lines: level-ups get a heart + bold level, my answered card a check (as in the design)
   const sysLine = (t: string) => { const lv = /^(Now at [^·]+?)( · .*)$/.exec(t)
@@ -311,7 +321,21 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const remoteInStage = view === 'stage' && tab === 'call' && call?.kind === 'video'
   const remoteVideo = <video ref={remoteV} playsInline data-t="remote-video" />
 
-  if (screen === 'match' && m) return <div className={`app ${event ? 'is-event' : ''} ${inCall ? 'in-call' : ''}`} data-ev={lvup ? (lvup.to === 5 ? 'full' : 'up') : evt?.kind === 'pair' ? 'combo' : undefined} data-tab={dataTab} data-view={view} data-stage={view === 'stage' ? '' : undefined} data-level={level}>
+  const onSaveProfile = async (p: Profile, ph?: string) => { setMe(p); if (net.current) net.current.me = p; if (!(window as any).__pdMock) await saveProfile(p, ph); if (ph) setPhoto(await loadImage(ph)) }
+  const quit = async (all: boolean) => { if (st.current.m) { send({ t: 'skip' }); leave('skipped') } await (all ? wipeAll() : logOut()); location.reload() }
+  const lastWho = m ? { uid: m.them.uid, name: m.them.name, br: m.them.br, av: theirAv } : (() => { const h = history()[0]; return h ? { uid: h.uid, name: h.name, br: h.br, av: h.av } : null })()
+  const reportBlock = () => { const w = lastWho; if (!w) return; if (st.current.m?.them.uid === w.uid) { setPage(null); doSkip(true) } else blockUser(w) }
+  const callNav = () => { if (st.current.m) { setPage(null); setTab('call') } else toast({ id: 'call-info', role: 'info', icon: 'call', t: 'notice-call-info', title: 'Calls start inside a match', body: "Find someone first, then call from the Call tab when you're both ready." }) }
+  const turnOn = m ? Object.entries(ans).find(([, a]) => a.them && !a.me)?.[0] : undefined
+  const pagesEl = page ? <Suspense fallback={null}><Pages page={page} go={p => setPage(p)} onCall={callNav} me={me} photo={photo} level={level} reportWho={lastWho}
+    current={m ? { name: m.them.name, br: m.them.br, lv: level, pct, av: theirAv, sub: turnOn ? ` · your turn on ${qn(turnOn)}` : '' } : null}
+    onOpen={() => setPage(null)} onFind={() => { setPage(null); if (!m && screen === 'lobby') find() }} onSave={onSaveProfile} onView={v => setView(v)}
+    onLogout={() => quit(false)} onDelete={() => quit(true)} onBlock={reportBlock} /></Suspense> : null
+  const railMore = <><span className="sp" style={{ flex: 1 }} />
+    <button className="ri" data-t="rail-you" onClick={() => setPage('profile')}><Icon n="user" s={3} />You</button>
+    <button className="ri" data-t="rail-settings" onClick={() => setPage('settings')}><Icon n="gear" s={3} />Settings</button></>
+
+  if (screen === 'match' && m) return <>{pagesEl}<div style={page ? { display: 'none' } : undefined} className={`app ${event ? 'is-event' : ''} ${inCall ? 'in-call' : ''}`} data-ev={lvup ? (lvup.to === 5 ? 'full' : 'up') : evt?.kind === 'pair' ? 'combo' : undefined} data-tab={dataTab} data-view={view} data-stage={view === 'stage' ? '' : undefined} data-level={level}>
     <div className="stage" style={{ ['--focal' as any]: '50% 26%', ['--clar' as any]: level === 5 ? 1 : Math.min(1, pct / 100) }} aria-hidden={view !== 'stage'}>
       {view === 'stage' && photoCanvas}
       {remoteInStage && remoteVideo}
@@ -322,6 +346,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
         <span className="logo" aria-hidden="true"><Icon n="heart" c="var(--c-coral)" s={5} /></span>
         <button className={`ri ${tab !== 'call' ? 'on' : ''}`} aria-current={tab !== 'call' ? 'page' : undefined} data-t="rail-match" onClick={() => go('profile')}><Icon n="heart" c={tab !== 'call' ? 'var(--cta)' : 'currentColor'} s={3} />Match</button>
         <button className={`ri ${tab === 'call' ? 'on' : ''}`} aria-current={tab === 'call' ? 'page' : undefined} data-t="rail-call" onClick={() => go('call')}><Icon n="call" c={tab === 'call' ? 'var(--cta)' : 'currentColor'} s={3} />Call</button>
+        {railMore}
       </nav>
       <header className="mhead">
         <div className="who"><Av src={theirAv} level={level} size={40} />
@@ -450,8 +475,10 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
           <button className="btn fx btn--ghost btn--block" onClick={() => setReadyOpen(false)}>Later</button></div></div></div>}
     {lvup && <LvEvent key={lvup.from + '-' + lvup.to} from={lvup.from} to={lvup.to} them={them} br={bracketLabel(m.them.br)} cv={lvCv} onClose={() => setLvup(null)} onCall={() => { setLvup(null); go('call') }} />}
     <p className="sr-only" role="status" aria-live="polite" data-t="lv-live">{lvup ? `Level ${lvup.to}, ${LEVELS[lvup.to - 1].name}. ${LEVELS[lvup.to - 1].blocks ? LEVELS[lvup.to - 1].blocks + ' blocks.' : 'Full photo.'}` : ''}</p>
-  </div>
+  </div></>
+
+  if (pagesEl) return pagesEl
 
   return <Lobby me={me} photo={photo} code={code} finding={screen === 'finding'} joinCode={joinCode} setJoinCode={setJoinCode} joining={joining}
-    onFind={find} onCancel={() => { net.current!.cancel(); dismiss('left'); setScreen('lobby') }} onJoin={doJoin} />
+    onFind={find} onCancel={() => { net.current!.cancel(); dismiss('left'); setScreen('lobby') }} onJoin={doJoin} onNav={setPage} onCall={callNav} />
 }

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Hp, MeterHead } from './parts'
 
-export const RM = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+import { reducedMotion } from '../prefs'
+export const RM = reducedMotion
 
 export function Burst({ n, seed, cols, cls = '' }: { n: number; seed: number; cols: string[]; cls?: string }) {
   let r = seed; const R = () => { r = (r * 9301 + 49297) % 233280; return r / 233280 }

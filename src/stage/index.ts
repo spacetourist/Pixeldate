@@ -8,7 +8,7 @@ import type { R } from './gl'
 
 export type Anim = 'cut' | 'up' | 'full'
 export type Mode = 'gl' | '2d' | 'static'
-const RM = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+import { reducedMotion as RM } from '../prefs'
 const ease = (r: number) => r < .5 ? 4 * r * r * r : 1 - Math.pow(-2 * r + 2, 3) / 2
 let glMod: Promise<typeof import('./gl')> | null = null
 export const loadGL = () => (glMod ??= import('./gl'))

@@ -1,3 +1,4 @@
+import { ls, blockedUids, blockUser } from './prefs'
 import type Peer from 'peerjs'
 import type { DataConnection } from 'peerjs'
 import { LOBBY_SLOTS } from './config'
@@ -24,7 +25,7 @@ function loadIce() {
     dlog(`ice servers: ${n.length} (turn ${turn ? 'yes' : 'no'})`)
   })()
 }
-export const store = LOOPBACK ? sessionStorage : localStorage
+export const store = ls
 
 export type Gender = 'man' | 'woman'
 export type Seek = 'men' | 'women' | 'everyone'
@@ -65,8 +66,8 @@ export function dlog(s: string) {
   if (!dbgEl) { dbgEl = document.createElement('pre'); dbgEl.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:40vh;overflow:auto;margin:0;padding:4px;font:10px monospace;background:#000c;color:#0f0;z-index:9999;white-space:pre-wrap;pointer-events:none'; document.body.appendChild(dbgEl) }
   dbgEl.textContent = (new Date().toTimeString().slice(0, 8) + ' ' + s + '\n' + dbgEl.textContent).slice(0, 4000)
 }
-export const blocked = (): string[] => JSON.parse(store.getItem('pd-blocked') || '[]')
-export const block = (uid: string) => store.setItem('pd-blocked', JSON.stringify([...new Set([...blocked(), uid])]))
+export const blocked = blockedUids
+export const block = (uid: string) => blockUser({ uid })
 const okWith = (me: Profile, them: PeerProfile, byCode: boolean) => !blocked().includes(them.uid) && them.uid !== me.uid && (byCode || compatible(me, them))
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))

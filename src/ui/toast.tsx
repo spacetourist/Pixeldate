@@ -1,3 +1,4 @@
+import { reducedMotion } from '../prefs'
 import { useSyncExternalStore, type ReactNode } from 'react'
 import { Icon } from './parts'
 import type { IconName } from './icons'
@@ -15,7 +16,7 @@ const OUT_MS = 140 // --dur-fast
 let list: ToastItem[] = []
 const subs = new Set<() => void>(), timers = new Map<string, number>()
 const emit = () => { list = [...list]; subs.forEach(f => f()) }
-const fast = () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : OUT_MS
+const fast = () => reducedMotion() ? 0 : OUT_MS
 
 export function toast(t: Omit<ToastItem, 'id' | 'role'> & { id?: string; role?: Role }): string {
   const it: ToastItem = { role: 'info', where: 'page', ...t, id: t.id || Math.random().toString(36).slice(2) }

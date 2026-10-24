@@ -11,9 +11,9 @@ export const fmtCode = (c: string) => c ? (c.slice(0, 3) + '·' + c.slice(3)).to
 const seekLabel = (p: Profile) => `${p.seek === 'everyone' ? 'Everyone' : p.seek === 'women' ? 'Women' : 'Men'} · ${p.min}–${p.max >= AGE_TOP ? AGE_TOP + '+' : p.max}`
 
 /** 07 lobby and 08 finding: app shell (top bar on phone, rail from 768), lobby art, card, and the side panel from 1200. */
-export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind, onCancel, onJoin, joining }: {
+export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind, onCancel, onJoin, joining, onNav, onCall }: {
   me: Profile; photo: HTMLImageElement | null; code: string; finding: boolean; joinCode: string; setJoinCode(s: string): void
-  onFind(): void; onCancel(): void; onJoin(): void; joining: boolean
+  onFind(): void; onCancel(): void; onJoin(): void; joining: boolean; onNav(p: 'matches' | 'profile' | 'settings'): void; onCall(): void
 }) {
   // small avatars follow the spec 4 coarse rule (<= 64px); the side panel shows your own photo at each level
   const avs = useMemo(() => AV_BLOCKS.map(b => coarse(photo ?? undefined, b)), [photo])
@@ -22,9 +22,14 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
     <nav className="rail" aria-label="Sections">
       <span className="logo" aria-hidden="true"><Icon n="heart" c="var(--c-coral)" s={5} /></span>
       <span className="ri on" aria-current="page"><Icon n="heart" c="var(--cta)" s={3} />Match</span>
-      <span className="ri is-off" aria-disabled="true" title="Calls start inside a match"><Icon n="call" s={3} />Call</span>
+      <button className="ri" data-t="rail-call" onClick={onCall}><Icon n="call" s={3} />Call</button>
+      <span className="sp" style={{ flex: 1 }} />
+      <button className="ri" data-t="rail-you" onClick={() => onNav('profile')}><Icon n="user" s={3} />You</button>
+      <button className="ri" data-t="rail-settings" onClick={() => onNav('settings')}><Icon n="gear" s={3} />Settings</button>
     </nav>
-    <header className="stop"><span className="logo" style={{ ['--logo' as any]: '28px' }}><Icon n="heart" c="var(--c-coral)" s={3} /><span>pixel<b>date</b></span></span></header>
+    <header className="stop"><span className="logo" style={{ ['--logo' as any]: '28px' }}><Icon n="heart" c="var(--c-coral)" s={3} /><span>pixel<b>date</b></span></span>
+      <button className="btn btn--ghost btn--icon btn--sm fx" aria-label="You" data-t="top-profile" onClick={() => onNav('profile')}><Icon n="user" c="var(--text)" s={2} /></button>
+      <button className="btn btn--ghost btn--icon btn--sm fx" aria-label="Settings" data-t="top-settings" onClick={() => onNav('settings')}><Icon n="gear" c="var(--text)" s={2} /></button></header>
     <div className="bgart" aria-hidden="true"><picture><source media="(min-width: 768px)" srcSet={`${B}art/landing-hero-wide.webp`} /><img src={`${B}art/lobby-bg-640.webp`} width={1280} height={720} alt="" /></picture></div>
     <main className="smain">
       <Toasts where="page" />
@@ -39,7 +44,8 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
           <button className="btn btn--secondary fx btn--block" data-t="cancel" onClick={onCancel}>Cancel</button>
         </section>
         : <section className="lobbycard fx" aria-labelledby="pd-hi">
-          <div className="who"><Av src={avs[0]} level={1} size={64} /><div className="label">Starting as a Stranger · {LEVELS[0].blocks} blocks</div></div>
+          <div className="who"><Av src={avs[0]} level={1} size={64} /><div className="label">Starting as a Stranger · {LEVELS[0].blocks} blocks</div>
+            <button className="btn fx btn--ghost btn--sm tomatches" data-t="to-matches" onClick={() => onNav('matches')}><Icon n="heart" c="var(--c-coral)" />Your matches</button></div>
           <h1 className="px" id="pd-hi">Hi {me.name}, ready to meet?</h1>
           <div className="chips">{chip}<span className="chip chip--edge">You · {bracketLabel(bracketOf(Math.min(me.age, 70)))}</span></div>
           <button className="btn fx btn--lg btn--block" data-t="find" disabled={!code} onClick={onFind}><Icon n="search" c="var(--edge)" s={3} />{code ? 'Find someone' : 'Connecting…'}</button>

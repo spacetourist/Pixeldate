@@ -138,7 +138,7 @@ h1.px,h2.px{font-weight:400}
 .stage .tint2{background:radial-gradient(130% 100% at 50% 25%,transparent 40%,rgb(8 4 26 / .5) 100%)}
 @container app (min-width:768px){ .hud .lvdesc{display:block} .app[data-tab=chat] .hud .lower{display:inline-flex} }
 @container app (max-width:380px){ .hud .stage-name{font-size:68px} .mhead .btn--sm{padding-inline:12px} }
-.chat .chatlog{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px);mask-image:linear-gradient(180deg,transparent 0,#000 24px)}
+.chat .chatlog{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 32px);mask-image:linear-gradient(180deg,transparent 0,#000 32px)}
 .is-event .hud,.is-event .chat,.is-event .mhead,.is-event .m>.tabbar{opacity:0;pointer-events:none}
 .is-event .stage .scrim-l{opacity:.35}
 .stage .newlv{clip-path:polygon(0 0,var(--front,62%) 0,calc(var(--front,62%) - 30%) 100%,0 100%)}

@@ -100,7 +100,7 @@ await t(b, '[data-t=ans-turn]'); if ((await b.content()).includes('Toast and cof
 log('B (on call tab) sees "your turn"; answer text not in the DOM')
 const shotW412 = async (p, n) => { await p.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await clean(p); await shot(p, n); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 await shotW412(b, 'v3.4-their-turn-412')
-if (!(await a.$eval('.chat', e => e.textContent)).includes('YOU ANSWERED Q1')) throw 'A chat log missing Q1'
+if (!(await a.$eval('.chat', e => e.textContent)).includes('You answered Q1')) throw 'A chat log missing Q1'
 await b.click('[data-t=ans-turn]'); await t(b, '[data-t=ans-input]'); await b.type('[data-t=ans-input]', 'Porridge'); await b.click('[data-t=ans-send]')
 await t(a, '[data-t=ans-pair]'); await t(b, '[data-t=ans-pair]')
 for (const p of [a, b]) { const x = await p.$eval('[data-t=ans-pair]', e => e.textContent); if (!x.includes('Toast and coffee') || !x.includes('Porridge')) throw 'pair reveal missing answers' }
@@ -117,7 +117,7 @@ await t(b, '[data-t=msg-them]'); await b.type('[data-t=chat-input]', 'Hey Sam, h
 await tab(a, 'profile'); await tab(b, 'profile')
 // one card on both sides, then drop next card to chat
 await answerCard(a, 'Toast and coffee'); await sleep(400)
-await click(a, '[data-t=card] button.px-btn-ghost'); // TO CHAT
+await click(a, '[data-t=to-chat]'); // To chat
 await tab(b, 'chat'); await sleep(500); await answerCard(b, 'Porridge'); await sleep(800)
 await shot(b, '05-chat-card')
 const dots = await a.$$eval('[data-t=dot-them].on', e => e.length); log('card answered on both sides, ticked dots seen by A:', dots)

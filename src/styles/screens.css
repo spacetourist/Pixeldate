@@ -1,0 +1,304 @@
+/* Player Two R1 · screen layout. Match shell from the design pack (screens/src/screens.css),
+   plus R1 additions marked "R1". Scoped so it never reaches the legacy lobby/onboarding. */
+html:has(.m),html:has(.m) body{height:100%;overflow:hidden;background:var(--bg-deep,#05020F)}
+@layer screens{@scope (body) to (.legacy){
+.app{container:app/inline-size;position:relative;min-height:100dvh;height:100dvh;overflow:hidden;background:var(--bg)}
+.app.flow{height:auto;overflow:visible}
+.hide{display:none!important}
+h1.px,h2.px{font-weight:400}
+
+/* ── MATCH SHELL ─────────────────────────────────────────── */
+.m{display:grid;height:100%;position:relative;z-index:1;
+   grid-template:"head" auto "hud" auto "chat" 1fr "tabs" auto / 1fr}
+.m>.rail{display:none}
+.mhead{grid-area:head;display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel-glassless);border-bottom:3px solid var(--edge);min-width:0}
+.mhead .who{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.mhead .who .nm{font-family:var(--font-px);font-size:26px;line-height:1;white-space:nowrap}
+.mhead .who .sub{font:var(--t-micro);color:var(--text-muted)}
+.mhead .hp{width:96px}
+.mhead .viewtoggle em{display:none}
+.mhead .viewtoggle>span{min-height:34px;padding:0 9px}
+.hud{grid-area:hud;padding:18px 16px 10px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.hud .stage-name{font-size:84px}
+.hud .chips{display:flex;gap:8px;flex-wrap:wrap}
+.hud .meterpanel{padding:calc(var(--edge-w) + 12px) calc(var(--edge-w) + 14px) calc(var(--edge-w) + 14px)}
+.hud .map,.hud .revealrow,.hud .hudq{display:none}
+.hud .revealrow{gap:10px;align-items:center}
+.hud .revealrow .btn{flex:1}
+.hud .hint{font:var(--t-small);color:var(--c-coral-hi);display:flex;gap:8px;align-items:center}
+.chat{grid-area:chat;display:flex;flex-direction:column;min-height:0;padding:0 12px 10px;gap:10px}
+.chat .chead{display:none}
+.chat .chatlog{flex:1;min-height:0;overflow:hidden;justify-content:flex-end;padding:4px 2px}
+.app[data-stage] .chat .sys{background:rgb(5 2 15 / .72);--s:2px;clip-path:var(--step-path)}
+.m>.tabbar{grid-area:tabs}
+/* phone: Match tab = stage + full HUD; chat hidden */
+.app[data-tab=match] .chat{display:none}
+.app[data-tab=match] .hud{grid-row:hud/chat;justify-content:safe flex-end;min-height:0;overflow-y:auto;scrollbar-width:none}
+.app[data-tab=match] .hud .map,.app[data-tab=match] .hud .revealrow,.app[data-tab=match] .hud .hudq{display:flex}
+.app[data-tab=match] .hud .hudq{display:block}
+.app[data-tab=match] .hud .map{display:flex}
+.hud .lower{font:var(--t-label);color:var(--text-muted);display:inline-flex;gap:6px;align-items:center;margin-top:8px}
+/* phone stage: photo shows above, scrim gets denser below the name */
+.app[data-stage] .stage{--scrim-h:78%}
+.app[data-tab=chat] .hud .meterpanel{padding:10px 12px}
+/* compact (phone): no photo stage; their photo lives in the header + Match tab */
+.app[data-view=compact] .stage{display:none}
+.app[data-view=compact] .hud .stage-name,.app[data-view=compact][data-tab=chat] .hud .chips{display:none}
+.app[data-view=compact] .cab-photo{display:block}
+.cab-photo{display:none;position:relative;--s:var(--step-lg);padding:3px;background:var(--edge);clip-path:var(--step-path)}
+.cab-photo img{width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;clip-path:var(--step-path);--s:4px}
+.cab-photo .chip{position:absolute;left:12px;top:12px}
+.cab-photo .plate{position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:rgb(5 2 15 / .85);--s:3px;clip-path:var(--step-path)}
+.cab-photo .plate .px{font-size:30px}
+.app[data-view=compact][data-tab=chat] .cab-photo{display:none}
+
+/* overlays inside the shell */
+.layer{position:absolute;inset:0;z-index:var(--z-modal);display:grid;place-items:center;padding:16px}
+.toastwrap{position:absolute;z-index:var(--z-toast);left:12px;right:12px;top:70px}
+
+/* ── TABLET 768+ : 2 panes, rail, floating chat ── */
+@container app (min-width:768px){
+  .m{grid-template:"rail head chat" auto "rail hud chat" 1fr / var(--rail-w) 1fr minmax(340px,var(--chat-w));}
+  .m>.rail{display:flex;grid-area:rail;background:rgb(5 2 15 / .92);border-right:3px solid var(--edge)}
+  .m>.tabbar{display:none}
+  .mhead{background:none;border:0;padding:20px 24px 0;justify-content:flex-end}
+  .mhead .who{display:none}
+  .mhead .viewtoggle em{display:inline}
+  .hud{justify-content:flex-end;padding:0 28px 28px;gap:16px}
+  .hud .stage-name{font-size:var(--px-hero)}
+  .hud .map,.hud .revealrow{display:flex}
+  .hud .hudq{display:none!important}
+  .hud .meterpanel{max-width:720px;padding:calc(var(--edge-w) + 18px) calc(var(--edge-w) + 22px) calc(var(--edge-w) + 20px);display:flex;flex-direction:column;gap:16px}
+  .app[data-tab] .chat{display:flex}
+  .chat{--s:var(--step-lg);margin:16px 16px 16px 0;padding:0;background:var(--edge);clip-path:var(--step-path);position:relative;gap:0}
+  .chat>.cin{position:absolute;inset:3px;background:var(--panel-glassless);clip-path:var(--step-path);z-index:-1}
+  .chat{isolation:isolate}
+  .chat .chead{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:3px solid var(--edge);margin:3px 3px 0}
+  .chat .chead .nm{font-family:var(--font-px);font-size:30px;line-height:1}
+  .chat .chead .sub{font:var(--t-micro);color:var(--text-muted)}
+  .chat .chatlog{padding:12px 18px}
+  .chat .pinq{padding:0 16px}
+  .chat .composer{padding:0 16px 18px}
+  .app[data-stage] .stage .scrim-b{height:62%}
+  .app[data-stage] .stage .scrim-l{width:58%}
+}
+/* ── DESKTOP 1200+ ── */
+@container app (min-width:1200px){
+  .m{grid-template-columns:var(--rail-w) 1fr var(--chat-w)}
+  .hud{padding:0 40px 36px}
+  .hud .meterpanel{display:grid;grid-template-columns:1fr auto;gap:18px 32px;align-items:end}
+  .hud .meterpanel .mp-meter{grid-column:1/-1}
+  .chat{margin:20px 20px 20px 0}
+}
+@container app (min-width:1680px){
+  .m{grid-template-columns:var(--rail-w) 1fr 520px}
+  .hud{padding:0 56px 48px}
+  .hud .meterpanel{max-width:880px}
+  .hud .stage-name{font-size:160px}
+}
+/* compact desktop = cabinet: rail | chat | cabinet. Chat is the solid centre; photo is a framed card */
+@container app (min-width:768px){
+  .app[data-view=compact] .m{grid-template:"rail head head" auto "rail chat hud" 1fr / var(--rail-w) 1fr minmax(340px,var(--cab-w))}
+  .app[data-view=compact] .mhead{padding:16px 20px;background:var(--panel);border-bottom:3px solid var(--edge)}
+  .app[data-view=compact] .mhead .who{display:flex}
+  .app[data-view=compact] .chat{margin:20px;--fill:var(--panel)}
+  .app[data-view=compact] .chat>.cin{background:var(--panel)}
+  .app[data-view=compact] .chat .chead{display:none}
+  .app[data-view=compact] .hud{justify-content:flex-start;padding:20px 20px 20px 0;overflow:auto}
+  .app[data-view=compact] .cab-photo{display:block!important}
+  .app[data-view=compact] .hud .meterpanel{display:flex;flex-direction:column;gap:14px;--fill:var(--panel)}
+  .app[data-view=compact] .hud .map{display:flex}
+  .app[data-view=compact] .hud .map .nd{width:auto;flex:none}
+  .app[data-view=compact] .hud .map .nd i{width:34px;height:34px}
+  .app[data-view=compact] .hud .map .ln{margin-top:14px}
+}
+
+/* ── STAGE-WIDE EVENTS (level-up, full reveal) ── */
+.event{position:absolute;inset:0;z-index:var(--z-modal);display:grid;place-items:center;text-align:center;padding:24px}
+.event .ev-in{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:640px;width:100%}
+.event .lvl{font-family:var(--font-px);font-size:clamp(64px,10cqi,150px);line-height:.85;text-shadow:0 5px 0 var(--edge),0 0 50px rgb(8 4 26 / .8)}
+.event .blocks{font:var(--t-ui);color:var(--text);background:rgb(5 2 15 / .8);padding:6px 12px;--s:3px;clip-path:var(--step-path)}
+.event .evpanel{width:100%;padding:calc(var(--edge-w) + 16px) calc(var(--edge-w) + 20px) calc(var(--edge-w) + 18px);display:flex;flex-direction:column;gap:16px}
+.burst{position:absolute;inset:0;pointer-events:none}
+.burst i{position:absolute;width:var(--z,12px);height:var(--z,12px);background:var(--c,var(--cta))}
+.front{position:absolute;inset:0;pointer-events:none}
+
+.app[data-stage] .mhead .who{display:none}
+.app:not([data-stage]) .mhead .lvbadge{display:none}
+.tabbar :is(a,button) svg{height:24px;width:auto}
+.tabbar :is(a,button){justify-content:flex-end}
+.app[data-tab=chat] .hud .lower{display:none}
+.hud .lvdesc{display:none;font:var(--t-body-lg);color:var(--text)}
+.app[data-stage] .hud{padding-top:24px}
+.stage .tint2{background:radial-gradient(130% 100% at 50% 25%,transparent 40%,rgb(8 4 26 / .5) 100%)}
+@container app (min-width:768px){ .hud .lvdesc{display:block} .app[data-tab=chat] .hud .lower{display:inline-flex} }
+@container app (max-width:380px){ .hud .stage-name{font-size:68px} .mhead .btn--sm{padding-inline:12px} }
+.chat .chatlog{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 48px);mask-image:linear-gradient(180deg,transparent 0,#000 48px)}
+.is-event .hud,.is-event .chat,.is-event .mhead,.is-event .m>.tabbar{opacity:0;pointer-events:none}
+.is-event .stage .scrim-l{opacity:.35}
+.stage .newlv{clip-path:polygon(0 0,var(--front,62%) 0,calc(var(--front,62%) - 30%) 100%,0 100%)}
+.stage .shimmer{position:absolute;inset:0;background:linear-gradient(100deg,transparent calc(var(--front,62%) - 22%),rgb(255 230 138 / .0) calc(var(--front,62%) - 18%),rgb(255 230 138 / .35) calc(var(--front,62%) - 15%),transparent calc(var(--front,62%) - 11%));mix-blend-mode:screen}
+.modal .flip{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.modal .flip>div{--s:var(--step-md);--fill:#102C33;--bev:inset 0 0 0 2px rgb(72 229 194 / .4);padding:calc(var(--edge-w) + 12px);text-align:left}
+.modal .flip b{display:block;font:var(--t-label);color:var(--c-mint);margin-bottom:6px}
+.modal .flip span{font:var(--t-body)}
+.modal .qt{font:var(--t-title);margin-top:8px}
+.modal .acts{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.modal .stampwrap{position:absolute;right:18px;top:16px}
+.app[data-sc=reveal] .stage .tint{opacity:.45}
+.app[data-sc=reveal] .stage .tint2{opacity:.6}
+.mwrap{position:relative;width:min(440px,calc(100% - 32px))}
+.mwrap .modal{width:100%}
+.mwrap>.stamp{position:absolute;right:-6px;top:-26px;z-index:2;font-size:44px}
+.event--bottom{place-items:end stretch;padding:0}
+.event--bottom::before{content:"";position:absolute;inset:auto 0 0 0;height:55%;background:linear-gradient(180deg,transparent,rgb(8 4 26 / .75) 50%,rgb(8 4 26 / .95))}
+.event--bottom .ev-in{position:relative;max-width:none;align-items:stretch;text-align:left;padding:20px 18px 26px;gap:12px}
+.event--bottom .lvl{font-size:64px}
+.event--bottom .acts{display:flex;gap:10px}.event--bottom .acts .btn{flex:1}
+.event--bottom .evpanel{padding:12px 14px}
+@container app (min-width:768px){
+  .event--bottom .ev-in{display:grid;grid-template-columns:1fr auto;align-items:end;gap:18px 40px;padding:40px 48px 44px calc(var(--rail-w) + 48px)}
+  .event--bottom .lvl{font-size:clamp(72px,8cqi,140px)}
+  .event--bottom .right{display:flex;flex-direction:column;gap:14px;width:min(520px,40cqi)}
+}
+.callui{position:absolute;inset:0;z-index:var(--z-modal);display:grid;grid-template-rows:auto 1fr auto;padding:16px;gap:12px}
+.callui .ctop{display:flex;gap:8px;flex-wrap:wrap}
+.callui .cname{align-self:end}
+.callui .cname .px{font-size:72px;line-height:.85;text-shadow:0 4px 0 var(--edge)}
+.callui .pip{position:absolute;right:16px;top:60px;width:112px;--s:var(--step-md);padding:var(--edge-w)}
+.callui .pip img,.callui .pip-off{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;image-rendering:pixelated}
+.callui .pip-off{display:grid;place-content:center;justify-items:center;gap:6px;background:var(--surface-1);font:var(--t-micro);color:var(--text-muted)}
+.callui .pip .chip{position:absolute;left:8px;bottom:8px;font-size:11px}
+.callui .cbar{padding:calc(var(--edge-w) + 12px);display:flex;flex-direction:column;gap:12px}
+.callui .cnote{font:var(--t-small);color:var(--text-muted);display:flex;gap:8px;align-items:flex-start}
+.callui .cbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.callui .cbtns .btn{padding-inline:6px}
+.callui .cbtns .btn:nth-child(4){grid-column:span 2}
+@container app (min-width:768px){
+ .callui{padding:28px 32px 32px calc(var(--rail-w) + 32px)}
+ .callui .pip{width:220px;right:32px;top:32px}
+ .callui .cname .px{font-size:clamp(96px,10cqi,160px)}
+ .callui .cbar{justify-self:center;width:min(980px,100%)}
+ .callui .cbtns{display:flex;justify-content:center}.callui .cbtns .btn:nth-child(4){grid-column:auto}
+ .callui .cnote{justify-content:center}
+}
+@container app (min-width:768px){ .mhead{justify-content:flex-start} .mhead .lvbadge{margin-right:auto} .mhead .viewtoggle{margin-left:auto} }
+@container app (min-width:768px) and (max-width:1199px){ .mhead .viewtoggle em{display:none} }
+.cab-photo .plate .chip{position:static}
+.lvbadge,.chip{white-space:nowrap;flex:none}
+@container app (min-width:768px){ .callui .toastwrap{top:28px!important;bottom:auto!important;left:50%;right:auto;transform:translateX(-50%);width:460px} }
+/* ── R1 additions ─────────────────────────────────────────── */
+/* Desktop chat is 440px (wide 520px) and floats 24px in from the edges. */
+@container app (min-width:1200px){
+  .m{grid-template-columns:var(--rail-w) 1fr calc(var(--chat-w) + 24px)}
+  .chat{margin:24px 24px 24px 0}
+  .app[data-view=compact] .chat{margin:24px}
+  .app[data-view=compact] .hud{padding:24px 24px 24px 0}
+}
+@container app (min-width:1680px){ .m{grid-template-columns:var(--rail-w) 1fr calc(520px + 24px)} }
+@container app (min-width:768px){
+  .app[data-view=compact] .m{grid-template-columns:var(--rail-w) 1fr minmax(340px,var(--cab-w))}
+}
+.app[data-view=compact]{background:var(--bg)}
+
+/* Clarity within a level: only the tint and scanlines lift (no extra blocks). --clar 0…1 set from the meter. */
+.stage .tint{background:rgb(12 7 34 / calc(.40 - .18 * var(--clar,0)));transition:background var(--dur-meter,600ms) linear}
+.stage::after{opacity:calc(1 - .55 * var(--clar,0));transition:opacity var(--dur-meter,600ms) linear}
+@media (prefers-reduced-motion:reduce){.stage .tint,.stage::after{transition:none}}
+
+/* Rail */
+.m>.rail .logo{margin:2px 0 14px}
+.m>.rail .ri{cursor:pointer}
+.m>.rail .ri:focus-visible,.tabbar button:focus-visible,.seg button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.tabbar button{cursor:pointer}
+
+/* Header */
+.mhead .who .nm{overflow:hidden;text-overflow:ellipsis}
+.mhead .lvbadge{cursor:default;user-select:none;-webkit-user-select:none;touch-action:none}
+.viewtoggle button{cursor:pointer}
+.viewtoggle .ico{height:14px;width:auto}
+
+/* Composer / answer fields: real inputs inside the .field frame */
+.field input{flex:1;min-width:0;background:none;border:0;outline:0;font:inherit;color:inherit}
+.field input::placeholder{color:var(--text-muted);opacity:1}
+.field:focus-within{--bev:inset 0 0 0 2px var(--focus)}
+.ansfield{margin-top:2px}
+.ansfield .btn{min-height:46px}
+
+/* Chat log */
+.chatlog{display:flex;flex-direction:column;gap:10px}
+.chat .chatlog{overflow-y:auto;scrollbar-width:none}
+.chat .chatlog::-webkit-scrollbar{display:none}
+.chatlog>.day{align-self:center;font:var(--t-micro);color:var(--text-muted);padding:2px 8px}
+.chatlog .pair{display:flex;flex-direction:column}
+.pinq{display:block}
+.pinq:empty{display:none}
+.chat .devbar{display:flex;gap:8px;align-items:center;font:var(--t-micro);color:var(--text-muted)}
+@container app (min-width:768px){ .chat .devbar{padding:0 16px} }
+
+/* Toasts */
+.toastwrap{display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toastwrap>*{pointer-events:auto}
+.toast{text-align:left;width:100%;cursor:pointer}
+.toast .acts{display:flex;gap:8px;margin-left:auto}
+@container app (min-width:768px){ .toastwrap{left:calc(var(--rail-w) + 24px);right:auto;width:min(460px,50cqi);top:84px} }
+
+/* Hud bits */
+.hud .stage-name{line-height:.86}
+.hud .revealrow .meta{font:var(--t-micro);opacity:.75}
+.hud .lower{cursor:pointer}
+.hud .lower:disabled{opacity:.5;cursor:not-allowed}
+.cab-photo canvas{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated;clip-path:var(--step-path);--s:4px}
+
+/* Call pane: sits in the HUD area (phone: over hud+chat; 768+: stage column, chat stays open) */
+.callui{position:relative;inset:auto;z-index:2;grid-area:hud;min-height:0;grid-template-rows:auto 1fr auto}
+.app[data-tab=call] .hud{display:none}
+.app:not([data-tab=call]) .callui{display:none}
+.app[data-tab=call] .chat{display:none}
+.app[data-tab=call] .callui{grid-row:hud/chat}
+.callui .cname{display:flex;flex-direction:column;gap:6px}
+.callui .idle{align-self:end;display:flex;flex-direction:column;gap:12px}
+.callui .idle .acts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.callui .pip video{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;transform:scaleX(-1)}
+.callui .cbtns{grid-template-columns:repeat(3,1fr)}
+.callui .ringcard{padding:calc(var(--edge-w) + 14px);display:flex;flex-direction:column;gap:12px}
+.stage>video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--c-abyss)}
+.hid{display:none}
+@container app (min-width:768px){
+  .callui{padding:0 28px 28px;grid-row:hud/hud}
+  .app[data-tab=call] .chat{display:flex}
+  .app[data-tab=call] .callui{grid-row:hud}
+  .callui .pip{top:0}
+  .app[data-view=compact] .callui{grid-area:hud;padding:20px 20px 20px 0}
+}
+
+/* Modals */
+.layer{background:var(--modal-backdrop)}
+.layer .mwrap .stamp{font-size:44px}
+.modal .eyebrow{justify-content:center}
+.modal .acts .btn{width:100%}
+.modal .hp{margin:16px 0}
+.modal .ans-in{margin-top:12px}
+.event{background:rgb(8 4 26 / .55)}
+.event .lvphoto{--s:var(--step-lg);width:min(260px,60cqi);padding:3px;background:var(--edge);clip-path:var(--step-path)}
+.event .lvphoto canvas{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated;clip-path:var(--step-path);--s:4px}
+.app[data-stage] .event .lvphoto{display:none}
+.app[data-stage] .event{background:linear-gradient(180deg,transparent 30%,rgb(8 4 26 / .8))}
+.event .burst i{transform:rotate(var(--a)) translateY(-38cqmin);left:50%;top:45%}
+@media (prefers-reduced-motion:no-preference){
+  .event .stamp,.mwrap>.stamp{animation:pd-stamp .32s steps(4,end) both}
+  .event .burst i{animation:pd-burst .7s steps(6,end) both}
+}
+@keyframes pd-stamp{from{transform:scale(1.6) rotate(-6deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes pd-burst{from{transform:rotate(var(--a)) translateY(0);opacity:1}to{transform:rotate(var(--a)) translateY(-38cqmin);opacity:0}}
+
+/* Solid fallbacks: no translucency at all when the user asks for it, or in forced colours */
+@media (prefers-reduced-transparency:reduce){
+  .app[data-stage] .chat .sys,.cab-photo .plate,.event .blocks{background:var(--c-surface-1)}
+  .m>.rail{background:var(--c-surface-1)}
+  .stage .scrim-b,.stage .scrim-l{opacity:1}
+  .layer,.event{background:var(--bg)}
+  .app[data-stage] .mhead{background:var(--c-surface-1)}
+}
+@media (forced-colors:active){ .layer,.event{background:Canvas} }
+}}

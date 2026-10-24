@@ -4,6 +4,7 @@ import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { mountReveal } from './reveal'
+import { Icon, Hp, MeterHead, LevelMap, Av, LvBadge, LV_DESC, LV_COLOR, AV_BLOCKS, coarse } from './ui/parts'
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
 type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
@@ -69,7 +70,7 @@ function Meter({ level, pct }: { level: number; pct: number }) {
 function TickMeter({ level, from, to }: { level: number; from: number; to: number }) {
   const [p, setP] = useState(from)
   useEffect(() => { setP(from); let v = from; const t0 = setTimeout(() => { const i = setInterval(() => { v = Math.min(to, v + 10); setP(v); if (v >= to) clearInterval(i) }, 90) }, 450); return () => clearTimeout(t0) }, [from, to])
-  return <div className="tick-meter"><Meter level={level} pct={p} /><span className="px-label-b px-coral">+{METER.cardBonus}%</span></div>
+  return <><MeterHead level={level} pct={p} /><Hp level={level} pct={p} /></>
 }
 const AGE_TOP = 70 // slider top; 70 means "70+" (no upper limit, see wants() in net.ts)
 function Banner() {
@@ -219,6 +220,7 @@ export default function App() {
   const [credited, setCredited] = useState<string[]>([]); const [msgs, setMsgs] = useState<Msg[]>([])
   const [tab, setTab] = useState<'profile' | 'chat' | 'call'>('profile'); const [draft, setDraft] = useState('')
   const [answering, setAnswering] = useState<string | null>(null)
+  const [view, setView] = useState<'stage' | 'compact'>(() => { try { return localStorage.getItem('pd.view') === 'compact' ? 'compact' : 'stage' } catch { return 'stage' } })
   const theirImgs = useRef<Record<number, HTMLImageElement>>({}); const shown = useRef<HTMLImageElement | null>(null)
   const cv = useRef<HTMLCanvasElement>(null)
   const [call, setCall] = useState<{ cam: Media; mc: MediaConnection; kind: Kind; remote?: MediaStream } | null>(null)
@@ -275,7 +277,7 @@ export default function App() {
   const declineCall = () => { setRing(null); send({ t: 'callans', ok: false }) }
   const onCallAns = async (ok: boolean) => {
     const r = st.current.ring; if (r?.dir !== 'out') return
-    if (!ok) { setRing(null); setMsgs(x => [...x, { from: 'sys', text: 'CALL DECLINED' }]); return }
+    if (!ok) { setRing(null); setMsgs(x => [...x, { from: 'sys', text: 'Call declined' }]); return }
     const cam = await getCam(r.kind); if (!cam || !st.current.m) { setRing(null); send({ t: 'endcall' }); return }
     cam.setLevel(st.current.level); hookCall(cam, net.current!.peer.call(st.current.m.peer, cam.out, { metadata: { kind: r.kind } }), r.kind)
   }
@@ -316,7 +318,7 @@ export default function App() {
   useEffect(() => { if (taps.them || taps.me) setReadyOpen(true) }, [taps.them, taps.me])
   // level-up event (both consented): overlay on any tab + a system card in the chat; drops are silent here
   useEffect(() => { const p = prevLv.current; prevLv.current = level
-    if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `NOW AT ${L.name.toUpperCase()} · ${L.blocks ? L.blocks + ' BLOCKS' : 'FULL PHOTO'}` }]) } }, [level])
+    if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
   useEffect(() => { const c = lvCv.current, to = theirImgs.current[lvup?.to ?? 0]; if (!lvup || !c || !to) return
     const from = theirImgs.current[lvup.from] || null; if (matchMedia('(prefers-reduced-motion: reduce)').matches) animateReveal(c, null, to); else animateReveal(c, from, to) }, [lvup, photoV])
 
@@ -327,15 +329,15 @@ export default function App() {
       case 'card': setMsgs(x => [...x, { from: 'them', card: d.id }]); break
       case 'ans': if (!cardById(d.id) || s.ans[d.id]?.them) break
         setAns(a => ({ ...a, [d.id]: { ...a[d.id], them: String(d.text) } })) // kept in state only; shown once I've answered too
-        if (!s.ans[d.id]?.me) { setEvt({ id: d.id, kind: 'turn', from: 0 }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} ANSWERED ${qn(d.id)} · YOUR TURN` }]); if (s.tab !== 'chat') setUnread(n => n + 1) }
+        if (!s.ans[d.id]?.me) { setEvt({ id: d.id, kind: 'turn', from: 0 }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name} answered ${qn(d.id)} · your turn` }]); if (s.tab !== 'chat') setUnread(n => n + 1) }
         break
       case 'tap': if (d.level === s.level) setTaps(t => ({ ...t, them: true })); break
       case 'season': if (['winter', 'spring', 'summer', 'autumn'].includes(d.s)) setThemSeason(d.s); break
-      case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name.toUpperCase()} LOWERED TO ${LEVELS[d.level - 1].name.toUpperCase()}` }]); break
+      case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name} lowered to ${LEVELS[d.level - 1].name}` }]); break
       case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break
       case 'skip': leave('They moved on. Finding someone new.', true); break
       case 'skipreq': if (DEV_SKIP_STAGE && d.level === s.level && s.level < 5) setSkip('in'); break
-      case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) setMsgs(x => [...x, { from: 'sys', text: 'SKIP DECLINED' }]); break
+      case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) setMsgs(x => [...x, { from: 'sys', text: 'Skip declined' }]); break
       case 'endcall': endCall(false); break
       case 'callreq': if (st.current.call) send({ t: 'callans', ok: false }); else setRing({ dir: 'in', kind: d.kind === 'voice' ? 'voice' : 'video' }); break
       case 'callcancel': setRing(r => r?.dir === 'in' ? null : r); break
@@ -350,7 +352,6 @@ export default function App() {
   useEffect(() => { const i = theirImgs.current[level]; if (i) paint(i) }, [level])
   useEffect(() => { if (tab === 'chat') setUnread(0) }, [tab])
   useEffect(() => { if (evt?.kind !== 'turn') return; const t = setTimeout(() => setEvt(e => e === evt ? null : e), 6000); return () => clearTimeout(t) }, [evt])
-  useEffect(() => { if (tab === 'profile' && shown.current && cv.current) animateReveal(cv.current, null, shown.current) }, [tab, screen])
 
   const used = new Set(Object.keys(ans).filter(k => ans[k].me && ans[k].them))
   const card = level < 6 ? deck.next(Math.min(level, 5), used) : null
@@ -358,7 +359,7 @@ export default function App() {
   const answer = (id: string, text: string) => {
     if (ans[id]?.me) return
     setAns(a => ({ ...a, [id]: { ...a[id], me: text } })); send({ t: 'ans', id, text }); setAnswering(null)
-    if (!ans[id]?.them) setMsgs(x => [...x, { from: 'sys', text: `YOU ANSWERED ${qn(id)} · WAITING FOR ${m?.them.name.toUpperCase()}` }])
+    if (!ans[id]?.them) setMsgs(x => [...x, { from: 'sys', text: `You answered ${qn(id)} · waiting for ${m?.them.name}` }])
     if (evt?.kind === 'turn' && evt.id === id) setEvt(null)
   }
   const tapReveal = () => { if (pct < 100 || level === 5) return; setTaps(t => ({ ...t, me: true })); setReadyOpen(true); send({ t: 'tap', level }) }
@@ -367,47 +368,193 @@ export default function App() {
   const dropCard = (id: string) => { send({ t: 'card', id }); setMsgs(x => [...x, { from: 'me', card: id }]); setTab('chat') }
 
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
-  useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab])
+  useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab, view])
 
+  const theirAv = useMemo(() => coarse(theirImgs.current[level], AV_BLOCKS[level - 1]), [level, photoV])
+  // the photo canvas moves between the stage and the compact plate: repaint the current level when it remounts
+  useEffect(() => { if (shown.current && cv.current) animateReveal(cv.current, null, shown.current) }, [screen, view])
+  useEffect(() => { const mk = (window as any).__pdMock; if (mk) import('./mock').then(x => x.runMock(mk, mockApi.current)) }, [])
+  const mockApi = useRef<any>(null)
+  mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup,
+    jump: (l: number) => { prevLv.current = l; setLevel(l); setPct(0) } }
   if (screen === 'onboard') return <div className="legacy"><div className="app px"><Onboard onDone={start} /><Splash ready /></div></div>
 
+  const them = m?.them.name || ''
+  const lv = LEVELS[level - 1], nx = LEVELS[level]
   const Q = ({ id, inChat }: { id: string; inChat?: boolean; key?: any }) => {
-    const q = cardById(id)!; const a = ans[id] || {}; const both = a.me && a.them
-    return <div className={`px-frame px-card px-qcard qcard ${both ? 'px-card--hot' : ''}`} data-t="card" data-card={id}>
-      <div className="px-qcard__top"><span className="px-frame px-tag">{LEVELS[q.level - 1].name.toUpperCase()} · Q{q.index}</span>
-        <span className="px-qcard__meta"><Ic n="sparkle" s={8} />{both || q.level === 1 || q.level === 3 || q.level === 5 ? `+${METER.cardBonus}%` : `+${METER.cardBonus}% TOGETHER`}</span></div>
-      <p className="px-qcard__q">{q.text}</p>
-      {both && <p className="answers px-label">YOU: <b className="px-cream">{a.me}</b><br />{m?.them.name.toUpperCase()}: <b className="px-cream">{a.them}</b></p>}
-      {answering === id ? <form className="ansrow" onSubmit={e => { e.preventDefault(); const v = (e.currentTarget.elements[0] as HTMLInputElement).value.trim(); if (v) answer(id, v) }}>
-        <input className="px-frame px-input fld" autoFocus placeholder="Your answer" data-t="ans-input" /><button className="px-frame px-btn-small" data-t="ans-send">SEND</button></form>
-        : <div className="px-qcard__foot">
-          <span className={`px-av ${a.them ? 'on' : ''}`} data-t="dot-them"><img src={a.them ? AV('b') : `${B}px/sprites/avatar-empty-18.png`} />{a.them && <img className="px-tick" src={`${B}px/sprites/tick.png`} />}</span>
-          <span className={`px-av ${a.me ? 'on' : ''}`} data-t="dot-me"><img src={a.me ? AV('a') : `${B}px/sprites/avatar-empty-18.png`} />{a.me && <img className="px-tick" src={`${B}px/sprites/tick.png`} />}</span>
-          <span className="px-label">{both ? 'BOTH ANSWERED' : a.them ? `${m?.them.name.toUpperCase()} ANSWERED` : a.me ? 'WAITING' : 'NEW CARD'}</span>
-          {!a.me && <button className={`px-frame ${inChat ? 'px-btn-small' : 'px-btn-ghost'}`} data-t="answer" onClick={() => setAnswering(id)}>ANSWER</button>}
-          {!inChat && a.me && !both && <button className="px-frame px-btn-ghost" onClick={() => dropCard(id)}>TO CHAT</button>}
-        </div>}
+    const q = cardById(id)!; const a = ans[id] || {}; const both = !!(a.me && a.them)
+    const together = !(q.level === 1 || q.level === 3 || q.level === 5)
+    const state = both ? 'both' : a.me ? 'you' : a.them ? 'them' : 'new'
+    return <div className={`qcard fx ${state === 'you' ? 'qcard--you' : both ? 'qcard--both' : ''}`} data-t="card" data-card={id} data-state={state}>
+      <div className="qh"><span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Icon n="cards" c="var(--c-mint)" /> {LEVELS[q.level - 1].name} · Q{q.index}{both ? ' · both answered' : ''}</span>
+        <span className="plus">+{METER.cardBonus}%{together || both ? ' together' : ''}</span></div>
+      <p className="q">{q.text}</p>
+      <div className="qf">{answering === id ? <form className="ansfield" style={{ flex: 1 }} onSubmit={e => { e.preventDefault(); const v = (e.currentTarget.elements[0] as HTMLInputElement).value.trim(); if (v) answer(id, v) }}>
+          <label className="field fx" style={{ ['--fill' as any]: '#071A20' }}><input autoFocus placeholder="Your answer" aria-label="Your answer" data-t="ans-input" /></label><button className="btn fx btn--mint btn--sm" data-t="ans-send">Send</button></form>
+        : both ? <div className="ans" style={{ flex: 1 }}><b>{them}</b><span>{a.them}</span><b>You</b><span>{a.me}</span></div>
+        : <>
+          <span className="who"><span className={`slot ${a.me ? 'ok on' : ''}`} data-t="dot-me"><img src={myAv} alt="" /></span><span className={`slot ${a.them ? 'ok on' : ''}`} data-t="dot-them">{theirAv && <img src={theirAv} alt="" />}</span></span>
+          {state === 'new' ? <span>New card · answers stay hidden until you both reply</span> : state === 'you' ? <span>You answered · waiting for {them}…</span> : <span style={{ color: 'var(--c-coral-hi)' }}>{them} answered · your turn</span>}
+          {!a.me && <button className="btn fx btn--mint btn--sm" data-t="answer" onClick={() => setAnswering(id)}>Answer</button>}
+          {!inChat && a.me && <button className="btn fx btn--ghost btn--sm" data-t="to-chat" onClick={() => dropCard(id)}>To chat</button>}
+        </>}</div>
     </div>
   }
-  const lv = LEVELS[level - 1], nx = LEVELS[level]
   const askSkip = () => { setSkip('out'); send({ t: 'skipreq', level }) }
   const ansSkip = (ok: boolean) => { setSkip(null); send({ t: 'skipans', ok, level }); if (ok) raise(level) } // my accept = my consent
-  const skipBar = !DEV_SKIP_STAGE || !dev || level >= 5 ? null : skipReq === 'in' ? <div className="px-frame px-card ringin" data-t="skip-in"><p className="px-text"><b className="px-coral">{m?.them.name}</b> wants to skip to {nx?.name}</p>
-      <div className="row2"><button className="px-frame px-btn-small" data-t="skip-accept" onClick={() => ansSkip(true)}>ACCEPT</button><button className="px-frame px-btn-ghost" data-t="skip-decline" onClick={() => ansSkip(false)}>DECLINE</button></div></div>
-    : skipReq === 'out' ? <p className="px-label" data-t="skip-out">ASKED TO SKIP TO {nx?.name.toUpperCase()}… WAITING</p>
-    : <button className="px-frame px-btn-ghost callbar" data-t="skip-stage" onClick={askSkip}>DEV · SKIP TO {nx?.name.toUpperCase()}</button>
-  const them = m?.them.name || ''
-  const callBar = call ? <button className="px-frame px-btn-ghost callbar" data-t="to-call" onClick={() => setTab('call')}><Ic n="call" s={8} /> IN CALL · OPEN</button>
-    : ring?.dir === 'in' ? <div className="px-frame px-card ringin" data-t="ring-in"><p className="px-text"><b className="px-coral">{them}</b> wants a {ring.kind} call</p>
-      <div className="row2"><button className="px-frame px-btn-small" data-t="call-accept" onClick={acceptCall}>ACCEPT</button><button className="px-frame px-btn-ghost" data-t="call-decline" onClick={declineCall}>DECLINE</button></div></div>
-    : ring ? <div className="px-frame px-card ringin" data-t="ring-out"><p className="px-text">Calling {them} ({ring.kind})… waiting for them to accept</p><button className="px-frame px-btn-ghost" onClick={cancelRing}>CANCEL</button></div>
-    : <div className="row2 callbar"><button className="px-frame px-btn-small" data-t="call-voice" onClick={() => requestCall('voice')}><Ic n="call" s={8} /> VOICE CALL</button>
-      <button className="px-frame px-btn-small" data-t="call-video" onClick={() => requestCall('video')}><Ic n="call" s={8} /> VIDEO CALL</button></div>
+  const devBar = !DEV_SKIP_STAGE || !dev || level >= 5 || skipReq === 'in' ? null : skipReq === 'out' ? <p className="devbar" data-t="skip-out">Asked to skip to {nx?.name}… waiting</p>
+    : <div className="devbar"><button className="btn fx btn--ghost btn--sm" data-t="skip-stage" onClick={askSkip}>Dev · skip to {nx?.name}</button></div>
   const press = () => { lp.current = window.setTimeout(() => { const v = !dev; sessionStorage.setItem('pd-dev', v ? '1' : ''); setDev(v) }, 800) }
   const unpress = () => clearTimeout(lp.current)
-  const theirAv = theirImgs.current[level]?.src || AV('b', true)
+  const devPress = { onPointerDown: press, onPointerUp: unpress, onPointerLeave: unpress, onContextMenu: (e: React.MouseEvent) => e.preventDefault() }
+  const setViewP = (v: 'stage' | 'compact') => { setView(v); try { localStorage.setItem('pd.view', v) } catch {} }
+  const go = (t: 'profile' | 'chat' | 'call') => setTab(t)
+  const dataTab = tab === 'profile' ? 'match' : tab
+  const event = !!lvup
+  const lvc = LV_COLOR(level)
+  const seasonChip = themSeason ? <span className="chip chip--edge" data-t="season-badge"><Icon n={themSeason} c="var(--c-mint)" /> {themSeason[0].toUpperCase() + themSeason.slice(1)}-born</span> : null
+  const photoCanvas = <canvas ref={cv} width={480} height={480} data-t="their-photo" aria-label={`${them}'s photo at ${lv.name}`} role="img" />
+  const remoteInStage = view === 'stage' && tab === 'call' && call?.kind === 'video'
+  const remoteVideo = <video ref={remoteV} playsInline data-t="remote-video" />
+
+  if (screen === 'match' && m) return <div className={`app ${event ? 'is-event' : ''}`} data-tab={dataTab} data-view={view} data-stage={view === 'stage' ? '' : undefined} data-level={level}>
+    <div className="stage" style={{ ['--focal' as any]: '50% 26%', ['--clar' as any]: level === 5 ? 1 : Math.min(1, pct / 100) }} aria-hidden={view !== 'stage'}>
+      {view === 'stage' && photoCanvas}
+      {remoteInStage && remoteVideo}
+      <div className="tint" /><div className="tint2" /><div className="scrim-l" /><div className="scrim-b" />
+    </div>
+    <div className="m">
+      <nav className="rail" aria-label="Sections">
+        <span className="logo" aria-hidden="true"><Icon n="heart" c="var(--c-coral)" s={5} /></span>
+        <button className={`ri ${tab !== 'call' ? 'on' : ''}`} aria-current={tab !== 'call' ? 'page' : undefined} data-t="rail-match" onClick={() => go('profile')}><Icon n="heart" c={tab !== 'call' ? 'var(--cta)' : 'currentColor'} s={3} />Match</button>
+        <button className={`ri ${tab === 'call' ? 'on' : ''}`} aria-current={tab === 'call' ? 'page' : undefined} data-t="rail-call" onClick={() => go('call')}><Icon n="call" c={tab === 'call' ? 'var(--cta)' : 'currentColor'} s={3} />Call</button>
+      </nav>
+      <header className="mhead">
+        <div className="who"><Av src={theirAv} level={level} size={40} />
+          <div style={{ minWidth: 0 }}><div className="nm">{them}, {bracketLabel(m.them.br)}</div><div className="sub" {...devPress}>LV {level} · {lv.name}{dev && <span className="devsfx"> · dev</span>}</div></div></div>
+        <LvBadge level={level} data-t="lvbadge" {...devPress}>{dev && <span className="devsfx"> · dev</span>}</LvBadge>
+        <div className="seg seg--sm viewtoggle" role="group" aria-label="Photo view">
+          <button className={view === 'stage' ? 'on' : ''} aria-pressed={view === 'stage'} data-t="view-stage" onClick={() => setViewP('stage')} title="Stage view"><Icon n="stage" /><em>Stage</em></button>
+          <button className={view === 'compact' ? 'on' : ''} aria-pressed={view === 'compact'} data-t="view-compact" onClick={() => setViewP('compact')} title="Compact view"><Icon n="compact" /><em>Compact</em></button>
+        </div>
+        <button className="btn fx btn--secondary btn--sm" data-t="skip" onClick={() => doSkip()}><Icon n="skip" />Skip</button>
+        {SHOW_BLOCK && <button className="btn fx btn--ghost btn--icon btn--sm" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>}
+      </header>
+      <section className="hud" aria-label={`${them} · level`}>
+        <div className="cab-photo">{view === 'compact' && photoCanvas}
+          <span className="chip chip--edge"><Icon n="heart" c={lvc} /> LV {level} · {lv.name}</span>
+          <div className="plate"><span className="px">{them}, <span data-t="them-bracket">{bracketLabel(m.them.br)}</span></span>{view === 'compact' && seasonChip && <span className="chip chip--edge"><Icon n={themSeason!} c="var(--c-mint)" /> {themSeason![0].toUpperCase() + themSeason!.slice(1)}-born</span>}</div></div>
+        <div className="stage-name px on-stage">{them}</div>
+        <p className="lvdesc on-stage">{LV_DESC[level - 1]}</p>
+        <div className="chips"><span className="chip chip--edge">{bracketLabel(m.them.br)}</span>
+          {seasonChip || <span className="chip chip--locked"><Icon n="lock" c="var(--locked)" /> Birth season unlocks at Spark</span>}</div>
+        <div className="meterpanel panel panel--stage fx">
+          <div className="mp-meter"><MeterHead level={level} pct={pct} /><Hp level={level} pct={pct} /></div>
+          <LevelMap level={level} pct={pct} cls="map--sm" />
+          {level < 5 ? <div className="revealrow">{pct >= 100
+            ? <button className="btn fx btn--lg" data-t="reveal" data-state="ready" onClick={tapReveal} disabled={taps.me}><Icon n="spark" />{taps.me ? `Waiting for ${them}…` : 'Reveal more'}<span className="meta">{nx?.name}</span></button>
+            : <button className="btn fx btn--lg is-disabled" data-t="reveal" data-state="locked" aria-disabled="true"><Icon n="lock" />Reveal more<span className="meta">{Math.floor(pct)}%</span></button>}</div>
+            : <div className="revealrow"><button className="btn fx btn--mint btn--lg" onClick={() => go('call')}><Icon n="cam" />Video call</button></div>}
+          {(taps.them && !taps.me) ? <p className="hint"><Icon n="heart" c="var(--c-coral-hi)" /> {them} has tapped. Your turn</p> : taps.me && !taps.them ? <p className="hint muted">Waiting for {them} to tap…</p> : null}
+          {level > 1 && <button className="lower" data-t="drop" onClick={drop}><Icon n="down" />Lower level</button>}
+        </div>
+        {tab === 'profile' && card && <div className="hudq">{Q({ id: card.id })}</div>}
+      </section>
+      <section className="callui" aria-label="Call">
+        <div className="ctop"><span className="chip chip--edge">{call ? <><Icon n={call.kind === 'video' ? 'cam' : 'call'} c="var(--c-mint)" /> {call.kind === 'video' ? 'Video' : 'Voice'}{call.remote ? '' : ' · connecting…'}</> : <><Icon n="call" c="var(--c-mint)" /> Call</>}</span><LvBadge level={level} /></div>
+        {call ? <>
+          <div className="cname">{call.kind === 'video' && !remoteInStage && <div className="fx" style={{ ['--s' as any]: 'var(--step-lg)', padding: 3, maxWidth: 420 }}>{remoteVideo}</div>}
+            {call.kind !== 'video' && <video ref={remoteV} playsInline data-t="remote-audio" className="hid" />}
+            <span className="px">{them}</span></div>
+          {call.kind === 'video' && <div className="pip fx"><video ref={localV} muted playsInline /><span className="chip chip--edge">You · {lv.name}</span></div>}
+          <div className="cbar panel panel--stage fx">
+            <p className="cnote"><Icon n="lock" c="var(--text-muted)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}.</p>
+            <div className="cbtns">
+              <button className="btn fx btn--secondary btn--sm" data-t="mute" onClick={toggleMute}><Icon n="mic" />{muted ? 'Unmute' : 'Mute'}</button>
+              {call.kind === 'video' && <button className="btn fx btn--secondary btn--sm" data-t="cam-off" onClick={toggleCam}><Icon n="cam" />{camOff ? 'Cam on' : 'Cam off'}</button>}
+              <button className="btn fx btn--danger btn--sm" data-t="hangup" onClick={() => endCall()}><Icon n="hangup" />Hang up</button>
+              <button className="btn fx btn--sm" data-t="call-reveal" disabled={pct < 100 || level === 5 || taps.me} onClick={tapReveal}><Icon n="spark" />Reveal more{pct < 100 ? ` ${Math.floor(pct)}%` : ''}</button>
+              <button className="btn fx btn--ghost btn--sm" data-t="call-drop" disabled={level === 1} onClick={drop}><Icon n="down" />Lower level</button>
+            </div>
+            {taps.them && !taps.me && <p className="hint">{them} has tapped. Your turn</p>}
+          </div>
+        </> : <div className="idle">
+          <span className="px on-stage" style={{ fontSize: 56, lineHeight: .9 }}>{them}</span>
+          {ring?.dir === 'out' ? <div className="ringcard panel panel--stage fx" data-t="ring-out"><p>Calling {them} ({ring.kind})… waiting for them to accept</p><button className="btn fx btn--ghost btn--sm" onClick={cancelRing}>Cancel</button></div>
+            : <div className="acts"><button className="btn fx btn--secondary" data-t="call-voice" onClick={() => requestCall('voice')}><Icon n="call" />Voice call</button>
+              <button className="btn fx btn--mint" data-t="call-video" onClick={() => requestCall('video')}><Icon n="cam" />Video call</button></div>}
+          <p className="cnote"><Icon n="lock" c="var(--text-muted)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>
+        </div>}
+      </section>
+      <aside className="chat" aria-label={`Chat with ${them}`}>
+        <div className="cin" />
+        <div className="chead"><Av src={theirAv} level={level} size={48} />
+          <div style={{ flex: 1, minWidth: 0 }}><div className="nm">{them}</div><div className="sub">Matched · {matchedAt.current} · LV {level} {lv.name}</div></div>
+          <button className="btn fx btn--secondary btn--icon btn--sm" aria-label="Voice call" data-t="chead-voice" onClick={() => { go('call'); if (!call && !ring) requestCall('voice') }}><Icon n="call" /></button>
+          <button className="btn fx btn--secondary btn--icon btn--sm" aria-label="Video call" data-t="chead-video" onClick={() => { go('call'); if (!call && !ring) requestCall('video') }}><Icon n="cam" /></button></div>
+        <div className="chatlog" role="log" aria-live="polite">
+          <p className="day">Matched · {matchedAt.current}</p>
+          {msgs.map((x, i) => x.pair ? <div key={i} className="pairlog fx" data-t="pair-log">
+              <div className="ph"><Icon n="cards" c="var(--c-mint)" /> {LEVELS[cardById(x.pair)!.level - 1].name} · {qn(x.pair)} · both answered<span className="combo-k">Combo +{METER.cardBonus}%</span></div>
+              <div className="pq">{cardById(x.pair)!.text}</div>
+              <div className="pa"><b>{them}</b><span data-t="pair-them">{ans[x.pair]?.them}</span><b>You</b><span>{ans[x.pair]?.me}</span></div></div>
+            : x.from === 'sys' ? <p key={i} className="sys">{x.text}</p>
+            : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div>
+            : <div key={i} className={`bub bub--${x.from === 'me' ? 'me' : 'them'}`} data-t={'msg-' + x.from}>{x.text}</div>)}
+        </div>
+        {card && !ans[card.id]?.me && !msgs.some(x => x.card === card.id) && <div className="pinq" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
+        {devBar}
+        <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>
+          <label className="field fx"><input value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${them}…`} aria-label={`Message ${them}`} data-t="chat-input" /></label>
+          <button className="btn fx btn--coral btn--icon" aria-label="Send" data-t="chat-send"><Icon n="send" c="var(--edge)" /></button></form>
+      </aside>
+      <nav className="tabbar" aria-label="Sections">
+        {(['profile', 'chat', 'call'] as const).map(t => <button key={t} className={tab === t ? 'on' : ''} aria-current={tab === t ? 'page' : undefined} data-t={'tab-' + t} onClick={() => go(t)}>
+          <Icon n={t === 'profile' ? 'heart' : t} s={3} />{t === 'profile' ? 'Match' : t === 'chat' ? 'Chat' : 'Call'}{t === 'chat' && unread > 0 && tab !== 'chat' && <span className="badge" data-t="unread">{unread}</span>}</button>)}
+      </nav>
+    </div>
+    <div className="toastwrap" aria-live="polite">
+      {call && tab !== 'call' && <button className="toast fx toast--success" data-t="to-call" onClick={() => go('call')}><span className="ic-wrap"><Icon n="call" c="var(--c-mint)" /></span><span><b>In call with {them}</b>Open call</span></button>}
+      {skipReq === 'in' && DEV_SKIP_STAGE && dev && <div className="toast fx toast--warn" data-t="skip-in"><span><b>{them} wants to skip to {nx?.name}</b>Dev tool</span>
+        <span className="acts"><button className="btn fx btn--sm" data-t="skip-accept" onClick={() => ansSkip(true)}>Accept</button><button className="btn fx btn--ghost btn--sm" data-t="skip-decline" onClick={() => ansSkip(false)}>Decline</button></span></div>}
+      {evt?.kind === 'turn' && <button className="toast fx toast--turn" data-t="ans-turn" onClick={() => { setEvt(null); setTab('profile'); setAnswering(evt.id) }}>
+        <span className="ic-wrap"><Icon n="cards" c="var(--c-mint)" /></span><span><b>{them} answered, your turn</b>{qn(evt.id)} · {cardById(evt.id)?.text}</span></button>}
+    </div>
+    {ring?.dir === 'in' && <div className="layer" data-t="ring-in" role="dialog" aria-label={`Incoming ${ring.kind} call`}>
+      <div className="modal fx"><div style={{ display: 'grid', placeItems: 'center', marginBottom: 14 }}><Av src={theirAv} level={level} size={96} /></div>
+        <p className="eyebrow"><Icon n="call" c="var(--cta)" /> Incoming · {ring.kind}</p><h2>{them} is calling</h2>
+        <p>You'll see each other at {lv.name}. Pixelated on each phone before it's sent.</p>
+        <div className="acts"><button className="btn fx btn--mint" data-t="call-accept" onClick={acceptCall}><Icon n="call" />Accept</button><button className="btn fx btn--danger" data-t="call-decline" onClick={declineCall}><Icon n="hangup" />Decline</button></div></div></div>}
+    {evt?.kind === 'pair' && ans[evt.id]?.me && ans[evt.id]?.them && <div className="layer" data-t="ans-pair" role="dialog" aria-label="Both answered" onClick={e => { if (e.target === e.currentTarget) setEvt(null) }}>
+      <div className="mwrap"><span className="stamp" aria-hidden="true">Combo!</span>
+        <div className="modal fx"><p className="eyebrow"><Icon n="cards" c="var(--cta)" /> {qn(evt.id)} · both answered</p>
+          <p className="qt">{cardById(evt.id)?.text}</p>
+          <div className="flip"><div className="fx"><b>{them}</b><span>{ans[evt.id].them}</span></div><div className="fx"><b>You</b><span>{ans[evt.id].me}</span></div></div>
+          <TickMeter level={level} from={evt.from} to={pct} />
+          <div className="acts">{pct >= 100 && level < 5 ? <button className="btn fx btn--lg" data-t="evt-reveal" onClick={() => { setEvt(null); setTab('profile'); tapReveal() }}><Icon n="spark" />Reveal more</button>
+            : <button className="btn fx" data-t="evt-close" onClick={() => setEvt(null)}>Keep chatting</button>}</div></div></div></div>}
+    {readyOpen && !evt && !lvup && level < 5 && pct >= 100 && <div className="layer" data-t="ready" role="dialog" aria-label="Ready to see more" onClick={e => { if (e.target === e.currentTarget) setReadyOpen(false) }}>
+      <div className="modal fx"><p className="eyebrow"><Icon n="spark" c="var(--cta)" /> Meter full</p>
+        <h2>Ready to see more?</h2>
+        <Hp level={level} pct={100} cls="hp--lg" />
+        <p>{taps.me ? `Waiting for ${them}…` : taps.them ? `${them} is ready. Your turn to reveal ${nx?.name}.` : `You both filled the meter. Reveal ${nx?.name} when you're both ready.`}</p>
+        <div className="acts">{taps.me ? <p className="eyebrow" data-t="ready-waiting"><Icon n="heart" c="var(--c-coral)" /> Waiting for {them}…</p>
+          : <button className="btn fx btn--lg" data-t="ready-reveal" onClick={tapReveal}><Icon n="spark" />Reveal more</button>}
+          <button className="btn fx btn--ghost" onClick={() => setReadyOpen(false)}>Later</button></div></div></div>}
+    {lvup && <div className="event" data-t="lvup" onClick={() => setLvup(null)}>
+      <div className="burst" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => <i key={k} style={{ ['--a' as any]: k * 36 + 'deg', ['--c' as any]: k % 2 ? 'var(--cta)' : 'var(--c-coral)' }} />)}</div>
+      <div className="ev-in">
+        <div className="lvphoto"><canvas ref={lvCv} width={480} height={480} /></div>
+        <span className="stamp">Level up!</span>
+        <h2 className="lvl" data-t="lvup-name" style={{ color: LV_COLOR(lvup.to) }}>LV {lvup.to} · {LEVELS[lvup.to - 1].name}</h2>
+        <span className="blocks">{LEVELS[lvup.to - 1].blocks ? `${LEVELS[lvup.to - 1].blocks} blocks` : 'Full photo'} · {LV_DESC[lvup.to - 1]}</span>
+        <div className="evpanel panel panel--stage fx" onClick={e => e.stopPropagation()}><Hp level={lvup.to} pct={0} /><LevelMap level={lvup.to} pct={0} cls="map--sm" />
+          <button className="btn fx" data-t="lvup-close" onClick={() => setLvup(null)}>Keep chatting</button></div>
+      </div></div>}
+  </div>
+
   return <div className="legacy"><div className="app px">
-    {screen !== 'match' ? <div className="screen scroll home">
+    <div className="screen scroll home">
       <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><img className="av" src={myAv} alt="" /></header>
       <div className="stage">
         <img src={`${B}px/hero/hero-dusk@2x.png`} width={390} height={300} alt="" />
@@ -426,105 +573,6 @@ export default function App() {
           <button className="px-frame px-btn-small join" onClick={doJoin} data-t="join">JOIN</button></div>
       </div>
       <p className="px-label safe"><Ic n="lock" s={8} /> 18+ · SKIP OR BLOCK ANYTIME</p>
-    </div> : <div className="screen">
-      <header className="top">
-        <img className="av l" src={theirAv} alt="" />
-        <div className="who"><div className="px-text">{them}, <span data-t="them-bracket">{bracketLabel(m!.them.br)}</span></div>
-          <div className="sub"><span className="px-label-b px-coral" data-t="lvbadge" onPointerDown={press} onPointerUp={unpress} onPointerLeave={unpress} onContextMenu={e => e.preventDefault()}>{lv.name.toUpperCase()}{dev && <span className="devsfx"> · DEV</span>}</span>
-            <span className="mini">{LEVELS.map((_, i) => <i key={i} className={i + 1 < level || level === 5 ? 'f' : i + 1 === level && pct >= 50 ? 'h' : ''} />)}</span></div></div>
-        <button className="px-frame px-btn-ghost sk" data-t="skip" onClick={() => doSkip()}>SKIP</button>
-        {SHOW_BLOCK && <button className="px-frame px-iconbtn ib" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>}
-      </header>
-      {ring?.dir === 'in' && tab !== 'call' ? callBar : call && tab !== 'call' ? callBar : null}
-      {(tab !== 'profile' || skipReq === 'in') && skipBar}
-      <div className="body scroll">
-        {tab === 'profile' && <>
-          <div className="px-frame px-card prof">
-            <div className="photo"><canvas ref={cv} width={480} height={480} data-t="their-photo" />
-              <span className="px-frame px-chip chip"><Ic n="heart" s={8} /> LV {level} · {lv.name.toUpperCase()}</span>
-              <div className="px-frame px-plate plate"><span className="px-title">{m!.them.name}, {bracketLabel(m!.them.br)}</span>{themSeason && <span className="px-frame px-tag sbadge" data-t="season-badge"><SeasonIc s={themSeason} px={2} /> {themSeason.toUpperCase()}-BORN</span>}</div></div>
-            <div className="meterrow">
-              <div className="mtop"><b className="px-label-b px-cream">{lv.name.toUpperCase()}</b>{nx && <span className="px-label">{Math.floor(pct)}% TO <b className="px-coral">{nx.name.toUpperCase()}</b></span>}</div>
-              <div className="mtop"><Meter level={level} pct={pct} /><button className="px-label linkbtn" data-t="drop" disabled={level === 1} onClick={drop}>LOWER LEVEL <Ic n="chevron" s={8} /></button></div>
-            </div>
-          </div>
-          {card && Q({ id: card.id })}
-          {taps.them && !taps.me && <p className="px-text px-coral-l hint"><Ic n="heart" s={8} /> {m!.them.name} has tapped. Your turn</p>}
-          {taps.me && !taps.them && <p className="px-text px-muted hint">Waiting for {m!.them.name} to tap…</p>}
-          {level < 5 && (pct >= 100
-            ? <button className="px-frame px-btn" data-t="reveal" data-state="ready" onClick={tapReveal} disabled={taps.me}><Ic n="sparkle" /><span className="px-btn__label">Reveal more</span><span className="px-btn__meta lbl-ink">{nx?.name.toUpperCase()}</span></button>
-            : <button className="px-frame px-btn px-btn--locked" data-t="reveal" data-state="locked"><Ic n="lock" /><span className="px-btn__label">Reveal more</span><span className="px-btn__meta">{Math.floor(pct)}%</span></button>)}
-        </>}
-        {tab === 'chat' && <div className="chat">
-          <p className="px-meta day">MATCHED · {matchedAt.current}</p>
-
-          {msgs.map((x, i) => x.pair ? <div key={i} className="px-frame px-card px-qcard px-card--hot pair" data-t="pair-log">
-              <div className="px-qcard__top"><span className="px-frame px-tag">{qn(x.pair)}</span><span className="px-qcard__meta"><Ic n="sparkle" s={8} />+{METER.cardBonus}%</span></div>
-              <p className="px-qcard__q">{qn(x.pair)} · {cardById(x.pair)!.text}</p>
-              <p className="read"><b className="px-coral">You:</b> {ans[x.pair]?.me}</p><p className="read" data-t="pair-them"><b className="px-coral-l">{them}:</b> {ans[x.pair]?.them}</p></div>
-            : x.from === 'sys' ? <p key={i} className="px-label sys">{x.text}</p>
-            : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div> : <div key={i} className={`px-frame px-bubble ${x.from === 'me' ? 'px-bubble--me me' : ''} bub msg`} data-t={'msg-' + x.from}>{x.text}</div>)}
-        </div>}
-        {tab === 'call' && <div className="call">
-          {call ? <>
-            <div className="remote">{call.kind === 'video' ? <video ref={remoteV} playsInline data-t="remote-video" />
-              : <>{theirImgs.current[level] && <img className="avatar" src={theirImgs.current[level].src} />}<video ref={remoteV} playsInline data-t="remote-audio" className="hid" /></>}
-              {!call.remote && <p className="px-label">CONNECTING…</p>}
-              <span className="px-frame px-chip chip">LV {level} · {lv.name.toUpperCase()}</span></div>
-            {call.kind === 'video' && <video ref={localV} className="self" muted playsInline />}
-            <div className="row3">
-              <button className="px-frame px-btn-small" data-t="mute" onClick={toggleMute}>{muted ? 'UNMUTE' : 'MUTE'}</button>
-              {call.kind === 'video' && <button className="px-frame px-btn-small" data-t="cam-off" onClick={toggleCam}>{camOff ? 'CAM ON' : 'CAM OFF'}</button>}
-              <button className="px-frame px-btn-small hang" data-t="hangup" onClick={() => endCall()}>HANG UP</button></div>
-            <div className="row2"><button className="px-frame px-btn-ghost" data-t="call-reveal" disabled={pct < 100 || level === 5 || taps.me} onClick={tapReveal}>REVEAL MORE {pct < 100 ? Math.floor(pct) + '%' : ''}</button>
-              <button className="px-frame px-btn-ghost" data-t="call-drop" disabled={level === 1} onClick={drop}>LOWER LEVEL</button></div>
-            {taps.them && !taps.me && <p className="px-text px-coral-l hint">{them} has tapped. Your turn</p>}
-            {card && Q({ id: card.id })}
-          </> : <>
-            {callBar}
-            <p className="meta">Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p></>}
-        </div>}
-      </div>
-      {tab === 'chat' && level === 1 && card && !ans[card.id]?.me && !msgs.some(x => x.from !== 'sys') && <div className="pinned" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
-      {tab === 'chat' && <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>
-        <input className="px-frame px-input fld" value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${them}`} data-t="chat-input" />
-        <button className="px-frame px-iconbtn" data-t="chat-send"><Ic n="send" /></button></form>}
-      {evt?.kind === 'turn' && <button className="px-frame px-card turn" data-t="ans-turn" onClick={() => { setEvt(null); setTab('profile'); setAnswering(evt.id) }}>
-        <span className="px-frame px-card cardback" aria-hidden="true"><b>?</b></span>
-        <span><span className="px-label-b px-cream">{them.toUpperCase()} ANSWERED, YOUR TURN</span><br /><span className="meta">{qn(evt.id)} · {cardById(evt.id)?.text}</span></span></button>}
-      {evt?.kind === 'pair' && ans[evt.id]?.me && ans[evt.id]?.them && <div className="modal" data-t="ans-pair" role="dialog" aria-label="Both answered" onClick={e => { if (e.target === e.currentTarget) setEvt(null) }}>
-        <div className="pairbox">
-          <p className="px-label-b px-cream ctr">{qn(evt.id)} · BOTH ANSWERED</p>
-          <p className="read ctr">{cardById(evt.id)?.text}</p>
-          <div className="flips"><div className="px-frame px-card px-qcard flip me"><span className="px-label-b">YOU</span><p className="read">{ans[evt.id].me}</p></div>
-            <div className="px-frame px-card px-qcard flip them"><span className="px-label-b">{them.toUpperCase()}</span><p className="read">{ans[evt.id].them}</p></div>
-            <div className="burst" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7].map(k => <i key={k} style={{ ['--a' as any]: k * 45 + 'deg' }}><Ic n="heart" s={8} /></i>)}</div></div>
-          <TickMeter level={level} from={evt.from} to={pct} />
-          {pct >= 100 && level < 5 ? <button className="px-frame px-btn" data-t="evt-reveal" onClick={() => { setEvt(null); setTab('profile'); tapReveal() }}><Ic n="sparkle" /><span className="px-btn__label">Reveal more</span></button>
-            : <button className="px-frame px-btn" data-t="evt-close" onClick={() => setEvt(null)}><span className="px-btn__label">Keep chatting</span></button>}
-        </div></div>}
-      {readyOpen && !evt && !lvup && level < 5 && pct >= 100 && <div className="modal" data-t="ready" role="dialog" aria-label="Ready to see more" onClick={e => { if (e.target === e.currentTarget) setReadyOpen(false) }}>
-        <div className="pairbox ctr pulse">
-          <p className="kicker" style={{ justifyContent: 'center' }}><Ic n="sparkle" s={8} /> METER FULL</p>
-          <h2 className="h1 ctr">Ready to see more?</h2>
-          <div className="tick-meter shimmer"><Meter level={level} pct={100} /></div>
-          <p className="read m">{taps.me ? `Waiting for ${them}…` : taps.them ? `${them} is ready. Your turn to reveal ${nx?.name}.` : `You both filled the meter. Reveal ${nx?.name} when you're both ready.`}</p>
-          {taps.me ? <p className="px-label-b px-cream" data-t="ready-waiting"><span className="beat"><Ic n="heart" s={8} /></span> WAITING FOR {them.toUpperCase()}…</p>
-            : <button className="px-frame px-btn big" data-t="ready-reveal" onClick={tapReveal}><Ic n="sparkle" /><span className="px-btn__label">Reveal more</span></button>}
-          <button className="ghost" onClick={() => setReadyOpen(false)}>LATER</button>
-        </div></div>}
-      {lvup && <div className="modal lvup" data-t="lvup" onClick={() => setLvup(null)}>
-        <div className="pairbox ctr">
-          <div className="lvphoto"><canvas ref={lvCv} width={480} height={480} />
-            <div className="burst gold" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => <i key={k} style={{ ['--a' as any]: k * 36 + 'deg' }}><Ic n={k % 2 ? 'sparkle' : 'heart'} s={8} /></i>)}</div></div>
-          <h2 className="h1 ctr stamp" data-t="lvup-name">LV {lvup.to} · {LEVELS[lvup.to - 1].name.toUpperCase()}</h2>
-          <span className="px-frame px-tag stamp2">{LEVELS[lvup.to - 1].blocks ? `${LEVELS[lvup.to - 1].blocks} BLOCKS` : 'FULL PHOTO'}</span>
-          <div className="tick-meter"><Meter level={lvup.to} pct={0} /></div>
-          <button className="px-frame px-btn" data-t="lvup-close" onClick={() => setLvup(null)}><span className="px-btn__label">Keep chatting</span></button>
-        </div></div>}
-      <nav className="px-nav nav">
-        {(['profile', 'chat', 'call'] as const).map(t => <a key={t} className={tab === t ? 'on' : ''} data-t={'tab-' + t} onClick={() => setTab(t)}><Ic n={t === 'profile' ? 'matches' : t} />{t === 'profile' ? 'MATCH' : t === 'chat' ? 'CHAT' : 'CALL'}{t === 'chat' && unread > 0 && tab !== 'chat' && <span className="unread" data-t="unread">{unread}</span>}</a>)}
-      </nav>
-    </div>}
+    </div>
   </div></div>
 }

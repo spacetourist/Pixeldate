@@ -65,9 +65,9 @@
 .check.is-on{background:var(--c-mint);box-shadow:none}
 /* segmented */
 .seg{--s:var(--step-md);display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:var(--edge-w);background:var(--edge);clip-path:var(--step-path)}
-.seg>span{--s:var(--step-sm);display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 14px;font:var(--t-ui);color:var(--text-muted);clip-path:var(--step-path)}
-.seg>span.on{background:var(--cta);color:var(--text-on-accent);box-shadow:var(--bevel-hi),var(--bevel-lo)}
-.seg--sm>span{min-height:34px;padding:0 10px;font-size:13.5px}
+.seg>:is(span,button){--s:var(--step-sm);display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 14px;font:var(--t-ui);color:var(--text-muted);clip-path:var(--step-path)}
+.seg>:is(span,button).on{background:var(--cta);color:var(--text-on-accent);box-shadow:var(--bevel-hi),var(--bevel-lo)}
+.seg--sm>:is(span,button){min-height:34px;padding:0 10px;font-size:13.5px}
 
 /* ── Chips, tags, badges ── */
 .chip{--s:var(--step-xs);display:inline-flex;align-items:center;gap:7px;padding:5px 11px;font:var(--t-label);color:var(--text);background:var(--raised);clip-path:var(--step-path);white-space:nowrap}
@@ -175,9 +175,9 @@
 .rail .ri.on{background:var(--raised);color:var(--text);box-shadow:var(--bevel-dark-hi),var(--bevel-dark-lo),inset 3px 0 0 var(--cta)}
 .rail .ri .badge{position:absolute;top:5px;right:6px;min-width:18px;height:18px;font-size:11px;padding:0 4px}
 .tabbar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--edge);padding:4px 6px calc(6px + env(safe-area-inset-bottom))}
-.tabbar a{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 8px;font:var(--t-micro);color:var(--text-muted);text-decoration:none}
-.tabbar a.on{color:var(--cta)}
-.tabbar a.on::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;background:var(--cta)}
+.tabbar :is(a,button){position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 8px;font:var(--t-micro);color:var(--text-muted);text-decoration:none}
+.tabbar :is(a,button).on{color:var(--cta)}
+.tabbar :is(a,button).on::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;background:var(--cta)}
 .tabbar .badge{position:absolute;top:4px;left:calc(50% + 6px);min-width:18px;height:18px;font-size:11px}
 .tabs{display:flex;gap:4px;border-bottom:3px solid var(--edge)}
 .tabs>span{position:relative;padding:12px 16px;font:var(--t-ui);color:var(--text-muted)}

@@ -4,7 +4,6 @@ import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { mountReveal } from './reveal'
-import { PixelCam } from './video'
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
 type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
@@ -258,7 +257,7 @@ export default function App() {
   const getCam = async (kind: Kind): Promise<Media | null> => {
     try {
       if (kind === 'voice') { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); return { stream: s, out: s, setLevel() {}, stop: () => s.getTracks().forEach(t => t.stop()) } }
-      const c = new PixelCam(await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: true })); (window as any).__pdCam = c
+      const { PixelCam } = await import('./video'); const c = new PixelCam(await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: true })); (window as any).__pdCam = c
       return { stream: c.stream, out: new MediaStream([...c.out.getVideoTracks(), ...c.stream.getAudioTracks()]), setLevel: l => c.setLevel(l), stop: () => c.stop() }
     } catch { alert(kind === 'voice' ? 'Microphone unavailable' : 'Camera unavailable'); return null }
   }
@@ -370,7 +369,7 @@ export default function App() {
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab])
 
-  if (screen === 'onboard') return <div className="app px"><Onboard onDone={start} /><Splash ready /></div>
+  if (screen === 'onboard') return <div className="legacy"><div className="app px"><Onboard onDone={start} /><Splash ready /></div></div>
 
   const Q = ({ id, inChat }: { id: string; inChat?: boolean; key?: any }) => {
     const q = cardById(id)!; const a = ans[id] || {}; const both = a.me && a.them
@@ -407,7 +406,7 @@ export default function App() {
   const press = () => { lp.current = window.setTimeout(() => { const v = !dev; sessionStorage.setItem('pd-dev', v ? '1' : ''); setDev(v) }, 800) }
   const unpress = () => clearTimeout(lp.current)
   const theirAv = theirImgs.current[level]?.src || AV('b', true)
-  return <div className="app px">
+  return <div className="legacy"><div className="app px">
     {screen !== 'match' ? <div className="screen scroll home">
       <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><img className="av" src={myAv} alt="" /></header>
       <div className="stage">
@@ -527,5 +526,5 @@ export default function App() {
         {(['profile', 'chat', 'call'] as const).map(t => <a key={t} className={tab === t ? 'on' : ''} data-t={'tab-' + t} onClick={() => setTab(t)}><Ic n={t === 'profile' ? 'matches' : t} />{t === 'profile' ? 'MATCH' : t === 'chat' ? 'CHAT' : 'CALL'}{t === 'chat' && unread > 0 && tab !== 'chat' && <span className="unread" data-t="unread">{unread}</span>}</a>)}
       </nav>
     </div>}
-  </div>
+  </div></div>
 }

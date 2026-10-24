@@ -1,0 +1,125 @@
+/* Pixeldate · Player Two · design tokens v1.0 (23 Oct 2026)
+   Layer order is declared once, here. Components/screens never use raw hex: only these tokens. */
+@layer reset, tokens, base, components, screens, utilities;
+
+@font-face{font-family:"Jersey 15";src:url("/Pixeldate/fonts/Jersey15-latin.woff2") format("woff2");font-weight:400;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Jersey 15";src:url("/Pixeldate/fonts/Jersey15-latin-ext.woff2") format("woff2");font-weight:400;font-display:swap;
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Bricolage Grotesque";src:url("/Pixeldate/fonts/BricolageGrotesque-latin.woff2") format("woff2");font-weight:200 800;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Bricolage Grotesque";src:url("/Pixeldate/fonts/BricolageGrotesque-latin-ext.woff2") format("woff2");font-weight:200 800;font-display:swap;
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+@layer tokens{
+:root{
+  /* ── Palette: deep aubergine base (Callum: dark, near-black purples) ── */
+  --c-abyss:#08041A;      /* page vignette, behind everything */
+  --c-night:#0C0722;      /* app background */
+  --c-surface-1:#161033;  /* panels, cards */
+  --c-surface-2:#1E1640;  /* raised: bubbles (them), inputs, active nav */
+  --c-surface-3:#281D52;  /* hover, secondary buttons */
+  --c-edge:#05020F;       /* the 3px edge frame, hard lips */
+  --c-track:#2A2150;      /* empty meter cells, dashed map lines */
+  --c-text:#FFF6EC;       /* 15.8:1 on surface-2 */
+  --c-muted:#A49CC2;      /* desaturated lilac, 6.5:1 on surface-2 */
+  --c-coral:#FF6F59;      /* primary accent: meter fill, send, love */
+  --c-coral-hi:#FF9A7F;
+  --c-butter:#FFD84D;     /* primary CTA, current stage, combo */
+  --c-butter-hi:#FFE68A;
+  --c-mint:#48E5C2;       /* my bubbles, co-op question, success */
+  --c-mint-hi:#8DF2DA;
+  --c-peach:#FFB48A;
+  --c-violet:#8F7BFF;     /* focus ring, links */
+  --c-raspberry:#FF5C7A;  /* errors only */
+  --c-locked:#6E6596;     /* lock icons + locked cells (non-text, 3.7:1 on night) */
+
+  /* ── Semantic roles ── */
+  --bg:var(--c-night); --bg-deep:var(--c-abyss);
+  --panel:var(--c-surface-1); --raised:var(--c-surface-2); --hover:var(--c-surface-3);
+  --edge:var(--c-edge); --text:var(--c-text); --text-muted:var(--c-muted); --text-on-accent:var(--c-edge);
+  --accent:var(--c-coral); --cta:var(--c-butter); --coop:var(--c-mint);
+  --success:var(--c-mint); --success-bg:#0E2E33;
+  --warn:var(--c-butter);  --warn-bg:#2E2614;
+  --error:var(--c-raspberry); --error-bg:#2E0F22;
+  --locked:var(--c-locked); --locked-bg:#120C2A;
+  --focus:var(--c-violet);
+  --me-bubble:var(--c-mint); --them-bubble:var(--c-surface-2);
+
+  /* Level colours (meter + stage map). One per stage, so a glance tells you where you are. */
+  --lv-1:#FF6F59; --lv-2:#FF8A5C; --lv-3:#FFB14E; --lv-4:#FFD84D; --lv-5:#48E5C2;
+
+  /* ── Type ── Jersey 15 = titles, names, logo ONLY. Bricolage = everything else. */
+  --font-px:"Jersey 15",ui-monospace,monospace;
+  --font-ui:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* display (Jersey; sizes are multiples of 4 for crisp pixels) */
+  --px-hero:clamp(64px,6vw + 28px,120px); --px-xl:64px; --px-lg:48px; --px-md:36px; --px-sm:28px; --px-lh:.92;
+  /* ui (Bricolage, opsz auto) */
+  --t-display:600 clamp(20px,1vw + 14px,26px)/1.25 var(--font-ui);
+  --t-title:700 19px/1.3 var(--font-ui);
+  --t-body-lg:400 17px/1.5 var(--font-ui);
+  --t-body:400 15.5px/1.45 var(--font-ui);
+  --t-ui:600 15px/1.2 var(--font-ui);
+  --t-btn:700 16px/1 var(--font-ui);
+  --t-small:500 13.5px/1.35 var(--font-ui);
+  --t-label:700 12.5px/1.2 var(--font-ui);   /* sentence case; never tracked uppercase */
+  --t-micro:700 11px/1.2 var(--font-ui);
+
+  /* ── Space: 4px grid ── */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px; --sp-16:64px;
+  --gutter:clamp(16px,2vw,24px);
+
+  /* ── Stepped corners: --s is ONE stair step; corners are 2 steps deep ── */
+  --step-xs:2px; /* tags, badges, avatar <40 */
+  --step-sm:3px; /* chips, bubbles, inputs, small buttons */
+  --step-md:4px; /* buttons, cards */
+  --step-lg:6px; /* panels, modals, the stage frame */
+  --step-path:polygon(calc(var(--s)*2) 0,calc(100% - var(--s)*2) 0,calc(100% - var(--s)*2) var(--s),calc(100% - var(--s)) var(--s),calc(100% - var(--s)) calc(var(--s)*2),100% calc(var(--s)*2),100% calc(100% - var(--s)*2),calc(100% - var(--s)) calc(100% - var(--s)*2),calc(100% - var(--s)) calc(100% - var(--s)),calc(100% - var(--s)*2) calc(100% - var(--s)),calc(100% - var(--s)*2) 100%,calc(var(--s)*2) 100%,calc(var(--s)*2) calc(100% - var(--s)),var(--s) calc(100% - var(--s)),var(--s) calc(100% - var(--s)*2),0 calc(100% - var(--s)*2),0 calc(var(--s)*2),var(--s) calc(var(--s)*2),var(--s) var(--s),calc(var(--s)*2) var(--s));
+
+  /* ── Edge frame + bevel recipe ── */
+  --edge-w:3px;        /* the frame */
+  --lip:3px;           /* extra bottom edge = "pressable" depth; 0 when pressed */
+  --bevel-hi:inset 0 3px 0 rgb(255 255 255 / .30);
+  --bevel-lo:inset 0 -4px 0 rgb(0 0 0 / .20);
+  --bevel-dark-hi:inset 0 2px 0 rgb(255 255 255 / .07);
+  --bevel-dark-lo:inset 0 -3px 0 rgb(0 0 0 / .28);
+
+  /* ── Shadows (hard, pixel) ── */
+  --sh-1:0 3px 0 var(--edge);
+  --sh-2:0 6px 0 var(--edge);
+  --sh-pop:0 10px 0 rgb(5 2 15 / .6),0 24px 60px rgb(5 2 15 / .7);
+  --glow-butter:0 0 24px rgb(255 216 77 / .45);
+  --glow-mint:0 0 20px rgb(72 229 194 / .35);
+
+  /* ── Overlays ── */
+  --scanlines:repeating-linear-gradient(0deg,rgb(255 255 255 / .022) 0 2px,transparent 2px 4px);           /* UI chrome */
+  --scanlines-stage:repeating-linear-gradient(0deg,rgb(8 4 26 / .26) 0 2px,transparent 2px 4px);          /* over photos */
+  --stage-tint:linear-gradient(180deg,rgb(12 7 34 / .30),rgb(12 7 34 / .30));                            /* night-purple wash */
+  --stage-tint-blend:multiply;
+  --scrim-bottom:linear-gradient(180deg,transparent 0%,rgb(12 7 34 / .55) 45%,rgb(8 4 26 / .94) 100%);
+  --scrim-side:linear-gradient(90deg,rgb(8 4 26 / .9) 0%,rgb(8 4 26 / .35) 45%,transparent 70%);
+  --panel-solid:var(--c-surface-1);
+  --panel-glassless:rgb(22 16 51 / .90);   /* semi-opaque panel over the stage. NO backdrop-filter needed */
+  --panel-stage-raised:rgb(30 22 64 / .94);
+  --modal-backdrop:rgb(8 4 26 / .78);
+
+  /* ── Motion ── */
+  --dur-instant:80ms; --dur-fast:140ms; --dur-base:220ms; --dur-slow:360ms; --dur-meter:600ms; --dur-reveal:1400ms; --dur-full-reveal:2400ms;
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  --ease-in-out:cubic-bezier(.65,0,.35,1);
+  --ease-pop:cubic-bezier(.34,1.56,.64,1);   /* overshoot, combo + stamps */
+  --ease-steps:steps(6,end);                  /* pixel-y fills */
+
+  /* ── Layout ── */
+  --rail-w:84px; --chat-w:440px; --cab-w:440px; --list-w:320px;
+  --z-stage:0; --z-ui:10; --z-sheet:40; --z-toast:60; --z-modal:80;
+}
+@media (prefers-reduced-motion:reduce){:root{--dur-fast:0ms;--dur-base:0ms;--dur-slow:0ms;--dur-meter:0ms;--dur-reveal:300ms;--dur-full-reveal:300ms}}
+}
+/* reset + base stop at .legacy (pre-R1 onboarding/lobby keep their own rules until R2/R4) */
+@layer reset{@scope (body) to (.legacy){*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}img,svg,canvas{display:block;max-width:100%}button,input,textarea{font:inherit;color:inherit;border:0;background:none}}}
+@layer base{
+  html{background:var(--bg-deep);color:var(--text);font:var(--t-body);-webkit-font-smoothing:antialiased;font-optical-sizing:auto;color-scheme:dark}
+  :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+  @scope (body) to (.legacy){.px{font-family:var(--font-px);font-weight:400;line-height:var(--px-lh);letter-spacing:.01em}}
+}

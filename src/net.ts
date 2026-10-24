@@ -1,8 +1,11 @@
-import Peer, { type DataConnection } from 'peerjs'
+import type Peer from 'peerjs'
+import type { DataConnection } from 'peerjs'
 import { LOBBY_SLOTS } from './config'
 import { FakePeer } from './fakepeer'
 export const LOOPBACK = location.search.includes('loopback')
-const P: any = LOOPBACK ? FakePeer : Peer
+/** peerjs (~25KB gz) is fetched on first use, after onboarding, so it stays out of the initial bundle. */
+let PeerCtor: Promise<any> | null = null
+const loadPeer = () => PeerCtor ||= LOOPBACK ? Promise.resolve(FakePeer) : import('peerjs').then(m => m.default)
 // PeerJS's built-in TURN hosts are gone; TURN comes from Metered (key injected at build as VITE_METERED_KEY).
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }]
 const OPTS = { config: { iceServers: STUN as RTCIceServer[] } }
@@ -67,7 +70,8 @@ export const block = (uid: string) => store.setItem('pd-blocked', JSON.stringify
 const okWith = (me: Profile, them: PeerProfile, byCode: boolean) => !blocked().includes(them.uid) && them.uid !== me.uid && (byCode || compatible(me, them))
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-function openPeer(id?: string): Promise<Peer> {
+async function openPeer(id?: string): Promise<Peer> {
+  const P = await loadPeer()
   return new Promise((ok, bad) => {
     const p: Peer = id ? new P(id, OPTS) : new P(OPTS)
     const t = setTimeout(() => { p.destroy(); bad(new Error('timeout')) }, 8000)

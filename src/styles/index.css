@@ -1,0 +1,6 @@
+/* Player Two R1. Layer order is declared first in tokens.css: reset, tokens, base, components, screens, utilities. */
+@import './tokens.css';
+@import './components.css';
+@import './screens.css';
+/* pre-R1 onboarding + lobby (fenced to .legacy by @scope; removed when R2/R4 land) */
+@import './legacy.css';

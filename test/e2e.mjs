@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer-core'
 const LB = !!process.env.LOOPBACK
 const URL = (process.env.URL || 'http://localhost:4173/Pixeldate/app/') + (LB ? '?loopback&dev=1' : '?dev=1')
-let shared
+let shared, dialogs = 0
 const S = p => `/workspace/pixeldate/shots/${p}.png`
 const shot = async (p, n) => { await p.bringToFront(); await new Promise(r => setTimeout(r, 400)); await p.screenshot({ path: S(n) }) }
 let cur = null
@@ -23,7 +23,7 @@ async function page(name, iam, seek, age, face) {
   const ctx = LB ? (shared ||= await browser.createBrowserContext()) : await browser.createBrowserContext(); const p = await ctx.newPage()
   await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
   p.on('console', m => { if (!/404/.test(m.text())) console.log(`  [${name}]`, m.text().slice(0, 150)) })
-  p.on('dialog', d => d.accept()); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
+  p.on('dialog', d => { dialogs++; d.accept() }); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
   if (name === 'Sam') await shotV(p, 'v3.6-signup-empty-412')
   // R2: the signup is a 4-step split (You · Your photo · Birthday · Who you'd like to meet); each step has its own Continue
@@ -192,4 +192,41 @@ log('skip accepted: both at', await a.$eval('.chip, [data-t=tab-profile]', e => 
 for (const p of [a, b]) if (await p.$('[data-t=lvup]')) await p.click('[data-t=lvup-close]'); await sleep(300); await b.click('[data-t=skip]'); await sleep(2000); for (const p of [a, b]) step('after skip: ' + (await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 120))))
 await t(a, '[data-t=finding]'); await t(b, '[data-t=finding]'); log('Skip ended match; both returned to lobby and auto-search for the next match')
 await shot(b, '10-after-skip')
+
+// ── R5: matches history, settings that persist, unblock, delete (all data on this device) ──
+for (const p of [a, b]) await click(p, '[data-t=cancel]')
+await sleep(500)
+const store = (p, js) => p.evaluate(js, LB)
+const ST = lb => lb ? sessionStorage : localStorage
+{ const n = await a.evaluate(() => window.__pdSounds || 0); if (!n) throw 'no level-up / combo sound played with Sounds on'; log('sounds on by default: played', n, '8-bit cues') }
+await click(a, '[data-t=top-settings]'); await t(a, '[data-t=page-settings]'); await click(a, '[data-t=top-matches]'); await t(a, '[data-t=page-matches]')
+{ const rows = await a.$$eval('[data-t=hist-row]', r => r.map(e => e.textContent)); if (!rows.some(x => x.includes('Alex'))) throw 'history has no Alex: ' + JSON.stringify(rows)
+  if (!(await a.$eval('[data-t=on-device]', e => /this device/i.test(e.textContent)))) throw 'matches page does not say data stays on the device'
+  log('matches history shows the ended match:', rows[0].replace(/\s+/g, ' ').slice(0, 60)) }
+await shot(a, 'r5-e2e-matches')
+await click(a, '[data-t=top-settings]'); await t(a, '[data-t=page-settings]')
+for (const k of ['set-view-compact', 'set-motion', 'set-solid', 'set-sounds']) await a.click(`[data-t=${k}]`)
+const prefsNow = p => store(p, lb => { const s = lb ? sessionStorage : localStorage, h = document.documentElement
+  return { view: s.getItem('pd.view'), motion: s.getItem('pd.motion'), solid: s.getItem('pd.solid'), sounds: s.getItem('pd.sounds'), dm: h.dataset.motion || null, ds: 'solid' in h.dataset, dur: getComputedStyle(h).getPropertyValue('--dur-fast').trim() } })
+{ const r = await prefsNow(a); if (r.view !== 'compact' || r.motion !== 'on' || r.solid !== 'on' || r.sounds !== 'off' || r.dm !== 'reduce' || !r.ds || r.dur !== '0s') throw 'settings not applied ' + JSON.stringify(r) }
+await a.reload({ waitUntil: 'networkidle0' }); await t(a, '[data-t=find]') // returning user: straight to the lobby, profile + photo restored from this device
+{ const r = await prefsNow(a); if (r.view !== 'compact' || r.motion !== 'on' || r.solid !== 'on' || r.sounds !== 'off' || r.dm !== 'reduce' || !r.ds || r.dur !== '0s') throw 'settings lost on reload ' + JSON.stringify(r)
+  if (!(await a.$('.lobbycard img, [data-t=me-photo], .who img'))) throw 'photo not restored on reload' }
+await click(a, '[data-t=top-settings]'); await t(a, '[data-t=page-settings]')
+{ const r = await a.evaluate(() => Object.fromEntries(['set-motion', 'set-solid', 'set-sounds'].map(k => [k, document.querySelector(`[data-t=${k}]`).getAttribute('aria-checked')]).concat([['compact', document.querySelector('[data-t=set-view-compact]').getAttribute('aria-pressed')]])))
+  if (r['set-motion'] !== 'true' || r['set-solid'] !== 'true' || r['set-sounds'] !== 'false' || r.compact !== 'true') throw 'settings UI after reload ' + JSON.stringify(r)
+  log('each setting persists across a reload (view compact, reduce motion, solid panels, sounds off): storage, html[data-motion/data-solid], --dur-fast 0s, switches', JSON.stringify(r)) }
+// unblock: a blocked person (as Skip & block stores them) is listed and can be unblocked
+await store(a, lb => (lb ? sessionStorage : localStorage).setItem('pd-blocked', JSON.stringify([{ uid: 'x-robin', name: 'Robin', br: [30, 34], at: Date.now() - 864e5 }])))
+await click(a, '[data-t=top-matches]'); await click(a, '[data-t=top-settings]'); await t(a, '[data-t=blocked-row]')
+if (!(await a.$eval('[data-t=blocked-row]', e => e.textContent)).includes('Robin')) throw 'blocked row'
+await a.click('[data-t=unblock]'); await t(a, '[data-t=blocked-empty]')
+{ const bl = await store(a, lb => (lb ? sessionStorage : localStorage).getItem('pd-blocked')); if (bl.includes('x-robin')) throw 'unblock not stored ' + bl; log('unblock removes the row and the stored entry:', bl) }
+// delete profile: in-app confirm (never window.confirm), then nothing of Pixeldate is left on this device
+await a.click('[data-t=delete]'); await t(a, '[data-t=confirm-delete][role=alertdialog]'); await shot(a, 'r5-e2e-delete-confirm')
+await Promise.all([a.waitForNavigation({ waitUntil: 'networkidle0' }), a.click('[data-t=confirm-delete-yes]')]); await t(a, '[data-t=name]')
+{ const r = await a.evaluate(async () => ({ keys: [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter(k => /^pd[-.]/.test(k) && !['pd-uid', 'pd-dev'].includes(k)), dbs: (await indexedDB.databases()).map(d => d.name).filter(n => n.startsWith('pixeldate')), html: document.documentElement.dataset.motion || null }))
+  if (r.keys.length || r.dbs.length || r.html) throw 'delete left data ' + JSON.stringify(r)
+  if (dialogs) throw dialogs + ' native dialogs were opened'
+  log('delete profile (in-app confirm, 0 native dialogs) wiped local data (pd-uid / pd-dev are recreated on boot by the signup / ?dev=1): other pd.* keys', JSON.stringify(r.keys), 'IndexedDB', JSON.stringify(r.dbs), '-> signup') }
 await browser.close(); console.log('ALL OK')

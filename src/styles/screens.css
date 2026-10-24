@@ -396,7 +396,7 @@ h1.px,h2.px{font-weight:400}
 .callui .cidle-name{font-size:56px;line-height:.9}
 .callui .ringcard{gap:14px}
 .callui .ringcard .rc-h{display:flex;gap:14px;align-items:center}
-.ringing{display:block;flex:none;line-height:0}
+.ringing{display:flex;flex:none}
 .callui .ringcard .eyebrow{margin-bottom:6px}
 .callui .rc-t{font-family:var(--font-px);font-weight:400;font-size:32px;line-height:.95;text-wrap:balance}
 .callui .rc-p{font:var(--t-body);color:var(--text-muted)}

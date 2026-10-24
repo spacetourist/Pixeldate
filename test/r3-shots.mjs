@@ -10,7 +10,7 @@ const MOTION = { reducedMotion: 'no-preference' }
 const api = (p, f, a) => p.evaluate(([f, a]) => window.__pdMockApi[f](...a), [f, a])
 const stage = p => p.evaluate(() => ({ mode: window.__pdStage?.mode, blocks: Math.round(window.__pdStage?.blocks || 0) }))
 const log = []
-const shot = async (p, n, extra = '') => { await p.screenshot({ path: OUT(n) }); const s = await stage(p); log.push(`${OUT(n)}  stage=${s.mode} blocks=${s.blocks} ${extra}`); console.log('shot', OUT(n), s.mode, s.blocks, extra) }
+const shot = async (p, n, extra = '') => { const s = await stage(p); await p.screenshot({ path: OUT(n) }); log.push(`${OUT(n)}  stage=${s.mode} blocks=${s.blocks} ${extra}`); console.log('shot', OUT(n), s.mode, s.blocks, extra) }
 // partner taps, we tap: the real level-up path (raise -> photo request -> pixelated photo back -> Stage.show)
 const levelUp = async (p, from) => { const t0 = await p.evaluate(() => performance.now()); await api(p, 'raise', [from]); return t0 }
 const at = async (p, t0, ms) => { const now = await p.evaluate(() => performance.now()); if (t0 + ms > now) await p.waitForTimeout(t0 + ms - now) }
@@ -52,7 +52,7 @@ for (const [sz, w, h] of SIZES) {
     await p.click('[data-t=hangup]'); await api(p, 'setEnded', [{ kind: 'video', secs: 272 }]); await p.waitForTimeout(400); await shot(p, `call-ended-${sz}`); await p.context().close() }
 }
 // Canvas 2D fallback (no WebGL2) mid level-up, and the reduced-motion (static) full reveal
-{ const p = await open(b, 390, 844, { level: 2, pct: 100, tab: 'chat' }, MOTION); await p.evaluate(() => { window.__pdNoGL = true; window.__pdMockApi.setView('compact'); window.__pdMockApi.setView('stage') }); await p.waitForTimeout(300)
+{ const p = await open(b, 390, 844, { level: 2, pct: 100, tab: 'chat' }, MOTION); await p.evaluate(() => { window.__pdNoGL = true; window.__pdMockApi.setView('compact') }); await p.waitForTimeout(300); await api(p, 'setView', ['stage']); await p.waitForTimeout(300)
   const t0 = await levelUp(p, 2); await at(p, t0, 900); await shot(p, 'levelup-mid-2d-p390', '(no WebGL2, t=900ms)'); await p.context().close() }
 for (const [sz, w, h] of SIZES) {
   const p = await open(b, w, h, { level: 4, pct: 100, tab: 'chat' }); const rm = await p.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)

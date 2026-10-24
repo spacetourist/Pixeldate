@@ -185,7 +185,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { if (taps.them || taps.me) setReadyOpen(true) }, [taps.them, taps.me])
   // level-up event (both consented): overlay on any tab + a system card in the chat; drops are silent here
   useEffect(() => { const p = prevLv.current; prevLv.current = level
-    if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
+    if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); S.begin(); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
   useEffect(() => { const c = lvCv.current, to = theirImgs.current[lvup?.to ?? 0]; if (!lvup || !c || !to) return
     const from = theirImgs.current[lvup.from] || null; if (RM()) animateReveal(c, null, to); else animateReveal(c, from, to, undefined, lvup.to === 5 ? { delay: 400, dur: 2000 } : { delay: 400, dur: 1000 }) }, [lvup, photoV])
 
@@ -338,13 +338,13 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
             {call.kind !== 'video' && <video ref={remoteV} playsInline data-t="remote-audio" className="hid" />}
             <span className="px">{them}</span></div>
           {call.kind === 'video' && <div className="pip fx">{(camErr === 'cam' || camOff) && <div className="pip-off" data-t="pip-off"><Icon n="cam" c="var(--text-muted)" s={3} /><span>Camera off</span></div>}
-            <video ref={localV} muted playsInline className={camErr === 'cam' || camOff ? 'hid' : ''} /><span className="chip chip--edge">You · {lv.name}</span></div>}
+            <video ref={localV} muted playsInline style={camErr === 'cam' || camOff ? { display: 'none' } : undefined} /><span className="chip chip--edge">You · {lv.name}</span></div>}
           {camErr === 'cam' && <div className="toastwrap callerr"><div className="toast toast--error fx" role="alert" data-t="cam-error"><span className="ic-wrap"><Icon n="alert" c="var(--error)" s={3} /></span><div><b>Camera unavailable</b>Another app may be using it. You're still on with voice.</div></div></div>}
           <div className="cbar panel panel--stage fx">
             <p className="cnote"><Icon n="lock" c="var(--c-mint)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>
             <div className="cbtns">
               <button className="btn fx btn--secondary" data-t="mute" aria-pressed={muted} onClick={toggleMute}><Icon n="mic" />{muted ? 'Unmute' : 'Mute'}</button>
-              {call.kind === 'video' && <button className="btn fx btn--secondary" data-t="cam-off" aria-pressed={camOff} disabled={camErr === 'cam'} onClick={toggleCam}><Icon n="cam" />{camOff || camErr === 'cam' ? 'Cam on' : 'Cam off'}</button>}
+              {call.kind === 'video' && <button className="btn fx btn--secondary" data-t="cam-off" aria-pressed={camOff} disabled={camErr === 'cam'} onClick={toggleCam}><Icon n="cam" />{camOff && camErr !== 'cam' ? 'Cam on' : 'Cam off'}</button>}
               <button className="btn fx btn--danger" data-t="hangup" onClick={() => endCall()}><Icon n="hangup" />Hang up</button>
               {pct >= 100 && level < 5 && !taps.me ? <button className="btn fx" data-t="call-reveal" onClick={tapReveal}><Icon n="spark" />Reveal more<span className="meta">{nx?.name}</span></button>
                 : <button className="btn fx is-disabled" data-t="call-reveal" disabled><Icon n="lock" c="var(--text-muted)" />{taps.me ? `Waiting for ${them}…` : 'Reveal more'}{!taps.me && level < 5 && <span className="meta">{Math.floor(pct)}%</span>}</button>}

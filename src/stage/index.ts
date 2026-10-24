@@ -51,9 +51,14 @@ export class Stage {
     this.r.setTex(img, anim !== 'cut')
     if (anim === 'cut' || RM()) { this.tw = null; this.frame(); return }
     const t = T[anim], n = img.naturalWidth
-    this.tw = { t0: performance.now(), delay: t.delay, dur: t.dur, b0: prev!.naturalWidth, b1: n, front: t.front }
+    this.tw = { t0: this.t0(t.delay), delay: t.delay, dur: t.dur, b0: prev!.naturalWidth, b1: n, front: t.front }
     this.loop()
   }
+  /** the level-up / reveal moment starts now (t=0 of motion/*.png); the new photo usually lands a few ms later */
+  private mark = 0
+  begin() { this.mark = performance.now() }
+  /** when the moment started; if the photo came in after the 400 ms hold, start its tween right away instead */
+  private t0(delay: number) { const now = performance.now(), m = this.mark; this.mark = 0; return m && now - m < delay ? m : now - delay }
   setClarity(v: number) { this.clar = v; if (!this.tw) this.frame() }
   /** progress for tests: blocks currently drawn */
   blocks = 0
@@ -80,7 +85,7 @@ export class Stage {
     const c = this.c, img = this.cur; if (!c || !img) return
     if (anim === 'cut' || !this.prev) { animateReveal(c, null, img); return }
     if (RM()) { crossfade(c, this.prev, img, T.rm); return }
-    const t = T[anim]; animateReveal(c, this.prev, img, undefined, t)
+    const t = T[anim]; animateReveal(c, this.prev, img, undefined, { dur: t.dur, delay: t.delay - (performance.now() - this.t0(t.delay)) })
   }
 }
 /** reduced motion: draw the old image, then the new one at rising opacity over `ms` (no blocks tween, no front) */

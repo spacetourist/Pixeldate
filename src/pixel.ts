@@ -19,11 +19,11 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = src })
 }
 /** Reveal: blocks split along a diagonal front with a shimmer over REVEAL_MS, drawn nearest-neighbour. */
-export function animateReveal(canvas: HTMLCanvasElement, from: HTMLImageElement | null, to: HTMLImageElement, onDone?: () => void) {
+export function animateReveal(canvas: HTMLCanvasElement, from: HTMLImageElement | null, to: HTMLImageElement, onDone?: () => void, tm: { delay?: number; dur?: number } = {}) {
   const S = canvas.width, c = canvas.getContext('2d')!; c.imageSmoothingEnabled = false
-  const n = to.naturalWidth, t0 = performance.now()
+  const n = to.naturalWidth, t0 = performance.now() + (tm.delay || 0), D = tm.dur || REVEAL_MS
   const step = () => {
-    const r = Math.min(1, (performance.now() - t0) / REVEAL_MS), t = r < .5 ? 4 * r * r * r : 1 - Math.pow(-2 * r + 2, 3) / 2 // ease-in-out
+    const r = Math.max(0, Math.min(1, (performance.now() - t0) / D)), t = r < .5 ? 4 * r * r * r : 1 - Math.pow(-2 * r + 2, 3) / 2 // ease-in-out
     if (!from || t >= 1) { c.drawImage(to, 0, 0, S, S); if (t >= 1 || !from) { onDone?.(); return } }
     c.drawImage(from!, 0, 0, S, S)
     const g = Math.min(n, 128), cell = S / g, slant = 0.35, sweep = 0.3

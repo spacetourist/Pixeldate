@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MediaConnection } from 'peerjs'
 import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
+import { Stage } from './stage'
+import { Burst, TickMeter, useLvClock, LvMeter, RM } from './ui/moments'
 import { AGE_TOP, seasonOf, type Season } from './signup/shared'
 import { Icon, Hp, MeterHead, LevelMap, Av, LvBadge, LV_DESC, LV_COLOR, AV_BLOCKS, coarse } from './ui/parts'
 type Kind = 'voice' | 'video'
@@ -29,10 +31,34 @@ function Meter({ level, pct }: { level: number; pct: number }) {
 }
 
 /** Meter that ticks up one art px (10%) at a time from `from` to `to` after the card flip. */
-function TickMeter({ level, from, to }: { level: number; from: number; to: number }) {
-  const [p, setP] = useState(from)
-  useEffect(() => { setP(from); let v = from; const t0 = setTimeout(() => { const i = setInterval(() => { v = Math.min(to, v + 10); setP(v); if (v >= to) clearInterval(i) }, 90) }, 450); return () => clearTimeout(t0) }, [from, to])
-  return <><MeterHead level={level} pct={p} /><Hp level={level} pct={p} /></>
+/** Level-up (motion/levelup.png, 2000 ms) and full reveal (motion/reveal.png, 2400 ms). The stage itself is the hero:
+    the shader tweens its blocks; this overlay only carries the stamp, the level text, the panel and the buttons. */
+function LvEvent({ from, to, them, br, cv, onClose, onCall }: { from: number; to: number; them: string; br: string; cv: React.RefObject<HTMLCanvasElement | null>; onClose(): void; onCall(): void }) {
+  const t = useLvClock(to), L = LEVELS[to - 1]
+  const close = useRef<HTMLButtonElement>(null)
+  useEffect(() => { close.current?.focus({ preventScroll: true }); const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; addEventListener('keydown', k); return () => { removeEventListener('keydown', k); const c = document.querySelector<HTMLInputElement>('[data-t=chat-input]'); if (c?.offsetParent) c.focus({ preventScroll: true }) } }, [])
+  if (to === 5) return <div className="event event--bottom ev-full" data-t="lvup" role="dialog" aria-label={`Level ${to}, ${L.name}`}>
+    <Burst n={40} seed={11} cols={['var(--cta)', 'var(--c-mint)', 'var(--c-butter-hi)']} />
+    <div className="ev-in">
+      <div className="lvphoto"><canvas ref={cv} width={480} height={480} /></div>
+      <div><p className="eyebrow"><Icon n="eye" c="var(--cta)" /> LV 5 · Full photo · you both chose this</p>
+        <h2 className="lvl" data-t="lvup-name">{L.name}</h2>
+        <div className="on-stage ev-who"><span className="px">{them}, {br}</span><span>{LV_DESC[4]}</span></div></div>
+      <div className="right"><div className="evpanel panel panel--stage fx"><LevelMap level={5} pct={100} cls="map--sm" /></div>
+        <div className="acts"><button className="btn fx btn--mint btn--lg" data-t="lvup-call" onClick={onCall}><Icon n="cam" c="var(--edge)" s={3} />Video call</button>
+          <button className="btn fx btn--secondary btn--lg" data-t="lvup-close" onClick={onClose} ref={close}>Keep chatting</button></div></div>
+    </div></div>
+  return <div className="event ev-up" data-t="lvup" role="dialog" aria-label={`Level ${to}, ${L.name}`} data-t2={t >= 1400 ? 'settled' : 'run'} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <i className="flash" aria-hidden="true" />
+    <Burst n={34} seed={3} cols={['var(--cta)', 'var(--c-butter-hi)', 'var(--c-coral)']} />
+    <div className="ev-in">
+      <div className="lvphoto"><canvas ref={cv} width={480} height={480} /></div>
+      <span className="stamp" aria-hidden="true">Combo!</span>
+      <h2 className="lvl" data-t="lvup-name">LV {to}<span className="lvn"> · {L.name}</span></h2>
+      <span className="blocks">{L.blocks} blocks · {LV_DESC[to - 1]}</span>
+      <div className="evpanel panel panel--stage fx"><div><LvMeter from={from} to={to} t={t} /></div><LevelMap level={t >= 1400 ? to : from} pct={t >= 1400 ? 0 : 100} /></div>
+      <button className="btn fx btn--lg" data-t="lvup-close" onClick={onClose} ref={close}>Keep chatting</button>
+    </div></div>
 }
 export default function App({ initial }: { initial?: { p: Profile; photo: string } }) {
   const [me, setMe] = useState<Profile | null>(null); const [photo, setPhoto] = useState<HTMLImageElement | null>(null)
@@ -63,6 +89,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const logEl = useRef<HTMLDivElement>(null), stick = useRef(true)
   const onLogScroll = () => { const l = logEl.current; if (l) stick.current = l.scrollHeight - l.scrollTop - l.clientHeight < 80 }
   useLayoutEffect(() => { const l = logEl.current; if (l && stick.current) l.scrollTop = l.scrollHeight }, [msgs, tab, view])
+  const S = useMemo(() => new Stage(), []); const [glKey, setGlKey] = useState(0); S.onBroken = () => setGlKey(k => k + 1)
+  const [callT, setCallT] = useState(0); const [camErr, setCamErr] = useState<'' | 'cam' | 'mic'>(''); const [ended, setEnded] = useState<{ kind: Kind; secs: number } | null>(null)
   const [evt, setEvt] = useState<{ id: string; kind: 'turn' | 'pair'; from: number } | null>(null); const [unread, setUnread] = useState(0)
   const st = useRef({ level, taps, pct, call, m, ring, skipReq, ans, tab }); st.current = { level, taps, pct, call, m, ring, skipReq, ans, tab }
 
@@ -93,13 +121,17 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
       if (kind === 'voice') { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); return { stream: s, out: s, setLevel() {}, stop: () => s.getTracks().forEach(t => t.stop()) } }
       const { PixelCam } = await import('./video'); const c = new PixelCam(await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: true })); (window as any).__pdCam = c
       return { stream: c.stream, out: new MediaStream([...c.out.getVideoTracks(), ...c.stream.getAudioTracks()]), setLevel: l => c.setLevel(l), stop: () => c.stop() }
-    } catch { alert(kind === 'voice' ? 'Microphone unavailable' : 'Camera unavailable'); return null }
+    } catch {
+      // camera busy/denied: stay on the call with voice only (19c); no mic at all: tell them, no call
+      if (kind === 'video') { const v = await getCam('voice'); if (v) { setCamErr('cam'); return v } return null }
+      setCamErr('mic'); return null
+    }
   }
   const hookCall = (cam: Media, mc: MediaConnection, kind: Kind) => {
-    setRing(null); setMuted(false); setCamOff(false); setTab('call')
+    setRing(null); setMuted(false); setCamOff(false); setEnded(null); setTab('call')
     setCall({ cam, mc, kind }); mc.on('stream', s => setCall(c => c && { ...c, remote: s })); mc.on('close', () => endCall(false))
   }
-  const requestCall = (kind: Kind) => { setRing({ dir: 'out', kind }); send({ t: 'callreq', kind }) }
+  const requestCall = (kind: Kind) => { setEnded(null); setCamErr(''); setRing({ dir: 'out', kind }); send({ t: 'callreq', kind }) }
   const cancelRing = () => { setRing(null); send({ t: 'callcancel' }) }
   const acceptCall = async () => {
     const r = st.current.ring; if (!r) return; const cam = await getCam(r.kind)
@@ -115,8 +147,11 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   }
   const toggleMute = () => { const v = !muted; call?.cam.stream.getAudioTracks().forEach(t => t.enabled = !v); setMuted(v) }
   const toggleCam = () => { const v = !camOff; call?.cam.out.getVideoTracks().forEach(t => t.enabled = !v); setCamOff(v) }
-  const endCall = (tell = true) => { setRing(null); const r = ready.current; ready.current = null; r?.cam.stop(); const c = st.current.call; if (!c) return; c.cam.stop(); c.mc.close(); setCall(null); if (tell) send({ t: 'endcall' }) }
+  const endCall = (tell = true) => { setRing(null); const r = ready.current; ready.current = null; r?.cam.stop(); const c = st.current.call; if (!c) return; c.cam.stop(); c.mc.close(); setCall(null); setCamErr(''); setEnded({ kind: c.kind, secs: callSecs.current }); if (tell) send({ t: 'endcall' }) }
   useEffect(() => { call?.cam.setLevel(level) }, [level, call])
+  const callSecs = useRef(0)
+  useEffect(() => { if (!call?.remote) return; const t0 = Date.now(); callSecs.current = 0; setCallT(0); const i = setInterval(() => { callSecs.current = Math.floor((Date.now() - t0) / 1000); setCallT(callSecs.current) }, 1000); return () => clearInterval(i) }, [call?.remote])
+  useEffect(() => { if (camErr !== 'mic') return; const t = setTimeout(() => setCamErr(''), 6000); return () => clearTimeout(t) }, [camErr])
 
   const find = async () => {
     setScreen('finding'); setNotice('')
@@ -128,7 +163,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
-    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
+    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); setEnded(null); setCamErr(''); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
     setM(mm); setScreen('match')
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
   }
@@ -152,7 +187,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { const p = prevLv.current; prevLv.current = level
     if (level > p && m) { setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
   useEffect(() => { const c = lvCv.current, to = theirImgs.current[lvup?.to ?? 0]; if (!lvup || !c || !to) return
-    const from = theirImgs.current[lvup.from] || null; if (matchMedia('(prefers-reduced-motion: reduce)').matches) animateReveal(c, null, to); else animateReveal(c, from, to) }, [lvup, photoV])
+    const from = theirImgs.current[lvup.from] || null; if (RM()) animateReveal(c, null, to); else animateReveal(c, from, to, undefined, lvup.to === 5 ? { delay: 400, dur: 2000 } : { delay: 400, dur: 1000 }) }, [lvup, photoV])
 
   function onData(d: any) {
     const s = st.current
@@ -176,11 +211,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
       case 'callans': onCallAns(!!d.ok); break
     }
   }
-  const paint = (img: HTMLImageElement) => {
-    const c = cv.current; if (!c) { shown.current = img; return }
-    const prev = shown.current; shown.current = img
-    if (prev && img.naturalWidth > prev.naturalWidth) animateReveal(c, prev, img); else animateReveal(c, null, img)
-  }
+  // the stage controller decides: WebGL2 shader, Canvas 2D or static; it only animates towards a larger allowed image
+  const paint = (img: HTMLImageElement) => { shown.current = img; S.show(img, st.current.level === 5 ? 'full' : 'up') }
   useEffect(() => { const i = theirImgs.current[level]; if (i) paint(i) }, [level])
   useEffect(() => { if (tab === 'chat') setUnread(0) }, [tab])
   useEffect(() => { if (evt?.kind !== 'turn') return; const t = setTimeout(() => setEvt(e => e === evt ? null : e), 6000); return () => clearTimeout(t) }, [evt])
@@ -203,8 +235,9 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab, view])
 
   const theirAv = useMemo(() => coarse(theirImgs.current[level], AV_BLOCKS[level - 1]), [level, photoV])
-  // the photo canvas moves between the stage and the compact plate: repaint the current level when it remounts
-  useEffect(() => { if (shown.current && cv.current) animateReveal(cv.current, null, shown.current) }, [screen, view])
+  // the photo canvas moves between the stage (WebGL2 when available) and the compact plate (2D); the controller repaints on attach
+  const attachCv = useCallback((c: HTMLCanvasElement | null) => { (cv as any).current = c; S.attach(c, view === 'stage') }, [view, glKey])
+  useEffect(() => { S.setClarity(level === 5 ? 1 : Math.min(1, pct / 100)) }, [pct, level])
   useEffect(() => { const mk = (window as any).__pdMock; if (mk) import('./mock').then(x => x.runMock(mk, mockApi.current)) }, [])
   const mockApi = useRef<any>(null)
   mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup,
@@ -247,13 +280,15 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     return lv ? <><Icon n="heart" c="var(--c-coral)" /><b>{lv[1]}</b>{lv[2]}</> : t.startsWith('You answered') ? <><Icon n="check" c="var(--c-mint)" />{t}</> : t }
   const dataTab = tab === 'profile' ? 'match' : tab
   const event = !!lvup
+  const inCall = !!call && tab === 'call'
+  const mmss = (x: number) => `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`
   const lvc = LV_COLOR(level)
   const seasonChip = themSeason ? <span className="chip chip--edge" data-t="season-badge"><Icon n={themSeason} c="var(--c-mint)" /> {themSeason[0].toUpperCase() + themSeason.slice(1)}-born</span> : null
-  const photoCanvas = <canvas ref={cv} width={480} height={480} data-t="their-photo" aria-label={`${them}'s photo at ${lv.name}`} role="img" />
+  const photoCanvas = <canvas key={view + glKey} ref={attachCv} width={480} height={480} data-t="their-photo" aria-label={`${them}'s photo at ${lv.name}`} role="img" />
   const remoteInStage = view === 'stage' && tab === 'call' && call?.kind === 'video'
   const remoteVideo = <video ref={remoteV} playsInline data-t="remote-video" />
 
-  if (screen === 'match' && m) return <div className={`app ${event ? 'is-event' : ''}`} data-tab={dataTab} data-view={view} data-stage={view === 'stage' ? '' : undefined} data-level={level}>
+  if (screen === 'match' && m) return <div className={`app ${event ? 'is-event' : ''} ${inCall ? 'in-call' : ''}`} data-ev={lvup ? (lvup.to === 5 ? 'full' : 'up') : evt?.kind === 'pair' ? 'combo' : undefined} data-tab={dataTab} data-view={view} data-stage={view === 'stage' ? '' : undefined} data-level={level}>
     <div className="stage" style={{ ['--focal' as any]: '50% 26%', ['--clar' as any]: level === 5 ? 1 : Math.min(1, pct / 100) }} aria-hidden={view !== 'stage'}>
       {view === 'stage' && photoCanvas}
       {remoteInStage && remoteVideo}
@@ -297,29 +332,42 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
         {tab === 'profile' && card && <div className="hudq">{Q({ id: card.id })}</div>}
       </section>
       <section className="callui" aria-label="Call">
-        <div className="ctop"><span className="chip chip--edge">{call ? <><Icon n={call.kind === 'video' ? 'cam' : 'call'} c="var(--c-mint)" /> {call.kind === 'video' ? 'Video' : 'Voice'}{call.remote ? '' : ' · connecting…'}</> : <><Icon n="call" c="var(--c-mint)" /> Call</>}</span><LvBadge level={level} /></div>
+        <div className="ctop"><span className="chip chip--edge" data-t="call-chip">{call ? <><Icon n={call.kind === 'video' ? 'cam' : 'call'} c="var(--c-mint)" /> {call.kind === 'video' ? 'Video' : 'Voice'} · {call.remote ? mmss(callT) : 'connecting…'}</> : <><Icon n="call" c="var(--c-mint)" /> Call</>}</span><LvBadge level={level} /></div>
         {call ? <>
-          <div className="cname">{call.kind === 'video' && !remoteInStage && <div className="fx" style={{ ['--s' as any]: 'var(--step-lg)', padding: 3, maxWidth: 420 }}>{remoteVideo}</div>}
+          <div className="cname">{call.kind === 'video' && !remoteInStage && <div className="cremote fx">{remoteVideo}</div>}
             {call.kind !== 'video' && <video ref={remoteV} playsInline data-t="remote-audio" className="hid" />}
             <span className="px">{them}</span></div>
-          {call.kind === 'video' && <div className="pip fx"><video ref={localV} muted playsInline /><span className="chip chip--edge">You · {lv.name}</span></div>}
+          {call.kind === 'video' && <div className="pip fx">{(camErr === 'cam' || camOff) && <div className="pip-off" data-t="pip-off"><Icon n="cam" c="var(--text-muted)" s={3} /><span>Camera off</span></div>}
+            <video ref={localV} muted playsInline className={camErr === 'cam' || camOff ? 'hid' : ''} /><span className="chip chip--edge">You · {lv.name}</span></div>}
+          {camErr === 'cam' && <div className="toastwrap callerr"><div className="toast toast--error fx" role="alert" data-t="cam-error"><span className="ic-wrap"><Icon n="alert" c="var(--error)" s={3} /></span><div><b>Camera unavailable</b>Another app may be using it. You're still on with voice.</div></div></div>}
           <div className="cbar panel panel--stage fx">
-            <p className="cnote"><Icon n="lock" c="var(--text-muted)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}.</p>
+            <p className="cnote"><Icon n="lock" c="var(--c-mint)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>
             <div className="cbtns">
-              <button className="btn fx btn--secondary btn--sm" data-t="mute" onClick={toggleMute}><Icon n="mic" />{muted ? 'Unmute' : 'Mute'}</button>
-              {call.kind === 'video' && <button className="btn fx btn--secondary btn--sm" data-t="cam-off" onClick={toggleCam}><Icon n="cam" />{camOff ? 'Cam on' : 'Cam off'}</button>}
-              <button className="btn fx btn--danger btn--sm" data-t="hangup" onClick={() => endCall()}><Icon n="hangup" />Hang up</button>
-              <button className="btn fx btn--sm" data-t="call-reveal" disabled={pct < 100 || level === 5 || taps.me} onClick={tapReveal}><Icon n="spark" />Reveal more{pct < 100 ? ` ${Math.floor(pct)}%` : ''}</button>
-              <button className="btn fx btn--ghost btn--sm" data-t="call-drop" disabled={level === 1} onClick={drop}><Icon n="down" />Lower level</button>
+              <button className="btn fx btn--secondary" data-t="mute" aria-pressed={muted} onClick={toggleMute}><Icon n="mic" />{muted ? 'Unmute' : 'Mute'}</button>
+              {call.kind === 'video' && <button className="btn fx btn--secondary" data-t="cam-off" aria-pressed={camOff} disabled={camErr === 'cam'} onClick={toggleCam}><Icon n="cam" />{camOff || camErr === 'cam' ? 'Cam on' : 'Cam off'}</button>}
+              <button className="btn fx btn--danger" data-t="hangup" onClick={() => endCall()}><Icon n="hangup" />Hang up</button>
+              {pct >= 100 && level < 5 && !taps.me ? <button className="btn fx" data-t="call-reveal" onClick={tapReveal}><Icon n="spark" />Reveal more<span className="meta">{nx?.name}</span></button>
+                : <button className="btn fx is-disabled" data-t="call-reveal" disabled><Icon n="lock" c="var(--text-muted)" />{taps.me ? `Waiting for ${them}…` : 'Reveal more'}{!taps.me && level < 5 && <span className="meta">{Math.floor(pct)}%</span>}</button>}
+              <button className="btn fx btn--ghost" data-t="call-drop" disabled={level === 1} onClick={drop}><Icon n="down" />Lower level</button>
             </div>
-            {taps.them && !taps.me && <p className="hint">{them} has tapped. Your turn</p>}
+            {taps.them && !taps.me && <p className="hint"><Icon n="heart" c="var(--c-coral-hi)" /> {them} has tapped. Your turn</p>}
           </div>
         </> : <div className="idle">
-          <span className="px on-stage" style={{ fontSize: 56, lineHeight: .9 }}>{them}</span>
-          {ring?.dir === 'out' ? <div className="ringcard panel panel--stage fx" data-t="ring-out"><p>Calling {them} ({ring.kind})… waiting for them to accept</p><button className="btn fx btn--ghost btn--sm" onClick={cancelRing}>Cancel</button></div>
+          <span className="px on-stage cidle-name">{them}</span>
+          {ring?.dir === 'out' ? <div className="ringcard panel panel--stage fx" data-t="ring-out" role="status">
+              <div className="rc-h"><span className="ringing"><Av src={theirAv} level={level} size={64} /></span>
+                <div><p className="eyebrow"><Icon n={ring.kind === 'video' ? 'cam' : 'call'} c="var(--c-mint)" /><span style={{ color: 'var(--c-mint)' }}>Calling · {ring.kind}</span></p><h2 className="rc-t">Waiting for {them}<span className="dots" aria-hidden="true">…</span></h2></div></div>
+              <p className="rc-p">They accept first. You both stay at {lv.name}, pixelated on each phone before it's sent.</p>
+              <button className="btn fx btn--danger btn--block" data-t="ring-cancel" onClick={cancelRing}><Icon n="hangup" />Cancel</button></div>
+            : ended ? <div className="ringcard panel panel--stage fx" data-t="call-ended" role="status">
+              <div className="rc-h"><Av src={theirAv} level={level} size={64} />
+                <div><p className="eyebrow"><Icon n="hangup" c="var(--c-coral-hi)" /><span style={{ color: 'var(--c-coral-hi)' }}>Call ended · {mmss(ended.secs)}</span></p><h2 className="rc-t">{ended.kind === 'video' ? 'Video' : 'Voice'} call with {them}</h2></div></div>
+              <p className="rc-p">You're still matched at {lv.name}. Keep chatting, or call again when you're both ready.</p>
+              <div className="acts"><button className="btn fx btn--secondary" data-t="ended-chat" onClick={() => { setEnded(null); go('chat') }}><Icon n="chat" />Back to chat</button>
+                <button className="btn fx btn--mint" data-t="call-again" onClick={() => requestCall(ended.kind)}><Icon n={ended.kind === 'video' ? 'cam' : 'call'} />Call again</button></div></div>
             : <div className="acts"><button className="btn fx btn--secondary" data-t="call-voice" onClick={() => requestCall('voice')}><Icon n="call" />Voice call</button>
               <button className="btn fx btn--mint" data-t="call-video" onClick={() => requestCall('video')}><Icon n="cam" />Video call</button></div>}
-          <p className="cnote"><Icon n="lock" c="var(--text-muted)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>
+          {!ring && !ended && <p className="cnote"><Icon n="lock" c="var(--c-mint)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>}
         </div>}
       </section>
       <aside className="chat" aria-label={`Chat with ${them}`}>
@@ -350,43 +398,37 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
       </nav>
     </div>
     <div className="toastwrap" aria-live="polite">
+      {camErr === 'mic' && <div className="toast fx toast--error" role="alert" data-t="mic-error"><span className="ic-wrap"><Icon n="alert" c="var(--error)" s={3} /></span><span><b>Microphone unavailable</b>Another app may be using it. The call didn't start.</span></div>}
       {call && tab !== 'call' && <button className="toast fx toast--success" data-t="to-call" onClick={() => go('call')}><span className="ic-wrap"><Icon n="call" c="var(--c-mint)" /></span><span><b>In call with {them}</b>Open call</span></button>}
       {skipReq === 'in' && DEV_SKIP_STAGE && dev && <div className="toast fx toast--warn" data-t="skip-in"><span><b>{them} wants to skip to {nx?.name}</b>Dev tool</span>
         <span className="acts"><button className="btn fx btn--sm" data-t="skip-accept" onClick={() => ansSkip(true)}>Accept</button><button className="btn fx btn--ghost btn--sm" data-t="skip-decline" onClick={() => ansSkip(false)}>Decline</button></span></div>}
       {evt?.kind === 'turn' && <button className="toast fx toast--turn" data-t="ans-turn" onClick={() => { setEvt(null); setTab('profile'); setAnswering(evt.id) }}>
         <span className="ic-wrap"><Icon n="cards" c="var(--c-mint)" /></span><span><b>{them} answered, your turn</b>{qn(evt.id)} · {cardById(evt.id)?.text}</span></button>}
     </div>
-    {ring?.dir === 'in' && <div className="layer" data-t="ring-in" role="dialog" aria-label={`Incoming ${ring.kind} call`}>
-      <div className="modal fx"><div style={{ display: 'grid', placeItems: 'center', marginBottom: 14 }}><Av src={theirAv} level={level} size={96} /></div>
-        <p className="eyebrow"><Icon n="call" c="var(--cta)" /> Incoming · {ring.kind}</p><h2>{them} is calling</h2>
-        <p>You'll see each other at {lv.name}. Pixelated on each phone before it's sent.</p>
-        <div className="acts"><button className="btn fx btn--mint" data-t="call-accept" onClick={acceptCall}><Icon n="call" />Accept</button><button className="btn fx btn--danger" data-t="call-decline" onClick={declineCall}><Icon n="hangup" />Decline</button></div></div></div>}
-    {evt?.kind === 'pair' && ans[evt.id]?.me && ans[evt.id]?.them && <div className="layer" data-t="ans-pair" role="dialog" aria-label="Both answered" onClick={e => { if (e.target === e.currentTarget) setEvt(null) }}>
+    {ring?.dir === 'in' && <div className="layer" data-t="ring-in" role="dialog" aria-modal="true" aria-label={`Incoming ${ring.kind} call`}>
+      <div className="modal fx"><div className="ringing ring-av"><Av src={theirAv} level={level} size={96} /></div>
+        <p className="eyebrow"><Icon n={ring.kind === 'video' ? 'cam' : 'call'} c="var(--c-mint)" /><span style={{ color: 'var(--c-mint)' }}>Incoming · {ring.kind}</span></p><h2 className="ring-t">{them} wants a {ring.kind} call</h2>
+        <p>You both stay at {lv.name}. You can hang up or lower the level anytime.</p>
+        <div className="acts acts--row"><button className="btn fx btn--danger" data-t="call-decline" onClick={declineCall}><Icon n="hangup" />Decline</button><button className="btn fx btn--mint" data-t="call-accept" onClick={acceptCall}><Icon n="call" />Accept</button></div></div></div>}
+    {evt?.kind === 'pair' && ans[evt.id]?.me && ans[evt.id]?.them && <div className="layer ml-combo" data-t="ans-pair" role="dialog" aria-modal="true" aria-label="Both answered" onClick={e => { if (e.target === e.currentTarget) setEvt(null) }}>
+      <Burst n={26} seed={7} cols={['var(--c-coral)', 'var(--cta)', 'var(--c-mint)']} />
       <div className="mwrap"><span className="stamp" aria-hidden="true">Combo!</span>
-        <div className="modal fx"><p className="eyebrow"><Icon n="cards" c="var(--cta)" /> {qn(evt.id)} · both answered</p>
+        <div className="modal fx"><p className="eyebrow"><Icon n="cards" c="var(--c-mint)" /><span style={{ color: 'var(--c-mint)' }}>{qn(evt.id)} · Both answered</span></p>
           <p className="qt">{cardById(evt.id)?.text}</p>
-          <div className="flip"><div className="fx"><b>{them}</b><span>{ans[evt.id].them}</span></div><div className="fx"><b>You</b><span>{ans[evt.id].me}</span></div></div>
-          <TickMeter level={level} from={evt.from} to={pct} />
-          <div className="acts">{pct >= 100 && level < 5 ? <button className="btn fx btn--lg" data-t="evt-reveal" onClick={() => { setEvt(null); setTab('profile'); tapReveal() }}><Icon n="spark" />Reveal more</button>
-            : <button className="btn fx" data-t="evt-close" onClick={() => setEvt(null)}>Keep chatting</button>}</div></div></div></div>}
-    {readyOpen && !evt && !lvup && level < 5 && pct >= 100 && <div className="layer" data-t="ready" role="dialog" aria-label="Ready to see more" onClick={e => { if (e.target === e.currentTarget) setReadyOpen(false) }}>
+          <div className="flip"><div className="fx"><b>You</b><span>{ans[evt.id].me}</span></div><div className="fx"><b>{them}</b><span>{ans[evt.id].them}</span></div></div>
+          <div className="mmeter"><TickMeter level={level} from={evt.from} to={pct} k={evt.id} /></div>
+          <div className="acts">{pct >= 100 && level < 5 && <button className="btn fx btn--block btn--lg lights" data-t="evt-reveal" onClick={() => { setEvt(null); setTab('profile'); tapReveal() }}><Icon n="spark" c="var(--edge)" s={3} />Reveal more<span className="meta">{nx?.name}</span></button>}
+            <button className={`btn fx btn--block ${pct >= 100 && level < 5 ? 'btn--ghost' : ''}`} data-t="evt-close" onClick={() => setEvt(null)}>Keep chatting</button></div></div></div></div>}
+    {readyOpen && !evt && !lvup && level < 5 && pct >= 100 && <div className="layer ml-ready" data-t="ready" role="dialog" aria-modal="true" aria-label="Ready to see more" onClick={e => { if (e.target === e.currentTarget) setReadyOpen(false) }}>
       <div className="modal fx"><p className="eyebrow"><Icon n="spark" c="var(--cta)" /> Meter full</p>
         <h2>Ready to see more?</h2>
         <Hp level={level} pct={100} cls="hp--lg" />
-        <p>{taps.me ? `Waiting for ${them}…` : taps.them ? `${them} is ready. Your turn to reveal ${nx?.name}.` : `You both filled the meter. Reveal ${nx?.name} when you're both ready.`}</p>
-        <div className="acts">{taps.me ? <p className="eyebrow" data-t="ready-waiting"><Icon n="heart" c="var(--c-coral)" /> Waiting for {them}…</p>
-          : <button className="btn fx btn--lg" data-t="ready-reveal" onClick={tapReveal}><Icon n="spark" />Reveal more</button>}
-          <button className="btn fx btn--ghost" onClick={() => setReadyOpen(false)}>Later</button></div></div></div>}
-    {lvup && <div className="event" data-t="lvup" onClick={() => setLvup(null)}>
-      <div className="burst" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => <i key={k} style={{ ['--a' as any]: k * 36 + 'deg', ['--c' as any]: k % 2 ? 'var(--cta)' : 'var(--c-coral)' }} />)}</div>
-      <div className="ev-in">
-        <div className="lvphoto"><canvas ref={lvCv} width={480} height={480} /></div>
-        <span className="stamp">Level up!</span>
-        <h2 className="lvl" data-t="lvup-name" style={{ color: LV_COLOR(lvup.to) }}>LV {lvup.to} · {LEVELS[lvup.to - 1].name}</h2>
-        <span className="blocks">{LEVELS[lvup.to - 1].blocks ? `${LEVELS[lvup.to - 1].blocks} blocks` : 'Full photo'} · {LV_DESC[lvup.to - 1]}</span>
-        <div className="evpanel panel panel--stage fx" onClick={e => e.stopPropagation()}><Hp level={lvup.to} pct={0} /><LevelMap level={lvup.to} pct={0} cls="map--sm" />
-          <button className="btn fx" data-t="lvup-close" onClick={() => setLvup(null)}>Keep chatting</button></div>
-      </div></div>}
+        <p>{taps.me ? <><b>You're ready.</b> Waiting for {them} to reveal {nx?.name}.</> : taps.them ? <><b>{them} is ready.</b> Your turn to reveal {nx?.name}.</> : <><b>You both filled the meter.</b> Reveal {nx?.name} when you're both ready.</>}</p>
+        <div className="acts">{taps.me ? <button className="btn fx btn--block btn--lg is-disabled" data-t="ready-waiting" disabled><Icon n="heart" c="var(--c-coral)" s={3} />Waiting for {them}…</button>
+          : <button className="btn fx btn--block btn--lg" data-t="ready-reveal" onClick={tapReveal}><Icon n="spark" c="var(--edge)" s={3} />Reveal more</button>}
+          <button className="btn fx btn--ghost btn--block" onClick={() => setReadyOpen(false)}>Later</button></div></div></div>}
+    {lvup && <LvEvent key={lvup.from + '-' + lvup.to} from={lvup.from} to={lvup.to} them={them} br={bracketLabel(m.them.br)} cv={lvCv} onClose={() => setLvup(null)} onCall={() => { setLvup(null); go('call') }} />}
+    <p className="sr-only" role="status" aria-live="polite" data-t="lv-live">{lvup ? `Level ${lvup.to}, ${LEVELS[lvup.to - 1].name}. ${LEVELS[lvup.to - 1].blocks ? LEVELS[lvup.to - 1].blocks + ' blocks.' : 'Full photo.'}` : ''}</p>
   </div>
 
   return <div className="legacy"><div className="app px">

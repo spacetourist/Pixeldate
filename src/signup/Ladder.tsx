@@ -6,6 +6,8 @@ import { Icon, LV_COLOR } from '../ui/parts'
 import { mountLadder, type LadderState } from './ladder'
 import { reduceMotion } from './shared'
 
+/** Thumbnail captions use the short level name (GD R2 fix 1); the viewer and chip keep the full one. */
+const SHORT = (n: string) => n === 'Crystal clear' ? 'Clear' : n
 const blocksLabel = (i: number) => LEVELS[i].blocks ? LEVELS[i].blocks + ' blocks' : 'Full photo'
 
 export function Ladder({ src, name, intro, onCtas }: { src: string; name: string; intro: boolean; onCtas: (on: boolean) => void }) {
@@ -49,7 +51,7 @@ export function Ladder({ src, name, intro, onCtas }: { src: string; name: string
         <button type="button" className="lf" data-t={'mini-' + (i + 1)} aria-label={`Preview at ${L.name}`} disabled={!ready}
           onClick={() => { if (reduce) ctl.current?.show(i); setOpen(i) }}>
           <span>{ready ? <img src={urls[i]} alt="" /> : null}</span></button>
-        <figcaption><b style={{ color: LV_COLOR(i + 1) }}>LV {i + 1} · {L.name}</b><br />{blocksLabel(i)}</figcaption>
+        <figcaption><b style={{ color: LV_COLOR(i + 1) }}>LV {i + 1} · {SHORT(L.name)}</b><span>{blocksLabel(i)}</span></figcaption>
       </figure>
     })}</div>
     {open !== null && urls[open] && <Viewer urls={urls} at={open} set={setOpen} />}

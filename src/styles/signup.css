@@ -1,5 +1,7 @@
 /* Player Two R2 · signup (4-step split + photo ladder). Ported from design css/screens.css "GENERIC PAGES" + "signup". */
 @layer screens{@scope (body) to (.legacy){
+/* GD R2 fix 3: balanced Jersey titles (no orphans) */
+.px,.ptitle,h1,h2{text-wrap:balance}
 .vh{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 @media (prefers-reduced-motion:no-preference){ .page .pbody{animation:step-in 180ms steps(3,end)} }
 @keyframes step-in{from{opacity:0;transform:translateX(12px)}}
@@ -20,14 +22,18 @@ html:has(.flow),body:has(.flow){height:auto;overflow:visible}
 .stepper{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
 .stepper i{height:10px;background:var(--c-track);--s:2px;clip-path:var(--step-path);transition:background var(--dur-base) var(--ease-steps)}
 .stepper i.on{background:var(--cta)}.stepper i.done{background:var(--c-coral)}
-@container app (min-width:768px){ .page .pfoot>.btn:last-child{flex:0 0 auto} }
+/* GD R2 fix 4: the sticky bottom bar is phone only; from 768 the actions sit 32px under the content */
+@container app (min-width:768px){
+  .page .pfoot>.btn:last-child{flex:0 0 auto}
+  .page .pbody{flex:0 0 auto;margin-top:auto}
+  .page .pfoot{position:static;background:none;padding:32px 0 48px;margin-bottom:auto;flex-direction:row;justify-content:flex-end}
+  .page .pfoot>.btn{width:auto;min-width:220px}
+}
 @container app (min-width:1024px){
   .page{grid-template-columns:minmax(420px,44%) 1fr}
   .page .pside{display:flex;position:sticky;top:0;height:100dvh;overflow:hidden;flex-direction:column;justify-content:space-between;padding:40px 48px;border-right:3px solid var(--edge)}
   .page .pmain{padding:40px 56px 0}
-  .page .pbody{justify-content:center;max-width:600px}
-  .page .pfoot{position:static;background:none;max-width:600px;padding:24px 0 48px;flex-direction:row;justify-content:flex-end}
-  .page .pfoot>.btn{width:auto;min-width:220px}
+  .page .pbody,.page .pfoot{max-width:600px}
   .page h1.px{font-size:64px}
 }
 @container app (min-width:1680px){.page .pbody,.page .pfoot,.page .ptop,.page .stepper{max-width:680px}.page h1.px{font-size:76px}}
@@ -120,11 +126,16 @@ html:has(.flow),body:has(.flow){height:auto;overflow:visible}
 .ladder .lf:not(:disabled):hover>span{background:var(--c-track)}
 .ladder img{width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;--s:2px;clip-path:var(--step-path)}
 .ladder figure.wait .lf>span::before{content:"";display:block;aspect-ratio:1;--s:2px;clip-path:var(--step-path);background:repeating-linear-gradient(135deg,var(--c-track) 0 4px,var(--panel) 4px 8px)}
-.ladder figcaption{font:var(--t-micro);color:var(--text-muted);text-align:center}
+/* GD R2 fix 1: every caption is exactly two lines (short name, then blocks), 16px+ clear of the actions */
+.ladder{margin-bottom:16px}
+.ladder figcaption{font:var(--t-micro);line-height:14px;height:28px;color:var(--text-muted);text-align:center;width:100%;display:flex;flex-direction:column;align-items:center}
+.ladder figcaption>*{white-space:nowrap}
+@container app (max-width:767px){ .ladder{gap:6px} .ladder figcaption>b{letter-spacing:-.3px;word-spacing:-1.5px} }
 .ladder figure.wait figcaption{opacity:.55}
 .ladder figure.on .lf>span{background:var(--cta)}.ladder figure.on figcaption{color:var(--cta)}
-@container app (min-width:1024px){ .ladder-wrap{grid-template-columns:300px 1fr;gap:20px;align-items:start} .ladder-wrap .ladder{grid-template-columns:repeat(3,1fr)} }
-@container app (min-width:1680px){ .ladder-wrap{grid-template-columns:380px 1fr} }
+/* GD R2 fix 2: on desktop the photo is a ~420px square (the biggest thing on screen) with all five thumbnails in one row under it */
+@container app (min-width:1024px){ .ladder-wrap{width:min(100%,420px);gap:16px} }
+@container app (min-width:1680px){ .ladder-wrap{width:min(100%,480px)} }
 @media (prefers-reduced-motion:no-preference){
   .ladder figure:not(.wait) img{animation:lf-pop 320ms steps(4,end)}
 }

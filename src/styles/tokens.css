@@ -124,3 +124,6 @@
   :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
   @scope (body) to (.legacy){.px{font-family:var(--font-px);font-weight:400;line-height:var(--px-lh);letter-spacing:.01em}}
 }
+/* GD R3 fix 2: rings only for keyboard users. main.tsx sets html[data-kbd] on navigation keys and clears it on pointer
+   input, so programmatic focus after a tap (e.g. Keep chatting) shows no ring; text fields always show theirs. */
+@layer utilities{html:not([data-kbd]) :focus-visible:not(input,textarea,select){outline:none}}

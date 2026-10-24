@@ -21,8 +21,10 @@ const fakeCall = (p, kind) => p.evaluate(kind => {
     const t = document.createElement('canvas'); const s = bl || img.naturalWidth; t.width = s; t.height = Math.round(s * 4 / 3); t.getContext('2d').drawImage(img, 0, 0, t.width, t.height)
     const draw = () => x.drawImage(t, 0, 0, c.width, c.height); draw(); setInterval(draw, 100); return c.captureStream(10) }
   const them = window.__pdStage.cur; const me = new Image(); me.src = window.__pdMock.mePhoto
-  return new Promise(r => me.onload = () => { const out = mk(me, 32); const ac = new AudioContext(); const au = ac.createMediaStreamDestination().stream.getAudioTracks()[0]; out.addTrack(au)
-    window.__pdMockApi.setCall({ kind, cam: { stream: out, out, stop() {}, setLevel() {} }, mc: { close() {} }, remote: mk(them) }); r() })
+  // like PixelCam: `stream` is the raw (sharp) camera, `out` is a canvas exactly `blocks` px wide; the PiP must show `out`
+  const exact = (img, bl) => { const t = document.createElement('canvas'); t.width = bl; t.height = Math.round(bl * 4 / 3); const x = t.getContext('2d'); const d = () => x.drawImage(img, 0, 0, t.width, t.height); d(); setInterval(d, 100); return t.captureStream(10) }
+  return new Promise(r => me.onload = () => { const out = exact(me, window.__pdLevelBlocks || 32), raw = mk(me); const ac = new AudioContext(); const au = ac.createMediaStreamDestination().stream.getAudioTracks()[0]; out.addTrack(au)
+    window.__pdMockApi.setCall({ kind, cam: { stream: raw, out, stop() {}, setLevel() {} }, mc: { close() {} }, remote: mk(them) }); r() })
 }, kind)
 
 const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] })
@@ -48,6 +50,7 @@ for (const [sz, w, h] of SIZES) {
     await api(p, 'setRing', [{ dir: 'out', kind: 'video' }]); await p.waitForTimeout(500); await shot(p, `call-request-${sz}`)
     await api(p, 'setRing', [{ dir: 'in', kind: 'video' }]); await p.waitForTimeout(500); await shot(p, `call-incoming-${sz}`)
     await api(p, 'setRing', [null]); await fakeCall(p, 'video'); await p.waitForTimeout(1600); await shot(p, `call-in-${sz}`)
+    console.log('  pip', JSON.stringify(await p.evaluate(() => { const v = document.querySelector('[data-t=pip-video]'); return v && { w: v.videoWidth, h: v.videoHeight, css: Math.round(v.getBoundingClientRect().width), rendering: getComputedStyle(v).imageRendering, label: v.getAttribute('aria-label') } })))
     await api(p, 'setCamErr', ['cam']); await p.waitForTimeout(400); await shot(p, `call-camera-unavailable-${sz}`)
     await p.click('[data-t=hangup]'); await api(p, 'setEnded', [{ kind: 'video', secs: 272 }]); await p.waitForTimeout(400); await shot(p, `call-ended-${sz}`); await p.context().close() }
 }

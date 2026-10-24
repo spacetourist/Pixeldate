@@ -5,6 +5,10 @@ import { Splash } from './Splash'
 import type { Profile } from './net'
 import './styles/index.css'
 // The signup is the first paint; lobby + match load after it (prefetched on idle by Signup).
+// keyboard modality for focus rings (tokens.css): navigation keys turn rings on, any pointer input turns them off
+const KBD = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', 'Enter', ' ', 'Home', 'End', 'PageUp', 'PageDown'])
+addEventListener('keydown', e => { if (KBD.has(e.key)) document.documentElement.dataset.kbd = '' }, true)
+addEventListener('pointerdown', () => { delete document.documentElement.dataset.kbd }, true)
 const App = lazy(() => import('./App'))
 function Root() {
   const [done, setDone] = useState<{ p: Profile; photo: string } | null>(null)

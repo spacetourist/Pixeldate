@@ -60,7 +60,7 @@ function Birthday({ by, bm, onChange }: { by: number; bm: number; onChange: (by:
       ? <div className="readout fx err" role="alert" data-t="under18"><span className="ro"><Icon n="alert" c="var(--error)" s={3} />
           <span><b>You need to be 18 or over to use Pixeldate.</b><span className="help">Your birthday stays on this device.</span></span></span></div>
       : <div className="readout fx" data-t="bday-readout" aria-live="polite">
-          <span className="ro">{age === null ? <b>Pick your birth month</b> : <><b>You are {Math.min(age, AGE_TOP)}{age >= AGE_TOP ? '+' : ''}</b>
+          <span className="ro">{age === null ? <b>Pick your birth month</b> : <><b>You're {Math.min(age, AGE_TOP)}{age >= AGE_TOP ? '+' : ''}</b>
             <span className="chip chip--mint"><Icon n={seasonOf(bm)} c="var(--c-mint)" />{cap(seasonOf(bm))}-born</span></>}</span>
           <span className="label to">Matches see <span data-t="bracket">{br || '—'}</span></span></div>}
     {!minor && <p className="help lockhelp"><Icon n="lock" c="var(--text-muted)" /> Your birth season badge unlocks at Spark as an icebreaker. Year, month and exact age never leave this device.</p>}
@@ -147,7 +147,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
       <div><span className="fl" id="lab-seek">I want to meet</span><Seg label="lab-seek" name="seek" value={seek} onChange={setSeek} opts={[['men', 'Men'], ['women', 'Women']]} /></div>
       <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
       <label className="tick"><input className="vh" type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" />
-        <span className={'check' + (adult ? ' is-on' : '')} data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <Icon n="check" c="var(--edge)" />}</span>I am 18 or over</label>
+        <span className={'check' + (adult ? ' is-on' : '')} data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <Icon n="check" c="var(--edge)" />}</span>I'm 18 or over</label>
     </>
     const ok = !!(name.trim() && photo && okPhoto && adult && bm > 0 && age >= 18)
     foot = next('Continue', ok, finish, 'start')

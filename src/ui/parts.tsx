@@ -3,7 +3,7 @@ import { LEVELS } from '../config'
 import { ICONS, type IconName } from './icons'
 
 /** Level flavour lines (design pack parts.js LV[].d). */
-export const LV_DESC = ['Shapes and colours. Say hi.', 'A smile starts to show.', 'Now it is getting interesting.', 'Almost there. Keep talking.', 'Face to face, no filter.']
+export const LV_DESC = ['Shapes and colours. Say hi.', 'A smile starts to show.', "Now it's getting interesting.", 'Almost there. Keep talking.', 'Face to face, no filter.']
 export const LV_COLOR = (l: number) => `var(--lv-${l})`
 /** Small avatars (≤64px) sit one notch coarser than the stage (design note AVLV). 0 = full. */
 export const AV_BLOCKS = [4, 6, 8, 12, 0]

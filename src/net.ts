@@ -134,7 +134,7 @@ export class Net {
   async joinCode(code: string): Promise<Match> {
     const c = await openConn(this.peer, 'pd-' + code.trim().toLowerCase(), 8000)
     c.send({ t: 'hello', p: wire(this.me) }); const r = await onceData(c, 10000)
-    if (r?.t !== 'ok') { c.close(); throw new Error('They are busy or unavailable') }
+    if (r?.t !== 'ok') { c.close(); throw new Error("They're busy or unavailable") }
     this.busy = true; return { conn: c, them: r.p, peer: c.peer }
   }
   cancel() { this.searching = false }

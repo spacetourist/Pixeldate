@@ -18,6 +18,9 @@ async function run(b, w, h, tag) {
   await p.click('[data-t=next]'); await p.waitForSelector('[data-t=add-selfie]'); await snap('03-signup-photo')
   await p.setInputFiles('[data-t=gallery]', PHOTO); await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]'); await p.waitForSelector('[data-t=mini-5] img')
   await p.waitForTimeout(300); await snap('04-signup-ladder')
+  // GD R3 fix 1: the whole ladder step, actions included, fits the viewport with no scrolling
+  const fold = await p.evaluate(() => { const se = document.scrollingElement, m = document.querySelector('.pmain'), btn = document.querySelector('[data-t=photo-confirm]').getBoundingClientRect(); return { vh: innerHeight, docH: se.scrollHeight, mainScroll: m ? m.scrollHeight - m.clientHeight : 0, btnBottom: Math.round(btn.bottom), hero: Math.round(document.querySelector('.ladder-wrap')?.getBoundingClientRect().width || 0) } })
+  console.log('fold', tag, JSON.stringify(fold), fold.btnBottom <= fold.vh && fold.docH <= fold.vh && fold.mainScroll <= 0 ? 'FITS' : 'SCROLLS')
   await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); await snap('04b-signup-viewer'); await p.click('[data-t=viewer-close]')
   await p.click('[data-t=photo-confirm]'); await p.waitForSelector('[data-t=bday]')
   const pick = async (y, m) => { await p.click(`[data-t=month-${m}]`); await p.$eval('[data-t=year-reel]', (r, y) => r.querySelector('#yr-' + y).click(), y); await p.waitForTimeout(900) }

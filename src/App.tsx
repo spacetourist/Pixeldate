@@ -231,8 +231,10 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const chat = () => { if (!draft.trim()) return; send({ t: 'chat', text: draft }); setMsgs(x => [...x, { from: 'me', text: draft }]); setDraft('') }
   const dropCard = (id: string) => { send({ t: 'card', id }); setMsgs(x => [...x, { from: 'me', card: id }]); setTab('chat') }
 
+  // PiP = the exact outgoing track (already pixelated at the level on this device), never the raw camera: GD R3 fix 3.
+  // It is 112/220px wide, above the 64px small-avatar cut-off, so it shows the stage level unchanged.
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
-  useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? call.cam.stream : null; localV.current.play().catch(() => {}) } }, [call, tab, view])
+  useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? new MediaStream(call.cam.out.getVideoTracks()) : null; localV.current.play().catch(() => {}) } }, [call, tab, view])
 
   const theirAv = useMemo(() => coarse(theirImgs.current[level], AV_BLOCKS[level - 1]), [level, photoV])
   // the photo canvas moves between the stage (WebGL2 when available) and the compact plate (2D); the controller repaints on attach
@@ -338,7 +340,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
             {call.kind !== 'video' && <video ref={remoteV} playsInline data-t="remote-audio" className="hid" />}
             <span className="px">{them}</span></div>
           {call.kind === 'video' && <div className="pip fx">{(camErr === 'cam' || camOff) && <div className="pip-off" data-t="pip-off"><Icon n="cam" c="var(--text-muted)" s={3} /><span>Camera off</span></div>}
-            <video ref={localV} muted playsInline style={camErr === 'cam' || camOff ? { display: 'none' } : undefined} /><span className="chip chip--edge">You · {lv.name}</span></div>}
+            <video ref={localV} muted playsInline data-t="pip-video" aria-label={`You, as ${them} sees you: ${lv.name}${lv.blocks ? ', ' + lv.blocks + ' blocks' : ''}`} style={camErr === 'cam' || camOff ? { display: 'none' } : undefined} /><span className="chip chip--edge">You · {lv.name}</span></div>}
           {camErr === 'cam' && <div className="toastwrap callerr"><div className="toast toast--error fx" role="alert" data-t="cam-error"><span className="ic-wrap"><Icon n="alert" c="var(--error)" s={3} /></span><div><b>Camera unavailable</b>Another app may be using it. You're still on with voice.</div></div></div>}
           <div className="cbar panel panel--stage fx">
             <p className="cnote"><Icon n="lock" c="var(--c-mint)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>

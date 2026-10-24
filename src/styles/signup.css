@@ -133,8 +133,16 @@ html:has(.flow),body:has(.flow){height:auto;overflow:visible}
 @container app (max-width:767px){ .ladder{gap:6px} .ladder figcaption>b{letter-spacing:-.3px;word-spacing:-1.5px} }
 .ladder figure.wait figcaption{opacity:.55}
 .ladder figure.on .lf>span{background:var(--cta)}.ladder figure.on figcaption{color:var(--cta)}
-/* GD R2 fix 2: on desktop the photo is a ~420px square (the biggest thing on screen) with all five thumbnails in one row under it */
-@container app (min-width:1024px){ .ladder-wrap{width:min(100%,420px);gap:16px} }
+/* GD R2 fix 2: on desktop the photo is a ~420px square (the biggest thing on screen) with all five thumbnails in one row under it.
+   GD R3 fix 1: ...and the whole step, buttons included, folds into the viewport. Everything that isn't the square (top bar,
+   two-line title, lede, thumbnail row, actions) is ~590px, so the square takes what's left of the height, capped at 420/480.
+   The thumbnail row keeps the full 420/480 so its captions never collide. */
+@container app (min-width:1024px){
+  .ladder-wrap{width:min(100%,420px);gap:16px}
+  .ladder-wrap .hero-photo{width:min(100%,max(300px,100svh - 590px))}
+  .ladder{margin-bottom:0}
+  .pmain:has(.ladder-wrap) .pfoot{padding:20px 0 24px}
+}
 @container app (min-width:1680px){ .ladder-wrap{width:min(100%,480px)} }
 @media (prefers-reduced-motion:no-preference){
   .ladder figure:not(.wait) img{animation:lf-pop 320ms steps(4,end)}

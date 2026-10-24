@@ -490,3 +490,5 @@ button.tmain{cursor:pointer}
 .toast .tx-x:focus-visible,.toast button.tmain:focus-visible{outline:3px solid var(--focus);outline-offset:2px;clip-path:none}
 }
 @layer screens{ .pmain>.ptoasts{max-width:none;margin:0 0 14px} }
+/* the design's phone top bar holds two 36px proposal buttons (You, Settings); they're not built, so keep its height */
+@layer screens{ .shell--lobby .stop{min-height:68px} }

@@ -28,8 +28,8 @@ s = re.sub(r'(fetchpriority="high">)', r'\1</picture>', s, count=1)
 for n in ('8', '16', '32', '64', 'full'):
     s = s.replace(f'../../assets/photos/juno-{n}.webp"', f'{A}art/ld/juno-{n}.webp" width="480" height="480" decoding="async"')
 # small avatars stay coarse (spec 4): the demo card uses 6-block avatars
-s = s.replace('../../assets/photos/kofi-full.webp"', f'{A}art/ld/kofi-6.webp" width="96" height="96" loading="lazy"')
-s = s.replace('../../assets/photos/rae-6.webp"', f'{A}art/ld/rae-6.webp" width="96" height="96" loading="lazy"')
+s = s.replace('../../assets/photos/kofi-full.webp"', f'{A}art/ld/kofi-6.webp" width="96" height="96"')
+s = s.replace('../../assets/photos/rae-6.webp"', f'{A}art/ld/rae-6.webp" width="96" height="96"')
 # nav + CTAs become real links
 s = s.replace('<span class="lk"><a>How it works</a><a>Question cards</a><a>Safety</a></span>',
   '<span class="lk"><a href="#how">How it works</a><a href="#cards">Question cards</a><a href="#safety">Safety</a></span>')

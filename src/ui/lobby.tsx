@@ -24,7 +24,7 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
       <span className="ri on" aria-current="page"><Icon n="heart" c="var(--cta)" s={3} />Match</span>
       <span className="ri is-off" aria-disabled="true" title="Calls start inside a match"><Icon n="call" s={3} />Call</span>
     </nav>
-    <header className="stop"><span className="logo" style={{ ['--logo' as any]: '28px' }}><Icon n="heart" c="var(--c-coral)" s={4} /><span>pixel<b>date</b></span></span></header>
+    <header className="stop"><span className="logo" style={{ ['--logo' as any]: '28px' }}><Icon n="heart" c="var(--c-coral)" s={3} /><span>pixel<b>date</b></span></span></header>
     <div className="bgart" aria-hidden="true"><picture><source media="(min-width: 768px)" srcSet={`${B}art/landing-hero-wide.webp`} /><img src={`${B}art/lobby-bg-640.webp`} width={1280} height={720} alt="" /></picture></div>
     <main className="smain">
       <Toasts where="page" />

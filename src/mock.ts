@@ -17,7 +17,7 @@ export interface MockCfg {
 }
 
 export async function runMock(cfg: MockCfg, api: any) {
-  if (cfg.scene) { await api.start(cfg.me, cfg.mePhoto); api.setCode('k7q2px'); api.setScreen(cfg.scene); ;(window as any).__pdMockApi = api; return }
+  if (cfg.scene) { await api.start(cfg.me, cfg.mePhoto); api.setCode('k7q2px'); api.setScreen(cfg.scene); ;(window as any).__pdMockApi = api; ;(window as any).__pdMockReady = true; return }
   const handlers: Record<string, ((d: any) => void)[]> = {}
   const emit = (ev: string, d?: any) => (handlers[ev] || []).forEach(f => f(d))
   const themImg = await loadImage(cfg.themPhoto)

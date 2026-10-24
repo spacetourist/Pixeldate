@@ -173,6 +173,10 @@ log('outgoing video track is exactly 8x6 at level 1')
 const pip = await a.evaluate(() => { const v = document.querySelector('[data-t=pip-video]'); const t = v?.srcObject?.getVideoTracks()[0]; return { same: !!t && t === window.__pdCam.out.getVideoTracks()[0], raw: !!t && t === window.__pdCam.stream.getVideoTracks()[0], w: t?.getSettings().width } })
 if (!pip.same || pip.raw) throw 'PiP is not the outgoing track: ' + JSON.stringify(pip)
 log('PiP shows the outgoing track (what they see):', JSON.stringify(pip))
+// GD R4 fix 2: my own preview is mirrored in CSS only; the remote video and the outgoing track are not
+const mir = await a.evaluate(() => { const pv = document.querySelector('[data-t=pip-video]'), rv = [...document.querySelectorAll('video')].find(v => v !== pv); return { pip: getComputedStyle(pv).transform, remote: rv ? getComputedStyle(rv).transform : 'none' } })
+if (mir.pip !== 'matrix(-1, 0, 0, 1, 0, 0)' || /matrix\(-1/.test(mir.remote)) throw 'PiP mirror wrong: ' + JSON.stringify(mir)
+log('self PiP mirrored (CSS only), remote not:', JSON.stringify(mir))
 if (out.w > 32 || (await vr(a)).w > 32 || (!LB && (await vr(b)).w > 32)) throw 'video too detailed'
 // block-content check on the received frame: 4x4 px cells should be uniform
 const uni = await (LB ? a : b).evaluate(() => { const v = document.querySelector('[data-t=remote-video]'); const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; const x = c.getContext('2d'); x.drawImage(v, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let distinct = new Set(); for (let i = 0; i < d.length; i += 4) distinct.add(d[i] >> 3 << 10 | d[i + 1] >> 3 << 5 | d[i + 2] >> 3); return { px: c.width * c.height, colours: distinct.size } })

@@ -263,7 +263,7 @@ h1.px,h2.px{font-weight:400}
 .callui .cname{display:flex;flex-direction:column;gap:6px}
 .callui .idle{align-self:end;display:flex;flex-direction:column;gap:12px}
 .callui .idle .acts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.callui .pip video{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;image-rendering:pixelated}
+.callui .pip video{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;image-rendering:pixelated;transform:scaleX(-1)} /* mirror your own preview only; the outgoing track (cam.out) is untouched */
 .callui .cbtns{grid-template-columns:repeat(3,1fr)}
 .callui .ringcard{padding:calc(var(--edge-w) + 14px);display:flex;flex-direction:column;gap:12px}
 .stage>video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--c-abyss)}
@@ -432,7 +432,8 @@ h1.px,h2.px{font-weight:400}
 .lobbycard .help{margin-top:8px}
 .lobbycard.finding{text-align:center}
 .lobbycard.finding .chip{align-self:center}
-.codeblk{display:grid;grid-template-columns:1fr auto;gap:10px}
+.codeblk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;min-width:0}
+.codeblk .field{min-width:0}.codeblk .field input{width:100%;min-width:0}
 .codeblk .field input{height:52px;padding:0 16px;font:var(--t-body-lg);caret-color:var(--cta);text-transform:uppercase}
 .codeblk .field input::placeholder{text-transform:none}
 .mycode{font:var(--t-title);letter-spacing:.12em;color:var(--cta)}

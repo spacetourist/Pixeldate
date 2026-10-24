@@ -1,7 +1,6 @@
 /* R2 signup: a 4-step split. 1 You · 2 Your photo (+ 2b the ladder) · 3 Birthday · 4 Who you'd like to meet.
    Photos are only ever pixelated on this device; the raw image stays in memory here and is handed to the app. */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import { store, bracketOf, bracketLabel, type Profile, type Gender, type Seek } from '../net'
 import { Icon } from '../ui/parts'
 import type { IconName } from '../ui/icons'
@@ -87,9 +86,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
 
   const go = (n: number) => {
     moved.current = true
-    const doc = document as any
-    if (doc.startViewTransition && !reduceMotion()) doc.startViewTransition(() => flushSync(() => setStep(n)))
-    else setStep(n)
+    setStep(n) // .pbody is keyed by step and plays a short CSS entry (none under reduced motion); no View Transition, so taps are never swallowed mid-animation
   }
   const setPic = (p: string) => { setPhoto(p); setOkPhoto(false); setCtas(false); moved.current = true }
   const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPic(c.toDataURL('image/jpeg', .9)); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
@@ -170,7 +167,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
       <main className="pmain">
         <div className="ptop">{back}<span className="label" data-t="step-label">Step {step} of 4 · {STEPS[step - 1]}</span><span className="sp" /></div>
         <div className="stepper" aria-hidden="true">{[1, 2, 3, 4].map(i => <i key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>
-        <div className="pbody">{body}</div>
+        <div className="pbody" key={step + (photo && step === 2 ? 'b' : '')}>{body}</div>
         <div className={'pfoot ' + footCls}>{foot}</div>
       </main>
     </div>

@@ -26,24 +26,33 @@ async function page(name, iam, seek, age, face) {
   p.on('dialog', d => d.accept()); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
   if (name === 'Sam') await shotV(p, 'v3.6-signup-empty-412')
-  await p.type('[data-t=name]', name); await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
-  await p.waitForSelector('[data-t=reveal-skip]:not(.hid)', { timeout: 10000 }); await p.click('[data-t=reveal-skip]') // skip the onboarding reveal
-  await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]'); await p.click('[data-t=photo-confirm]')
-  await p.click(`[data-t=iam-${iam}]`); await p.click(`[data-t=seek-${seek}]`)
-  await p.waitForSelector('[data-t=mini-5] img'); if ((await p.$$('[data-t=minis] img')).length !== 5) throw '5 minis missing'
+  // R2: the signup is a 4-step split (You · Your photo · Birthday · Who you'd like to meet); each step has its own Continue
+  await p.type('[data-t=name]', name); await p.click(`[data-t=iam-${iam}]`)
   if (!(await p.$eval(`[data-t=iam-${iam}] input`, e => e.checked)) || (await p.$$('[data-t^=iam-].on')).length !== 1) throw 'iam radio state'
+  await p.click('[data-t=next]')
+  await p.waitForSelector('[data-t=add-selfie]'); if (!(await p.$eval('[data-t=next]', e => e.disabled))) throw 'photo step continues without a photo'
+  await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
+  await p.waitForSelector('[data-t=reveal-skip]:not(.hid)', { timeout: 10000 }); await p.click('[data-t=reveal-skip]') // skip the ladder's first pass
+  await p.waitForSelector('.rv-acts:not(.hid) [data-t=photo-confirm]')
+  await p.waitForSelector('[data-t=mini-5] img'); if ((await p.$$('[data-t=minis] img')).length !== 5) throw '5 minis missing'
+  if (name === 'Sam') { await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); const w = await p.$eval('[data-t=viewer] img', e => e.naturalWidth); if (w !== 32) throw 'viewer not 32 blocks: ' + w
+    await shotV(p, 'v3.6-viewer-412', false); await p.click('[aria-label="Next level"]'); if (!(await p.$eval('[data-t=viewer-name]', e => e.textContent)).includes('LV 4')) throw 'viewer next'
+    await p.click('[data-t=viewer-close]'); await sleep(200); if (await p.$('[data-t=viewer]')) throw 'viewer did not close'; log('5 minis; viewer opens at 32 blocks, next works, X closes') }
+  await p.click('[data-t=photo-confirm]'); await p.waitForSelector('[data-t=bday]')
   if (name === 'Sam') { // under-18 block: born this month next year-boundary -> 17
     const now = new Date(), m = now.getMonth() + 2
-    if (m <= 12) { await pickBday(p, now.getFullYear() - 18, m); await p.$eval('[data-t=adult]', e => e.click()); await p.waitForSelector('[data-t=under18]')
-      if (!(await p.$eval('[data-t=start]', e => e.disabled))) throw 'under-18 not blocked'; await p.$eval('[data-t=adult]', e => e.click()); log('under-18 birthday blocks Continue (with 18+ ticked) and shows the message') }
+    if (m <= 12) { await pickBday(p, now.getFullYear() - 18, m); await p.waitForSelector('[data-t=under18]')
+      if (!(await p.$eval('[data-t=next]', e => e.disabled))) throw 'under-18 not blocked'; log('under-18 birthday blocks Continue and shows the message') }
     await shotV(p, 'v3.9-birthday-under18-412', true) }
   await pickBday(p, new Date().getFullYear() - age, 1)
   if (await p.$('[data-t=under18]')) throw 'under18 shown for adult'
-  if (name === 'Sam') { const r = await p.$eval('[data-t=bday-readout]', e => e.textContent); if (!r.includes(age + ' · winter-born') || !r.includes('25–29')) throw 'readout ' + r; log('birthday readout:', r) }
+  if (name === 'Sam') { const r = await p.$eval('[data-t=bday-readout]', e => e.textContent); if (!r.includes('You are ' + age) || !r.includes('Winter-born') || !r.includes('25–29')) throw 'readout ' + r; log('birthday readout:', r) }
+  await p.click('[data-t=next]'); await p.waitForSelector('[data-t=start]')
+  await p.click(`[data-t=seek-${seek}]`)
+  if (!(await p.$eval(`[data-t=seek-${seek}] input`, e => e.checked)) || (await p.$$('[data-t^=seek-].on')).length !== 1) throw 'seek radio state'
+  if (!(await p.$eval('[data-t=start]', e => e.disabled))) throw 'start enabled before 18+ tick'
   await p.$eval('[data-t=adult]', e => e.click())
-  if (name === 'Sam') { await shotV(p, 'v3.6-signup-filled-412'); await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); const w = await p.$eval('[data-t=viewer] img', e => e.naturalWidth); if (w !== 32) throw 'viewer not 32 blocks: ' + w
-    await shotV(p, 'v3.6-viewer-412', false); await p.click('[aria-label="Next level"]'); if (!(await p.$eval('[data-t=viewer-name]', e => e.textContent)).includes('LV 4')) throw 'viewer next'
-    await p.click('[data-t=viewer-close]'); await sleep(200); if (await p.$('[data-t=viewer]')) throw 'viewer did not close'; log('5 minis; viewer opens at 32 blocks, next works, X closes') }
+  if (name === 'Sam') await shotV(p, 'v3.6-signup-filled-412')
   step('filled ' + name); return wrap(p)
 }
 const t = (p, sel) => p.waitForSelector(sel, { timeout: 60000 })

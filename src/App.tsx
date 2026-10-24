@@ -1,7 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { prefs, setPref, saveHist, blockUser, sound, saveProfile, logOut, wipeAll, history, type Hist } from './prefs'
 import type { PageId } from './ui/pages'
-const Pages = lazy(() => import('./ui/pages'))
+// R5: Matches / You / Settings are their own chunk. Once it has loaded it renders directly, without a Suspense
+// boundary: React throttles a boundary's reveal to 300 ms after its fallback, which cost a deep link ~300 ms LCP.
+type PagesT = typeof import('./ui/pages').default
+let PagesC: PagesT | null = null
+export const loadPages = () => import('./ui/pages').then(m => (PagesC = m.default))
+const PagesLazy = lazy(() => loadPages().then(d => ({ default: d })))
+// warm the Matches / You / Settings chunk once the lobby is idle, so the first tap on You or Settings is instant
+const idle = (f: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 4000 }) : setTimeout(f, 2500))
 import type { MediaConnection } from 'peerjs'
 import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
@@ -80,6 +87,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const [tab, setTab] = useState<'profile' | 'chat' | 'call'>('profile'); const [draft, setDraft] = useState('')
   const [answering, setAnswering] = useState<string | null>(null)
   const [view, setView] = useState<'stage' | 'compact'>(prefs.view)
+  useEffect(() => { idle(() => { void loadPages() }) }, [])
   const [page, setPage] = useState<PageId | null>(null); const hist = useRef<Hist | null>(null)
   const theirImgs = useRef<Record<number, HTMLImageElement>>({}); const shown = useRef<HTMLImageElement | null>(null)
   const cv = useRef<HTMLCanvasElement>(null)
@@ -327,7 +335,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const reportBlock = () => { const w = lastWho; if (!w) return; if (st.current.m?.them.uid === w.uid) { setPage(null); doSkip(true) } else blockUser(w) }
   const callNav = () => { if (st.current.m) { setPage(null); setTab('call') } else toast({ id: 'call-info', role: 'info', icon: 'call', t: 'notice-call-info', title: 'Calls start inside a match', body: "Find someone first, then call from the Call tab when you're both ready." }) }
   const turnOn = m ? Object.entries(ans).find(([, a]) => a.them && !a.me)?.[0] : undefined
-  const pagesEl = page ? <Suspense fallback={null}><Pages page={page} go={p => setPage(p)} onCall={callNav} me={me} photo={photo} level={level} reportWho={lastWho}
+  const Pg = PagesC ?? PagesLazy
+  const pagesEl = page ? <Suspense fallback={null}><Pg page={page} go={p => setPage(p)} onCall={callNav} me={me} photo={photo} level={level} reportWho={lastWho}
     current={m ? { name: m.them.name, br: m.them.br, lv: level, pct, av: theirAv, sub: turnOn ? ` · your turn on ${qn(turnOn)}` : '' } : null}
     onOpen={() => setPage(null)} onFind={() => { setPage(null); if (!m && screen === 'lobby') find() }} onSave={onSaveProfile} onView={v => setView(v)}
     onLogout={() => quit(false)} onDelete={() => quit(true)} onBlock={reportBlock} /></Suspense> : null

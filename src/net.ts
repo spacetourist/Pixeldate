@@ -111,15 +111,19 @@ export class Net {
   peer!: Peer; code = ''; busy = false; searching = false
   private slot: Peer | null = null // kept while a match made through it is live
   onIncomingByCode?: (m: Match) => void
+  /** 'retrying' while the signalling server can't be reached (start-up or a dropped link), 'up' once it is. */
+  onStatus?: (s: 'retrying' | 'up') => void
   me: Profile
   constructor(me: Profile) { this.me = me }
   async start() {
     await loadIce()
     for (;;) {
       this.code = Math.random().toString(36).slice(2, 8)
-      try { this.peer = await openPeer('pd-' + this.code); break } catch { await sleep(500) }
+      try { this.peer = await openPeer('pd-' + this.code); break } catch { this.onStatus?.('retrying'); await sleep(500) }
     }
-    this.peer.on('disconnected', () => { try { this.peer.reconnect() } catch {} })
+    this.onStatus?.('up')
+    this.peer.on('disconnected', () => { this.onStatus?.('retrying'); try { this.peer.reconnect() } catch {} })
+    this.peer.on('open', () => this.onStatus?.('up'))
     this.peer.on('connection', async c => {
       // direct "join with a code"
       c.on('open', async () => {
@@ -132,7 +136,7 @@ export class Net {
     })
   }
   async joinCode(code: string): Promise<Match> {
-    const c = await openConn(this.peer, 'pd-' + code.trim().toLowerCase(), 8000)
+    const c = await openConn(this.peer, 'pd-' + code.replace(/[^a-z0-9]/gi, '').toLowerCase(), 8000)
     c.send({ t: 'hello', p: wire(this.me) }); const r = await onceData(c, 10000)
     if (r?.t !== 'ok') { c.close(); throw new Error("They're busy or unavailable") }
     this.busy = true; return { conn: c, them: r.p, peer: c.peer }

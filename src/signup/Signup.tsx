@@ -5,6 +5,7 @@ import { store, bracketOf, bracketLabel, type Profile, type Gender, type Seek } 
 import { Icon } from '../ui/parts'
 import type { IconName } from '../ui/icons'
 import { Ladder } from './Ladder'
+import { toast, dismiss, Toasts } from '../ui/toast'
 import { AGE_TOP, EDGES, ageFrom, reduceMotion, seasonOf, snapRange } from './shared'
 
 const B = import.meta.env.BASE_URL
@@ -88,10 +89,10 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
     moved.current = true
     setStep(n) // .pbody is keyed by step and plays a short CSS entry (none under reduced motion); no View Transition, so taps are never swallowed mid-animation
   }
-  const setPic = (p: string) => { setPhoto(p); setOkPhoto(false); setCtas(false); moved.current = true }
+  const setPic = (p: string) => { dismiss('cam'); setPhoto(p); setOkPhoto(false); setCtas(false); moved.current = true }
   const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPic(c.toDataURL('image/jpeg', .9)); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPic(String(r.result)); r.readAsDataURL(f) } }
-  const openCam = async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera available. Try Gallery instead.') } }
+  const openCam = async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { toast({ id: 'cam', role: 'error', icon: 'cam', t: 'notice-cam', title: 'Camera unavailable', body: 'Another app may be using it, or access is blocked. Try Gallery instead.' }) } }
   const minor = bm > 0 && age < 18
   const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }
 
@@ -167,6 +168,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
       <main className="pmain">
         <div className="ptop">{back}<span className="label" data-t="step-label">Step {step} of 4 · {STEPS[step - 1]}</span><span className="sp" /></div>
         <div className="stepper" aria-hidden="true">{[1, 2, 3, 4].map(i => <i key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>
+        <Toasts where="page" cls="ptoasts" />
         <div className="pbody" key={step + (photo && step === 2 ? 'b' : '')}>{body}</div>
         <div className={'pfoot ' + footCls}>{foot}</div>
       </main>

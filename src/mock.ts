@@ -12,9 +12,12 @@ export interface MockCfg {
   level?: number; pct?: number; tab?: 'profile' | 'chat' | 'call'; view?: 'stage' | 'compact'
   season?: 'winter' | 'spring' | 'summer' | 'autumn'
   script?: 'chat' | 'empty'
+  /** lobby (07) / finding (08) instead of a match; `them` is not needed */
+  scene?: 'lobby' | 'finding'
 }
 
 export async function runMock(cfg: MockCfg, api: any) {
+  if (cfg.scene) { await api.start(cfg.me, cfg.mePhoto); api.setCode('k7q2px'); api.setScreen(cfg.scene); ;(window as any).__pdMockApi = api; return }
   const handlers: Record<string, ((d: any) => void)[]> = {}
   const emit = (ev: string, d?: any) => (handlers[ev] || []).forEach(f => f(d))
   const themImg = await loadImage(cfg.themPhoto)

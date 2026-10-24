@@ -5,30 +5,32 @@ import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
 import { Stage } from './stage'
 import { Burst, TickMeter, useLvClock, LvMeter, RM } from './ui/moments'
-import { AGE_TOP, seasonOf, type Season } from './signup/shared'
+import { seasonOf, type Season } from './signup/shared'
 import { Icon, Hp, MeterHead, LevelMap, Av, LvBadge, LV_DESC, LV_COLOR, AV_BLOCKS, coarse } from './ui/parts'
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
 type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
 import { Net, block, bracketLabel, type Profile, type Match } from './net'
+import { toast, dismiss, clearToasts, Toast, Toasts } from './ui/toast'
+import { Lobby } from './ui/lobby'
 
-const B = import.meta.env.BASE_URL
 const deck: QuestionSource = localDeck
-const Ic = ({ n, s = 16 }: { n: string; s?: number }) => <i className="ic" style={{ width: s * 2, height: s * 2, WebkitMaskImage: `url(${B}px/icons/${s}/${n}.svg)`, maskImage: `url(${B}px/icons/${s}/${n}.svg)` }} />
 /** Block button hidden for now (Callum); logic (block(), doSkip(true)) stays. */
 const SHOW_BLOCK = false
 const qn = (id: string) => 'Q' + (cardById(id)?.index ?? '')
-const AV = (k: 'a' | 'b' | 'c', big = false) => `${B}px/hero/avatar-${k}-${big ? '32' : '18'}@2x.png`
 // hidden dev tools (level-skip request): ?dev=1 (remembered for the session) or long-press the level badge
 if (/[?&]dev=1/.test(location.search)) sessionStorage.setItem('pd-dev', '1')
 const isDev = () => sessionStorage.getItem('pd-dev') === '1'
 const NoEntry = () => <svg className="noentry" viewBox="0 0 14 14" width={28} height={28} shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 0h1v1h-1zM7 0h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 1h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM1 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM1 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM12 6h1v1h-1zM13 6h1v1h-1zM0 7h1v1h-1zM1 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM8 7h1v1h-1zM12 7h1v1h-1zM13 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM1 9h1v1h-1zM2 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM11 9h1v1h-1zM12 9h1v1h-1zM1 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM5 11h1v1h-1zM8 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM8 12h1v1h-1zM9 12h1v1h-1zM10 12h1v1h-1zM6 13h1v1h-1zM7 13h1v1h-1z" /></svg>
+/** Lobby/finding notices after a match ends (design 08b/08c): title, body while searching again, icon, role. */
+const NOTICE = {
+  left: ['They left the match.', 'Finding someone new.', 'plug', 'warn'],
+  moved: ['They moved on.', 'Finding someone new.', 'skip', 'warn'],
+  skipped: ['Skipped.', 'Finding someone new.', 'skip', 'turn'],
+  blocked: ['Blocked.', 'Finding someone new.', 'block', 'error'],
+} as const
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string; pair?: string }
 type Ans = Record<string, { me?: string; them?: string }>
-
-function Meter({ level, pct }: { level: number; pct: number }) {
-  return <div className="px-meter">{LEVELS.map((_, i) => i + 1 < level || level === 5 ? <i key={i} className="is-full" /> : i + 1 === level ? <i key={i} style={{ ['--f' as any]: Math.floor(pct / 10) }} /> : <i key={i} />)}</div>
-}
 
 /** Meter that ticks up one art px (10%) at a time from `from` to `to` after the card flip. */
 /** Level-up (motion/levelup.png, 2000 ms) and full reveal (motion/reveal.png, 2400 ms). The stage itself is the hero:
@@ -64,7 +66,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const [me, setMe] = useState<Profile | null>(null); const [photo, setPhoto] = useState<HTMLImageElement | null>(null)
   const net = useRef<Net | null>(null); const [code, setCode] = useState('')
   const [screen, setScreen] = useState<'boot' | 'lobby' | 'finding' | 'match'>('boot')
-  const [notice, setNotice] = useState(''); const [joinCode, setJoinCode] = useState('')
+  const [joinCode, setJoinCode] = useState(''); const [joining, setJoining] = useState(false)
   const [m, setM] = useState<Match | null>(null)
   const skip = useRef(new Set<string>())
 
@@ -81,8 +83,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const [ring, setRing] = useState<{ dir: 'in' | 'out'; kind: Kind } | null>(null); const [muted, setMuted] = useState(false); const [camOff, setCamOff] = useState(false)
   const ready = useRef<{ cam: Media; kind: Kind } | null>(null) // media grabbed on accept, used when their call arrives
   const [dev, setDev] = useState(isDev); const matchedAt = useRef(''); const lp = useRef(0) // long-press on the level badge toggles dev tools
-  const myAv = useMemo(() => photo ? pixelatePhoto(photo, 1) : AV('a'), [photo])
-  const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
+    const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
   const [themSeason, setThemSeason] = useState<Season | null>(null); const seasonSent = useRef(false)
   const [readyOpen, setReadyOpen] = useState(false); const [lvup, setLvup] = useState<{ from: number; to: number } | null>(null); const prevLv = useRef(1); const lvCv = useRef<HTMLCanvasElement>(null); const [photoV, setPhotoV] = useState(0)
   // Chat log sticks to the newest message unless the reader has scrolled up (>80px from the bottom).
@@ -90,7 +91,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const onLogScroll = () => { const l = logEl.current; if (l) stick.current = l.scrollHeight - l.scrollTop - l.clientHeight < 80 }
   useLayoutEffect(() => { const l = logEl.current; if (l && stick.current) l.scrollTop = l.scrollHeight }, [msgs, tab, view])
   const S = useMemo(() => new Stage(), []); const [glKey, setGlKey] = useState(0); S.onBroken = () => setGlKey(k => k + 1)
-  const [callT, setCallT] = useState(0); const [camErr, setCamErr] = useState<'' | 'cam' | 'mic'>(''); const [ended, setEnded] = useState<{ kind: Kind; secs: number } | null>(null)
+  const [callT, setCallT] = useState(0); const [camErr, setCamErr] = useState<'' | 'cam' | 'mic'>(''); const [camTxOff, setCamTxOff] = useState(false); const [ended, setEnded] = useState<{ kind: Kind; secs: number } | null>(null)
   const [evt, setEvt] = useState<{ id: string; kind: 'turn' | 'pair'; from: number } | null>(null); const [unread, setUnread] = useState(0)
   const st = useRef({ level, taps, pct, call, m, ring, skipReq, ans, tab }); st.current = { level, taps, pct, call, m, ring, skipReq, ans, tab }
 
@@ -107,7 +108,11 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
 
   const start = async (p: Profile, ph: string) => {
     setMe(p); setPhoto(await loadImage(ph)); setScreen('lobby')
-    const n = new Net(p); net.current = n; await n.start(); setCode(n.code)
+    const n = new Net(p); net.current = n
+    // signalling unreachable for more than 1.5 s: one sticky notice, cleared when it's back (the Net retries forever)
+    let slow = 0; n.onStatus = s => { clearTimeout(slow); if (s === 'up') { dismiss('conn'); return }
+      slow = window.setTimeout(() => toast({ id: 'conn', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'plug', t: 'notice-noconn', title: "Couldn't connect", body: "Check your connection. We'll keep trying." }), 1500) }
+    await n.start(); setCode(n.code)
     n.onIncomingByCode = mm => beginMatch(mm)
     n.peer.on('call', async mc => {
       if (mc.peer !== st.current.m?.peer) { mc.close(); return }
@@ -128,7 +133,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     }
   }
   const hookCall = (cam: Media, mc: MediaConnection, kind: Kind) => {
-    setRing(null); setMuted(false); setCamOff(false); setEnded(null); setTab('call')
+    setRing(null); setMuted(false); setCamOff(false); setCamTxOff(false); setEnded(null); setTab('call')
     setCall({ cam, mc, kind }); mc.on('stream', s => setCall(c => c && { ...c, remote: s })); mc.on('close', () => endCall(false))
   }
   const requestCall = (kind: Kind) => { setEnded(null); setCamErr(''); setRing({ dir: 'out', kind }); send({ t: 'callreq', kind }) }
@@ -141,7 +146,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const declineCall = () => { setRing(null); send({ t: 'callans', ok: false }) }
   const onCallAns = async (ok: boolean) => {
     const r = st.current.ring; if (r?.dir !== 'out') return
-    if (!ok) { setRing(null); setMsgs(x => [...x, { from: 'sys', text: 'Call declined' }]); return }
+    if (!ok) { setRing(null); setMsgs(x => [...x, { from: 'sys', text: 'Call declined' }]); toast({ id: 'call-no', where: 'match', role: 'warn', icon: 'call', t: 'notice-call-declined', title: `${st.current.m?.them.name ?? 'They'} declined the call`, body: 'You can keep chatting.' }); return }
     const cam = await getCam(r.kind); if (!cam || !st.current.m) { setRing(null); send({ t: 'endcall' }); return }
     cam.setLevel(st.current.level); hookCall(cam, net.current!.peer.call(st.current.m.peer, cam.out, { metadata: { kind: r.kind } }), r.kind)
   }
@@ -151,28 +156,41 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { call?.cam.setLevel(level) }, [level, call])
   const callSecs = useRef(0)
   useEffect(() => { if (!call?.remote) return; const t0 = Date.now(); callSecs.current = 0; setCallT(0); const i = setInterval(() => { callSecs.current = Math.floor((Date.now() - t0) / 1000); setCallT(callSecs.current) }, 1000); return () => clearInterval(i) }, [call?.remote])
-  useEffect(() => { if (camErr !== 'mic') return; const t = setTimeout(() => setCamErr(''), 6000); return () => clearTimeout(t) }, [camErr])
+  useEffect(() => { if (camErr !== 'mic') return; setCamErr('')
+    toast({ id: 'mic', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'mic', t: 'mic-error', title: 'Microphone unavailable', body: "Another app may be using it, or access is blocked. The call didn't start." }) }, [camErr])
+  // offline / back online, anywhere in the app
+  useEffect(() => {
+    const off = () => toast({ id: 'net', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'plug', t: 'notice-offline', title: "You're offline", body: "Matching and chat pause until you're back." })
+    const on = () => { dismiss('net'); toast({ id: 'net-on', where: st.current.m ? 'match' : 'page', role: 'success', icon: 'check', t: 'notice-online', title: 'Back online' }) }
+    if (!navigator.onLine) off(); addEventListener('offline', off); addEventListener('online', on)
+    return () => { removeEventListener('offline', off); removeEventListener('online', on) }
+  }, [])
 
   const find = async () => {
-    setScreen('finding'); setNotice('')
+    setScreen('finding')
     const mm = await net.current!.find(skip.current)
     if (mm) beginMatch(mm); else setScreen(s => s === 'finding' ? 'lobby' : s)
   }
   const doJoin = async () => {
-    try { setNotice('Connecting…'); beginMatch(await net.current!.joinCode(joinCode)) } catch (e: any) { setNotice(e.message || 'Could not connect') }
+    if (joining) return; setJoining(true); dismiss('join')
+    try { beginMatch(await net.current!.joinCode(joinCode)) } catch (e: any) {
+      const busy = /busy/.test(e?.message || '')
+      toast({ id: 'join', role: busy ? 'warn' : 'error', icon: 'plug', t: 'notice-join', title: busy ? "They're busy or unavailable" : "Couldn't connect", body: busy ? 'Try again in a moment, or find someone new.' : 'Check the code and try again.' })
+    } finally { setJoining(false) }
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
     setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); setEnded(null); setCamErr(''); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
-    setM(mm); setScreen('match')
-    mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('They left the match.'))
+    setM(mm); setScreen('match'); clearToasts('page'); clearToasts('match')
+    mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('left', true))
   }
-  const leave = (why: string, again = false) => {
+  const leave = (why: keyof typeof NOTICE, again = false) => {
     endCall(false); const c = st.current.m; if (!c) return; st.current.m = null; setM(null)
     setTimeout(() => { try { c.conn.close() } catch {} }, 300); net.current!.busy = false; net.current!.release()
-    setNotice(why); setScreen('lobby'); if (again) setTimeout(find, 50)
+    clearToasts('match'); clearToasts('call'); const n = NOTICE[why]; toast({ id: 'left', role: n[3], icon: n[2], t: 'notice-' + why, title: n[0], body: again ? n[1] : undefined })
+    setScreen('lobby'); if (again) setTimeout(find, 50)
   }
-  const doSkip = (blk = false) => { const t = st.current.m?.them; if (!t) return; if (blk) block(t.uid); skip.current.add(t.uid); send({ t: 'skip' }); leave(blk ? 'Blocked. Finding someone new.' : 'Skipped. Finding someone new.', true) }
+  const doSkip = (blk = false) => { const t = st.current.m?.them; if (!t) return; if (blk) block(t.uid); skip.current.add(t.uid); send({ t: 'skip' }); leave(blk ? 'blocked' : 'skipped', true) }
 
   useEffect(() => { if (m) sendPhoto(level) }, [m, level])
   // meter: time together
@@ -202,9 +220,9 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
       case 'season': if (['winter', 'spring', 'summer', 'autumn'].includes(d.s)) setThemSeason(d.s); break
       case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name} lowered to ${LEVELS[d.level - 1].name}` }]); break
       case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break
-      case 'skip': leave('They moved on. Finding someone new.', true); break
+      case 'skip': leave('moved', true); break
       case 'skipreq': if (DEV_SKIP_STAGE && d.level === s.level && s.level < 5) setSkip('in'); break
-      case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) setMsgs(x => [...x, { from: 'sys', text: 'Skip declined' }]); break
+      case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) { setMsgs(x => [...x, { from: 'sys', text: 'Skip declined' }]); toast({ id: 'skip-no', where: 'match', role: 'warn', icon: 'skip', t: 'notice-skip-declined', title: `${s.m?.them.name} said not yet`, body: 'You stay at this level.' }) } break
       case 'endcall': endCall(false); break
       case 'callreq': if (st.current.call) send({ t: 'callans', ok: false }); else setRing({ dir: 'in', kind: d.kind === 'voice' ? 'voice' : 'video' }); break
       case 'callcancel': setRing(r => r?.dir === 'in' ? null : r); break
@@ -236,13 +254,14 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? new MediaStream(call.cam.out.getVideoTracks()) : null; localV.current.play().catch(() => {}) } }, [call, tab, view])
 
+  const myAv = useMemo(() => coarse(photo ?? undefined, AV_BLOCKS[level - 1]), [photo, level])
   const theirAv = useMemo(() => coarse(theirImgs.current[level], AV_BLOCKS[level - 1]), [level, photoV])
   // the photo canvas moves between the stage (WebGL2 when available) and the compact plate (2D); the controller repaints on attach
   const attachCv = useCallback((c: HTMLCanvasElement | null) => { (cv as any).current = c; S.attach(c, view === 'stage') }, [view, glKey])
   useEffect(() => { S.setClarity(level === 5 ? 1 : Math.min(1, pct / 100)) }, [pct, level])
   useEffect(() => { const mk = (window as any).__pdMock; if (mk) import('./mock').then(x => x.runMock(mk, mockApi.current)) }, [])
   const mockApi = useRef<any>(null)
-  mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup, setTaps, setReadyOpen, setRing, setCall, setEnded, setCamErr, raise,
+  mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setScreen, setCode, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup, setTaps, setReadyOpen, setRing, setCall, setEnded, setCamErr, raise,
     jump: (l: number) => { prevLv.current = l; setLevel(l); setPct(0) } }
   useEffect(() => { if (initial) start(initial.p, initial.photo) }, [])
   if (screen === 'boot' || !me) return null
@@ -311,7 +330,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
           <button className={view === 'compact' ? 'on' : ''} aria-pressed={view === 'compact'} data-t="view-compact" onClick={() => setViewP('compact')} title="Compact view"><Icon n="compact" /><em>Compact</em></button>
         </div>
         <button className="btn fx btn--secondary btn--sm" data-t="skip" onClick={() => doSkip()}><Icon n="skip" />Skip</button>
-        {SHOW_BLOCK && <button className="btn fx btn--ghost btn--icon btn--sm" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => confirm(`Block ${them} and never match again?`) && doSkip(true)}><NoEntry /></button>}
+        {SHOW_BLOCK && <button className="btn fx btn--ghost btn--icon btn--sm" title={`Block ${them}`} aria-label={`Block ${them}`} data-t="block" onClick={() => doSkip(true)}><NoEntry /></button>}
       </header>
       <section className="hud" aria-label={`${them} · level`}>
         <div className="cab-photo">{view === 'compact' && photoCanvas}
@@ -341,7 +360,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
             <span className="px">{them}</span></div>
           {call.kind === 'video' && <div className="pip fx">{(camErr === 'cam' || camOff) && <div className="pip-off" data-t="pip-off"><Icon n="cam" c="var(--text-muted)" s={3} /><span>Camera off</span></div>}
             <video ref={localV} muted playsInline data-t="pip-video" aria-label={`You, as ${them} sees you: ${lv.name}${lv.blocks ? ', ' + lv.blocks + ' blocks' : ''}`} style={camErr === 'cam' || camOff ? { display: 'none' } : undefined} /><span className="chip chip--edge">You · {lv.name}</span></div>}
-          {camErr === 'cam' && <div className="toastwrap callerr"><div className="toast toast--error fx" role="alert" data-t="cam-error"><span className="ic-wrap"><Icon n="alert" c="var(--error)" s={3} /></span><div><b>Camera unavailable</b>Another app may be using it. You're still on with voice.</div></div></div>}
+          {camErr === 'cam' && !camTxOff && <div className="toastwrap callerr"><Toast it={{ id: 'cam', role: 'error', icon: 'cam', t: 'cam-error', title: 'Camera unavailable', body: "Another app may be using it. You're still on with voice." }} onDismiss={() => setCamTxOff(true)} /></div>}
           <div className="cbar panel panel--stage fx">
             <p className="cnote"><Icon n="lock" c="var(--c-mint)" /> Pixelated on your phone before it's sent: {them} sees you at {lv.name}. They accept first.</p>
             <div className="cbtns">
@@ -399,14 +418,12 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
           <Icon n={t === 'profile' ? 'heart' : t} s={3} />{t === 'profile' ? 'Match' : t === 'chat' ? 'Chat' : 'Call'}{t === 'chat' && unread > 0 && tab !== 'chat' && <span className="badge" data-t="unread">{unread}</span>}</button>)}
       </nav>
     </div>
-    <div className="toastwrap" aria-live="polite">
-      {camErr === 'mic' && <div className="toast fx toast--error" role="alert" data-t="mic-error"><span className="ic-wrap"><Icon n="alert" c="var(--error)" s={3} /></span><span><b>Microphone unavailable</b>Another app may be using it. The call didn't start.</span></div>}
-      {call && tab !== 'call' && <button className="toast fx toast--success" data-t="to-call" onClick={() => go('call')}><span className="ic-wrap"><Icon n="call" c="var(--c-mint)" /></span><span><b>In call with {them}</b>Open call</span></button>}
-      {skipReq === 'in' && DEV_SKIP_STAGE && dev && <div className="toast fx toast--warn" data-t="skip-in"><span><b>{them} wants to skip to {nx?.name}</b>Dev tool</span>
-        <span className="acts"><button className="btn fx btn--sm" data-t="skip-accept" onClick={() => ansSkip(true)}>Accept</button><button className="btn fx btn--ghost btn--sm" data-t="skip-decline" onClick={() => ansSkip(false)}>Decline</button></span></div>}
-      {evt?.kind === 'turn' && <button className="toast fx toast--turn" data-t="ans-turn" onClick={() => { setEvt(null); setTab('profile'); setAnswering(evt.id) }}>
-        <span className="ic-wrap"><Icon n="cards" c="var(--c-mint)" /></span><span><b>{them} answered, your turn</b>{qn(evt.id)} · {cardById(evt.id)?.text}</span></button>}
-    </div>
+    <Toasts where="match" cls="toastwrap" extra={<>
+      {call && tab !== 'call' && <Toast it={{ id: 'to-call', role: 'success', icon: 'call', t: 'to-call', title: `In call with ${them}`, body: 'Open call', onClick: () => go('call') }} />}
+      {skipReq === 'in' && DEV_SKIP_STAGE && dev && <Toast it={{ id: 'skip-in', role: 'warn', icon: 'skip', t: 'skip-in', title: `${them} wants to skip to ${nx?.name}`, body: 'Dev tool',
+        acts: <><button className="btn fx btn--sm" data-t="skip-accept" onClick={() => ansSkip(true)}>Accept</button><button className="btn fx btn--ghost btn--sm" data-t="skip-decline" onClick={() => ansSkip(false)}>Decline</button></> }} />}
+      {evt?.kind === 'turn' && <Toast it={{ id: 'ans-turn', role: 'turn', icon: 'cards', t: 'ans-turn', title: `${them} answered, your turn`, body: `${qn(evt.id)} · ${cardById(evt.id)?.text}`, onClick: () => { setEvt(null); setTab('profile'); setAnswering(evt.id) } }} />}
+    </>} />
     {ring?.dir === 'in' && <div className="layer" data-t="ring-in" role="dialog" aria-modal="true" aria-label={`Incoming ${ring.kind} call`}>
       <div className="modal fx"><div className="ringing ring-av"><Av src={theirAv} level={level} size={96} /></div>
         <p className="eyebrow"><Icon n={ring.kind === 'video' ? 'cam' : 'call'} c="var(--c-mint)" /><span style={{ color: 'var(--c-mint)' }}>Incoming · {ring.kind}</span></p><h2 className="ring-t">{them} wants a {ring.kind} call</h2>
@@ -433,26 +450,6 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     <p className="sr-only" role="status" aria-live="polite" data-t="lv-live">{lvup ? `Level ${lvup.to}, ${LEVELS[lvup.to - 1].name}. ${LEVELS[lvup.to - 1].blocks ? LEVELS[lvup.to - 1].blocks + ' blocks.' : 'Full photo.'}` : ''}</p>
   </div>
 
-  return <div className="legacy"><div className="app px">
-    <div className="screen scroll home">
-      <header className="bar"><img src={`${B}px/logo/logo-2.svg`} alt="pixeldate" /><img className="av" src={myAv} alt="" /></header>
-      <div className="stage">
-        <img src={`${B}px/hero/hero-dusk@2x.png`} width={390} height={300} alt="" />
-        <span className="px-frame px-chip chip"><Ic n="heart" s={8} /> {me!.seek === 'everyone' ? 'EVERYONE' : me!.seek.toUpperCase()} · {me!.min}–{me!.max >= AGE_TOP ? AGE_TOP + '+' : me!.max}</span>
-        {screen === 'finding' && <div className="sprite" data-t="finding" />}
-      </div>
-      <div className="copy">{screen === 'finding' ? <><h1 className="h1">Finding someone…</h1><p className="read m">Hang tight. As soon as someone is free, you'll both start as Strangers.</p></>
-        : <><h1 className="h1 hi">Hi {me!.name}, ready to meet?</h1><p className="read m">We'll pair you with someone at random. You both start as Strangers: 8 blocks.</p></>}</div>
-      {notice && <p className="px-label px-coral-l">{notice.toUpperCase()}</p>}
-      {screen === 'finding' ? <button className="px-frame px-btn big" data-t="cancel" onClick={() => { net.current!.cancel(); setScreen('lobby') }}><span className="px-btn__label">Cancel</span></button>
-        : <button className="px-frame px-btn big" data-t="find" disabled={!code} onClick={find}><Ic n="matches" /><span className="px-btn__label">{code ? 'Find someone' : 'Connecting…'}</span></button>}
-      <div className="ladder"><div className="mtop"><span className="px-label-b px-cream">STRANGER</span><span className="px-label">LV 1 OF 5</span></div><Meter level={1} pct={0} /></div>
-      <div className="px-frame px-card codecard">
-        <p className="px-label">MEETING A FRIEND? <b className="px-cream" data-t="code">{code ? code.toUpperCase() : '…'}</b></p>
-        <div className="ansrow"><input className="px-frame px-input fld" value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Friend's code" data-t="joincode" />
-          <button className="px-frame px-btn-small join" onClick={doJoin} data-t="join">JOIN</button></div>
-      </div>
-      <p className="px-label safe"><Ic n="lock" s={8} /> 18+ · SKIP OR BLOCK ANYTIME</p>
-    </div>
-  </div></div>
+  return <Lobby me={me} photo={photo} code={code} finding={screen === 'finding'} joinCode={joinCode} setJoinCode={setJoinCode} joining={joining}
+    onFind={find} onCancel={() => { net.current!.cancel(); dismiss('left'); setScreen('lobby') }} onJoin={doJoin} />
 }

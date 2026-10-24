@@ -3,18 +3,16 @@ import type { MediaConnection } from 'peerjs'
 import { LEVELS, METER, DEV_SKIP_STAGE } from './config'
 import { localDeck, cardById, type QuestionSource } from './deck'
 import { pixelatePhoto, loadImage, animateReveal } from './pixel'
-import { mountReveal } from './reveal'
+import { AGE_TOP, seasonOf, type Season } from './signup/shared'
 import { Icon, Hp, MeterHead, LevelMap, Av, LvBadge, LV_DESC, LV_COLOR, AV_BLOCKS, coarse } from './ui/parts'
 type Kind = 'voice' | 'video'
 /** What we send on a call: pixelated video + mic, or mic only. */
 type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void; stop(): void }
-import { Net, block, store, bracketOf, bracketLabel, type Profile, type Gender, type Seek, type Match } from './net'
+import { Net, block, bracketLabel, type Profile, type Match } from './net'
 
 const B = import.meta.env.BASE_URL
 const deck: QuestionSource = localDeck
 const Ic = ({ n, s = 16 }: { n: string; s?: number }) => <i className="ic" style={{ width: s * 2, height: s * 2, WebkitMaskImage: `url(${B}px/icons/${s}/${n}.svg)`, maskImage: `url(${B}px/icons/${s}/${n}.svg)` }} />
-// per tab, so two tabs in one browser are different people
-const uid = () => { let u = sessionStorage.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); sessionStorage.setItem('pd-uid', u) } return u }
 /** Block button hidden for now (Callum); logic (block(), doSkip(true)) stays. */
 const SHOW_BLOCK = false
 const qn = (id: string) => 'Q' + (cardById(id)?.index ?? '')
@@ -22,43 +20,7 @@ const AV = (k: 'a' | 'b' | 'c', big = false) => `${B}px/hero/avatar-${k}-${big ?
 // hidden dev tools (level-skip request): ?dev=1 (remembered for the session) or long-press the level badge
 if (/[?&]dev=1/.test(location.search)) sessionStorage.setItem('pd-dev', '1')
 const isDev = () => sessionStorage.getItem('pd-dev') === '1'
-/** Boot splash: heart resolves through logo-1..5 (200 ms steps), holds to 1200 ms, steps out by 1400 ms. */
-function Splash({ ready }: { ready: boolean }) {
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-  const [t, setT] = useState(reduce ? 4 : 0); const [out, setOut] = useState(false); const [gone, setGone] = useState(false)
-  const r = useRef(ready); r.current = ready
-  useEffect(() => {
-    if (reduce) { const a = setTimeout(() => setOut(true), 600), b = setTimeout(() => setGone(true), 800); return () => { clearTimeout(a); clearTimeout(b) } }
-    const t0 = performance.now(); let id = 0
-    const tick = () => { const e = performance.now() - t0; setT(Math.floor(e / 200)); if (e >= 1200 && r.current) { setOut(true); setTimeout(() => setGone(true), 200); return } id = window.setTimeout(tick, 50) }
-    tick(); return () => clearTimeout(id)
-  }, [])
-  if (gone) return null
-  const f = Math.min(t, 4), lit = t <= 4 ? t + 1 : (t % 5) + 1 // after 1200 ms while not ready: loop the loader
-  return <div className={`splash dither ${out ? 'out' : ''}`} data-t="splash" data-frame={f + 1}>
-    {[1, 2, 3, 4, 5].map(n => <img key={n} src={`${B}px/logo/logo-${n}.svg`} width={244} height={36} style={{ display: n === f + 1 ? 'block' : 'none' }} alt={n === 5 ? 'pixeldate' : ''} />)}
-    <p className="px-label mauve">GET CLOSER TO SEE CLEARER</p>
-    <div className="load">{[1, 2, 3, 4, 5].map(n => <i key={n} className={n <= lit ? 'on' : ''} />)}</div>
-  </div>
-}
 const NoEntry = () => <svg className="noentry" viewBox="0 0 14 14" width={28} height={28} shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 0h1v1h-1zM7 0h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM10 1h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM1 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM1 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM12 6h1v1h-1zM13 6h1v1h-1zM0 7h1v1h-1zM1 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM8 7h1v1h-1zM12 7h1v1h-1zM13 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM1 9h1v1h-1zM2 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM11 9h1v1h-1zM12 9h1v1h-1zM1 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM5 11h1v1h-1zM8 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM8 12h1v1h-1zM9 12h1v1h-1zM10 12h1v1h-1zM6 13h1v1h-1zM7 13h1v1h-1z" /></svg>
-/** "This is how they'll meet you": plays the 5-level reveal for a freshly picked photo (local only). */
-function PhotoReveal({ src, onConfirm, onChange }: { src: string; onConfirm: () => void; onChange: () => void }) {
-  const box = useRef<HTMLDivElement>(null); const [ready, setReady] = useState(false)
-  useEffect(() => { let off = () => {}, dead = false; setReady(false)
-    loadImage(src).then(img => { if (!dead && box.current) off = mountReveal(box.current, img, setReady) })
-    return () => { dead = true; off() } }, [src])
-  return <div className="reveal">
-    <header className="rv-bar"><span className="kicker">CREATE YOUR PROFILE</span><span className="steps" aria-label="Step 2 of 3"><i className="on" /><i className="on" /><i /></span></header>
-    <div className="copy"><h1 className="h1">This is how they'll meet you.</h1><p className="read m">Every answer you share together brings you into focus.</p></div>
-    <div ref={box} className="rv-box" data-t="reveal" />
-    <div className={`rv-acts ${ready ? '' : 'hid'}`}>
-      <button className="px-frame px-btn" data-t="photo-confirm" onClick={onConfirm}><span className="px-btn__label">Looks good, continue</span></button>
-      <button className="ghost" type="button" data-t="photo-change" onClick={onChange}>CHANGE PHOTO</button></div>
-  </div>
-}
-/** Inline pixel tick: no mask-image fetch, so it paints in the same frame as the state change (Android Chrome bug). */
-const TickMark = () => <svg className="tickmark" width="16" height="16" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M6 1h1v2H6zM5 3h1v1H5zM4 4h1v1H4zM3 5h1v1H3zM1 3h1v2H1zM2 5h1v1H2zM2 4h1v1H2z" /></svg>
 type Msg = { from: 'me' | 'them' | 'sys'; text?: string; card?: string; pair?: string }
 type Ans = Record<string, { me?: string; them?: string }>
 
@@ -72,144 +34,10 @@ function TickMeter({ level, from, to }: { level: number; from: number; to: numbe
   useEffect(() => { setP(from); let v = from; const t0 = setTimeout(() => { const i = setInterval(() => { v = Math.min(to, v + 10); setP(v); if (v >= to) clearInterval(i) }, 90) }, 450); return () => clearTimeout(t0) }, [from, to])
   return <><MeterHead level={level} pct={p} /><Hp level={level} pct={p} /></>
 }
-const AGE_TOP = 70 // slider top; 70 means "70+" (no upper limit, see wants() in net.ts)
-function Banner() {
-  const u = (x: string, e: string) => `${B}px/img/create-profile-banner${x}.${e}`
-  const set = (e: string) => `${u('', e)} 1x, ${u('@2x', e)} 2x, ${u('@3x', e)} 3x`
-  return <div className="px-frame cp-banner" data-t="banner"><picture>
-    <source type="image/webp" srcSet={set('webp')} /><img src={u('', 'png')} srcSet={set('png')} width={412} height={200} alt="" /></picture>
-    <div className="cp-ov"><h1 className="cp-h">Create your profile</h1><p className="cp-s">Blurry until you both choose.</p></div></div>
-}
-/** Segmented radio pair: real radio inputs, so arrow keys / screen readers work natively. */
-function Seg({ name, value, opts, onChange, label }: { name: string; value: string; opts: [string, string][]; onChange: (v: string) => void; label: string }) {
-  return <div className="seg" role="radiogroup" aria-labelledby={label}>{opts.map(([v, l]) =>
-    <label key={v} className={'px-frame seg-o' + (value === v ? ' on' : '')} data-t={name + '-' + v}>
-      <input type="radio" name={name} value={v} checked={value === v} onChange={() => onChange(v)} /><span>{l}</span></label>)}</div>
-}
-/** One track, two thumbs (two native ranges stacked). Thumbs can't cross; 70 = 70+. */
-/** Range stops = bracket edges. Lower thumb picks a bracket start, upper thumb the next start (max = edge - 1). 70 = "70+". */
-const EDGES = [18, 25, 30, 35, 40, 50, 60, 70]
-const snapEdge = (n: number) => EDGES.reduce((b, e) => Math.abs(e - n) < Math.abs(b - n) ? e : b, EDGES[0])
-/** Migrate any min/max (old saved or non-edge) to bracket edges: min -> edge, max -> edge - 1 (or 70+). */
-export const snapRange = (min: number, max: number): [number, number] => {
-  let i = EDGES.indexOf(snapEdge(min)), j = max >= 70 ? 7 : EDGES.indexOf(snapEdge(max + 1)); if (i > 6) i = 6; if (j <= i) j = i + 1
-  return [EDGES[i], j === 7 ? 70 : EDGES[j] - 1] }
-function AgeRange({ min, max, onChange }: { min: number; max: number; onChange: (a: number, b: number) => void }) {
-  const i = EDGES.indexOf(min), j = max >= 70 ? 7 : EDGES.indexOf(max + 1), f = (k: number) => k / 7 * 100
-  const val = (k: number) => k === 7 ? 70 : EDGES[k] - 1, show = (n: number) => n >= AGE_TOP ? AGE_TOP + '+' : String(n)
-  return <div className="range" style={{ ['--lo' as any]: f(i) + '%', ['--hi' as any]: f(j) + '%' }}>
-    <div className="range-h"><span className="px-label">AGED</span><span className="px-label-b px-coral" data-t="range-val" aria-live="polite">{show(min)} – {show(max)}</span></div>
-    <div className="range-t"><i />
-      <input type="range" min={0} max={7} step={1} value={i} aria-label="Minimum age" aria-valuetext={String(min)} data-t="min" onChange={e => { const k = Math.min(+e.target.value, j - 1); onChange(EDGES[k], max) }} />
-      <input type="range" min={0} max={7} step={1} value={j} aria-label="Maximum age" aria-valuetext={show(max)} data-t="max" onChange={e => { const k = Math.max(+e.target.value, i + 1); onChange(min, val(k)) }} /></div>
-  </div>
-}
-/** After upload: the photo at each level, pre-pixelated (same pixelateCanvas as what's sent), tap for full screen. */
-function Minis({ src, onChange }: { src: string; onChange: () => void }) {
-  const [urls, setUrls] = useState<string[]>([]); const [open, setOpen] = useState<number | null>(null); const [sel, setSel] = useState(0)
-  useEffect(() => { if (open !== null) setSel(open) }, [open])
-  useEffect(() => { let live = true; loadImage(src).then(im => { if (live) setUrls(LEVELS.map((_, i) => pixelatePhoto(im, i + 1))) }); return () => { live = false } }, [src])
-  useEffect(() => { if (open === null) return
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); if (e.key === 'ArrowRight') setOpen(o => Math.min(4, (o ?? 0) + 1)); if (e.key === 'ArrowLeft') setOpen(o => Math.max(0, (o ?? 0) - 1)) }
-    history.pushState({ pdViewer: 1 }, ''); const pop = () => setOpen(null)
-    addEventListener('keydown', k); addEventListener('popstate', pop)
-    return () => { removeEventListener('keydown', k); removeEventListener('popstate', pop) } }, [open === null])
-  const close = () => { if (history.state?.pdViewer) history.back(); else setOpen(null) }
-  let x0 = 0
-  return <div className="minis-wrap">
-    <div className="minis" data-t="minis">{LEVELS.map((L, i) => <button key={i} className={'mini-b' + (sel === i ? ' sel' : '')} aria-pressed={sel === i} data-t={'mini-' + (i + 1)} aria-label={`Preview at ${L.name}`} onClick={() => setOpen(i)}>
-      {urls[i] && <img src={urls[i]} alt="" className={i < 4 ? 'px' : ''} />}<span className="px-label">{L.blocks || "FULL"}</span></button>)}</div>
-    <button type="button" className="tlink" data-t="photo-change-link" onClick={onChange}>Change photo</button>
-    {open !== null && <div className="viewer" data-t="viewer" role="dialog" aria-label={`Photo at ${LEVELS[open].name}`} onClick={close}
-      onTouchStart={e => { x0 = e.touches[0].clientX }} onTouchEnd={e => { const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 50) { e.preventDefault(); setOpen(o => Math.max(0, Math.min(4, (o ?? 0) + (d < 0 ? 1 : -1)))) } }}>
-      <button className="px-frame px-iconbtn vx" aria-label="Close" data-t="viewer-close" onClick={e => { e.stopPropagation(); close() }}>✕</button>
-      <img src={urls[open]} alt="" className={open < 4 ? 'px' : ''} onClick={e => e.stopPropagation()} />
-      <div className="vnav" onClick={e => e.stopPropagation()}>
-        <button className="px-frame px-btn-ghost" disabled={open === 0} aria-label="Previous level" onClick={() => setOpen(open - 1)}>◀</button>
-        <span className="vstep" data-t="viewer-name">LV {open + 1} · {LEVELS[open].name.toUpperCase()} · {LEVELS[open].blocks ? LEVELS[open].blocks + ' BLOCKS' : 'FULL'}</span>
-        <button className="px-frame px-btn-ghost" disabled={open === 4} aria-label="Next level" onClick={() => setOpen(open + 1)}>▶</button></div>
-    </div>}
-  </div>
-}
-const MONTHS = 'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ')
-type Season = 'winter' | 'spring' | 'summer' | 'autumn'
-const seasonOf = (m: number): Season => m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'autumn'
-const SEASON_PX: Record<Season, string[]> = { winter: ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'], spring: ['.#.#.', '#####', '.###.', '..#..', '.##..'], summer: ['#.#.#', '.###.', '#####', '.###.', '#.#.#'], autumn: ['...##', '..###', '.###.', '###..', '#....'] }
-const SeasonIc = ({ s, px = 3 }: { s: Season; px?: number }) => <svg className={'sic s-' + s} width={px * 5} height={px * 5} viewBox="0 0 5 5" shapeRendering="crispEdges" aria-hidden="true">
-  {SEASON_PX[s].flatMap((row, y) => [...row].map((ch, x) => ch === '#' ? <rect key={x + '-' + y} x={x} y={y} width="1" height="1" fill="currentColor" /> : null))}</svg>
-/** Age on the 1st of the birth month. */
-const ageFrom = (by: number, bm: number, now = new Date()) => now.getFullYear() - by - (now.getMonth() + 1 < bm ? 1 : 0)
-const NOW_Y = new Date().getFullYear(), Y_MIN = NOW_Y - 70, Y_MAX = NOW_Y - 18, ROW = 32
-/** GD birthday picker: month tiles + scroll-snap year reel. The year/month stay on this device. */
-function Birthday({ by, bm, onChange }: { by: number; bm: number; onChange: (by: number, bm: number) => void }) {
-  const reel = useRef<HTMLDivElement>(null), years = useMemo(() => Array.from({ length: Y_MAX - Y_MIN + 1 }, (_, i) => Y_MIN + i), [])
-  const t = useRef(0)
-  useEffect(() => { const r = reel.current; if (r) r.scrollTop = (by - Y_MIN) * ROW }, []) // initial position only
-  const onScroll = () => { clearTimeout(t.current); t.current = window.setTimeout(() => { const r = reel.current; if (!r) return; const y = Y_MIN + Math.round(r.scrollTop / ROW); if (y !== by && y >= Y_MIN && y <= Y_MAX) onChange(y, bm) }, 60) }
-  const go = (y: number) => { const v = Math.max(Y_MIN, Math.min(Y_MAX, y)); reel.current?.scrollTo({ top: (v - Y_MIN) * ROW, behavior: 'smooth' }); onChange(v, bm) }
-  const age = bm ? ageFrom(by, bm) : null, br = age !== null && age >= 18 ? bracketLabel(bracketOf(Math.min(age, 70))) : null
-  return <div className="bday" data-t="bday">
-    <p className="px-label lab">WHEN DID YOUR STORY START?</p>
-    <h2 className="h2 bday-h">Your birthday</h2>
-    <p className="px-meta bday-sub">Matches only ever see your age bracket.</p>
-    <span className="px-label lab" id="lab-month">MONTH</span>
-    <div className="months" role="radiogroup" aria-labelledby="lab-month">{MONTHS.map((m, i) => <button key={m} type="button" role="radio" aria-checked={bm === i + 1}
-      className={'px-frame mtile' + (bm === i + 1 ? ' on' : '')} data-t={'month-' + (i + 1)} onClick={() => onChange(by, i + 1)}><SeasonIc s={seasonOf(i + 1)} /><span>{m}</span></button>)}</div>
-    <span className="px-label lab" id="lab-year">YEAR</span>
-    <div className="reel-box"><div className="reel-sel" aria-hidden="true" />
-      <div className="reel" ref={reel} onScroll={onScroll} tabIndex={0} role="listbox" aria-labelledby="lab-year" aria-activedescendant={'yr-' + by} data-t="year-reel"
-        onKeyDown={e => { if (e.key === 'ArrowUp') { e.preventDefault(); go(by - 1) } if (e.key === 'ArrowDown') { e.preventDefault(); go(by + 1) } }}>
-        {years.map(y => <div key={y} id={'yr-' + y} role="option" aria-selected={y === by} className={'yr' + (y === by ? ' on' : '')} onClick={() => go(y)}>{y}</div>)}</div></div>
-    <div className="px-frame px-card youare" data-t="bday-readout" aria-live="polite">
-      <div><span className="px-label">YOU ARE</span><b>{age === null ? 'Pick your month' : `${Math.min(age, 70)}${age >= 70 ? '+' : ''} · ${seasonOf(bm)}-born`}</b></div>
-      <div className="ms"><span className="px-label">MATCHES SEE</span><b className="px-coral" data-t="bracket">{br || '—'}</b></div></div>
-    {age !== null && age < 18 && <p className="under18" role="alert" data-t="under18">You need to be 18 or over to use Pixeldate.</p>}
-    <p className="px-meta bday-sub">Your birth season badge unlocks at Spark as an icebreaker.</p>
-  </div>
-}
-function Onboard({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
-  const [name, setName] = useState(''); const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const fileIn = useRef<HTMLInputElement>(null); const [adult, setAdult] = useState(false)
-  const [iam, setIam] = useState<Gender>('man'); const [seek, setSeek] = useState<Seek>('women')
-  const saved = (() => { try { return JSON.parse(store.getItem('pd-bday') || '') } catch { return null } })()
-  const [by, setBy] = useState<number>(saved?.by || NOW_Y - 25); const [bm, setBm] = useState<number>(saved?.bm || 0); const age = bm ? ageFrom(by, bm) : 0
-  const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP)
-  const [cam, setCam] = useState<MediaStream | null>(null); const vid = useRef<HTMLVideoElement>(null)
-  useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
-  const snap = () => { const v = vid.current!, c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d')!.drawImage(v, 0, 0); setPhoto(c.toDataURL('image/jpeg', .9)); setOkPhoto(false); cam!.getTracks().forEach(t => t.stop()); setCam(null) }
-  const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => { setPhoto(String(r.result)); setOkPhoto(false) }; r.readAsDataURL(f) } }
-  const ok = name.trim() && photo && okPhoto && adult && bm > 0 && age >= 18
-  const input = <input ref={fileIn} type="file" accept="image/*" hidden data-t="gallery" onChange={e => { file(e.target.files?.[0]); e.target.value = '' }} />
-  if (photo && !okPhoto) return <div className="screen scroll">{input}<PhotoReveal src={photo} onConfirm={() => setOkPhoto(true)} onChange={() => fileIn.current?.click()} /></div>
-  return <div className="screen scroll">{input}
-    <Banner />
-    <label className="px-label lab" htmlFor="pd-name">NAME</label>
-    <input id="pd-name" className="px-frame px-input fld" value={name} maxLength={20} onChange={e => setName(e.target.value)} placeholder="Username" data-t="name" />
-    <label className="px-label lab">PHOTO</label>
-    {photo && !cam ? <Minis src={photo} onChange={() => fileIn.current?.click()} /> : <div className="photo-row">
-      {cam ? <div className="thumb"><video ref={vid} muted playsInline /></div>
-        : <button type="button" className="addself" data-t="add-selfie" onClick={() => fileIn.current?.click()}><svg width="24" height="24" viewBox="0 0 12 12" shapeRendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M4 2h4v1h2v1h1v6H1V4h1V3h2zM2 4v5h8V4zM5 5h2v1h1v2H7v1H5V8H4V6h1zM5 6v2h2V6z" /></svg><span>Add a selfie</span></button>}
-      <div className="col">
-        {cam ? <button className="px-frame px-btn-small" onClick={snap}>SNAP</button>
-          : <button className="px-frame px-btn-ghost pbtn" onClick={async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { alert('No camera') } }}>Camera</button>}
-        <button className="px-frame px-btn-ghost pbtn" onClick={() => fileIn.current?.click()}>Gallery</button>
-      </div>
-    </div>}
-    <span className="px-label lab" id="lab-iam">I AM</span>
-    <Seg label="lab-iam" name="iam" value={iam} onChange={v => setIam(v as Gender)} opts={[['man', 'Man'], ['woman', 'Woman']]} />
-    <Birthday by={by} bm={bm} onChange={(y, m) => { setBy(y); setBm(m) }} />
-    <fieldset className="meet"><legend className="px-label lab" id="lab-seek">I WANT TO MEET</legend>
-      <Seg label="lab-seek" name="seek" value={seek} onChange={v => setSeek(v as Seek)} opts={[['men', 'Men'], ['women', 'Women']]} />
-      <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
-    </fieldset>
-    <label className="tick read"><input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" /><span className="px-frame box" data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <TickMark />}</span> I am 18 or over</label>
-    <button className="px-frame px-btn" disabled={!ok} data-t="start" style={{ marginTop: 16 }} onClick={() => { const a = Math.min(age, 70), [lo, hi] = snapRange(min, max); if (a < 18) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }}><span className="px-btn__label">Continue</span></button>
-  </div>
-}
-
-export default function App() {
+export default function App({ initial }: { initial?: { p: Profile; photo: string } }) {
   const [me, setMe] = useState<Profile | null>(null); const [photo, setPhoto] = useState<HTMLImageElement | null>(null)
   const net = useRef<Net | null>(null); const [code, setCode] = useState('')
-  const [screen, setScreen] = useState<'onboard' | 'lobby' | 'finding' | 'match'>('onboard')
+  const [screen, setScreen] = useState<'boot' | 'lobby' | 'finding' | 'match'>('boot')
   const [notice, setNotice] = useState(''); const [joinCode, setJoinCode] = useState('')
   const [m, setM] = useState<Match | null>(null)
   const skip = useRef(new Set<string>())
@@ -381,7 +209,8 @@ export default function App() {
   const mockApi = useRef<any>(null)
   mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup,
     jump: (l: number) => { prevLv.current = l; setLevel(l); setPct(0) } }
-  if (screen === 'onboard') return <div className="legacy"><div className="app px"><Onboard onDone={start} /><Splash ready /></div></div>
+  useEffect(() => { if (initial) start(initial.p, initial.photo) }, [])
+  if (screen === 'boot' || !me) return null
 
   const them = m?.them.name || ''
   const lv = LEVELS[level - 1], nx = LEVELS[level]

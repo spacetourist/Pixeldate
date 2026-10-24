@@ -2,5 +2,6 @@
 @import './tokens.css';
 @import './components.css';
 @import './screens.css';
+@import './signup.css';
 /* pre-R1 onboarding + lobby (fenced to .legacy by @scope; removed when R2/R4 land) */
 @import './legacy.css';

@@ -106,12 +106,14 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
      other side did; a remote message alone can never raise it. 'drop' messages are only accepted if lower. */
   const sendPhoto = (l: number) => { if (photo) send({ t: 'photo', level: l, data: pixelatePhoto(photo, l) }) }
 
+  // signalling unreachable for more than 1.5 s: one sticky notice, cleared when it's back (the Net retries forever)
+  const slow = useRef(0)
+  const netStatus = (s: 'retrying' | 'up') => { clearTimeout(slow.current); if (s === 'up') { dismiss('conn'); return }
+    slow.current = window.setTimeout(() => toast({ id: 'conn', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'plug', t: 'notice-noconn', title: "Couldn't connect", body: "Check your connection. We'll keep trying." }), 1500) }
   const start = async (p: Profile, ph: string) => {
     setMe(p); setPhoto(await loadImage(ph)); setScreen('lobby')
     const n = new Net(p); net.current = n
-    // signalling unreachable for more than 1.5 s: one sticky notice, cleared when it's back (the Net retries forever)
-    let slow = 0; n.onStatus = s => { clearTimeout(slow); if (s === 'up') { dismiss('conn'); return }
-      slow = window.setTimeout(() => toast({ id: 'conn', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'plug', t: 'notice-noconn', title: "Couldn't connect", body: "Check your connection. We'll keep trying." }), 1500) }
+    n.onStatus = netStatus
     await n.start(); setCode(n.code)
     n.onIncomingByCode = mm => beginMatch(mm)
     n.peer.on('call', async mc => {
@@ -261,7 +263,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { S.setClarity(level === 5 ? 1 : Math.min(1, pct / 100)) }, [pct, level])
   useEffect(() => { const mk = (window as any).__pdMock; if (mk) import('./mock').then(x => x.runMock(mk, mockApi.current)) }, [])
   const mockApi = useRef<any>(null)
-  mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setScreen, setCode, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup, setTaps, setReadyOpen, setRing, setCall, setEnded, setCamErr, raise,
+  mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setScreen, setCode, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup, setTaps, setReadyOpen, setRing, setCall, setEnded, setCamErr, raise, leave, netStatus, setNet: (o: any) => { net.current = o },
     jump: (l: number) => { prevLv.current = l; setLevel(l); setPct(0) } }
   useEffect(() => { if (initial) start(initial.p, initial.photo) }, [])
   if (screen === 'boot' || !me) return null

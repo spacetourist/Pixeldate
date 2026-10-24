@@ -35,4 +35,4 @@ LOOPBACK=1 node test/e2e.mjs incompat   # incompatible genders never match
 LOOPBACK=1 node test/e2e.mjs incompat age
 node test/e2e.mjs                       # the same flow over real WebRTC (needs a network that allows it)
 ```
-Design: Pixeldate v2 pixel-art kit, Lagoon palette. Fonts Pixeldate Sans / Caps are OFL derivatives of Pixelify Sans and Silkscreen (see `public/px/fonts`).
+Design: Pixeldate "Player Two" (design repo `pixeldate/player-two`). Fonts: Bricolage Grotesque and Jersey 15, both OFL (see `public/fonts/LICENSE`).

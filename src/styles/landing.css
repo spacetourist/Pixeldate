@@ -1,0 +1,54 @@
+/* Landing (SPEC 01, design screens/src/landing.html): tokens + components + the design's .ld-* rules. Static, no JS. */
+@import './tokens.css';
+@import './components.css';
+@layer screens{
+.app{container:app/inline-size;position:relative;min-height:100dvh;background:var(--bg)}
+html,body{height:auto;overflow:visible}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.ld a{color:inherit;text-decoration:none}
+.ld-nav .lk a:hover{color:var(--text)}
+.ld-nav .lk a:focus-visible,.ld-nav .logo:focus-visible{outline:3px solid var(--focus);outline-offset:4px}
+.ld-hero>picture{display:contents}
+.muted{color:var(--text-muted)}
+.ld{position:relative}
+.ld-nav{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:20px;padding:14px 18px;background:rgb(12 7 34 / .92);border-bottom:3px solid var(--edge)}
+.ld-nav .lk{display:none;gap:24px;font:var(--t-ui);color:var(--text-muted);margin-left:auto}
+.ld-nav .acts{display:flex;gap:8px;margin-left:auto}
+.ld-hero{position:relative;overflow:hidden;min-height:640px;display:grid;align-items:end}
+.ld-hero>picture>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+.ld-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgb(12 7 34 / .1) 20%,rgb(12 7 34 / .7) 60%,var(--bg)),var(--scanlines-stage)}
+.ld-hero .in{position:relative;z-index:2;padding:0 18px 40px;display:flex;flex-direction:column;gap:16px;max-width:720px}
+.ld-hero h1{font-family:var(--font-px);font-size:clamp(64px,13cqi,148px);line-height:.85;text-shadow:0 5px 0 var(--edge)}
+.ld-hero h1 em{font-style:normal;color:var(--c-coral)}
+.ld-hero .lede{font:var(--t-body-lg);color:var(--text);max-width:560px}
+.ld-hero .ctas{display:flex;gap:10px;flex-wrap:wrap}
+.ld-sec{padding:56px 18px;display:flex;flex-direction:column;gap:20px;max-width:1280px;margin:0 auto}
+.ld-sec h2{font-family:var(--font-px);font-size:48px;line-height:.9}
+.ld-sec .lede{font:var(--t-body-lg);color:var(--text-muted);max-width:640px}
+.lvgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.lvtile{--s:var(--step-md);--fill:var(--panel);padding:calc(var(--edge-w) + 8px);display:flex;flex-direction:column;gap:10px}
+.lvtile img{width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;--s:3px;clip-path:var(--step-path)}
+.lvtile .n{font:var(--t-title)} .lvtile .d{font:var(--t-small);color:var(--text-muted)}
+.lvtile:last-child{grid-column:1/-1}
+.pace{display:grid;gap:12px}
+.pace .card{display:flex;flex-direction:column;gap:10px}
+.pace b{font:var(--t-title)}
+.ld-final{text-align:center;align-items:center;padding:72px 18px}
+.ld-final h2{font-size:64px}
+.ld-foot{border-top:3px solid var(--edge);padding:24px 18px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font:var(--t-label);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.demo2{display:grid;gap:12px}
+@container app (min-width:768px){
+  .ld-nav{padding:16px 40px}.ld-nav .lk{display:flex}.ld-nav .acts{margin-left:16px}
+  .ld-hero{min-height:760px}.ld-hero .in{padding:0 40px 72px}
+  .ld-sec{padding:96px 40px}.ld-sec h2{font-size:72px}
+  .lvgrid{grid-template-columns:repeat(5,1fr)}.lvtile:last-child{grid-column:auto}
+  .pace{grid-template-columns:repeat(2,1fr)} .demo2{grid-template-columns:1fr 1fr}
+  .ld-final h2{font-size:104px}
+}
+@container app (min-width:1200px){ .pace{grid-template-columns:repeat(4,1fr)} .ld-hero .in{padding-left:max(40px,calc((100cqi - 1280px)/2 + 40px))} .ld-split{display:grid;grid-template-columns:1fr 1.2fr;gap:56px;align-items:center} }
+}
+@layer screens{ .ld-hero h1{font-size:clamp(60px,8.4cqi,136px)} @container app (min-width:768px){ .ld-hero .in{max-width:1000px} .ld-hero .lede{max-width:600px} } }
+@layer screens{ @container app (max-width:767px){ .lvtile:last-child img{aspect-ratio:2/1;object-position:50% 25%} } }
+@layer screens{ @container app (max-width:379px){ .ld-nav{gap:10px;padding:12px 12px} .ld-nav .logo{--logo:28px} .ld-nav .acts .btn{padding-inline:10px} } }
+@layer screens{ @media (prefers-reduced-transparency:reduce){ .ld-nav{background:var(--panel)} } }

@@ -119,6 +119,7 @@
 /* reset + base stop at .legacy (pre-R1 onboarding/lobby keep their own rules until R2/R4) */
 @layer reset{@scope (body) to (.legacy){*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}img,svg,canvas{display:block;max-width:100%}button,input,textarea{font:inherit;color:inherit;border:0;background:none}}}
 @layer base{
+  body{margin:0}
   html{background:var(--bg-deep);color:var(--text);font:var(--t-body);-webkit-font-smoothing:antialiased;font-optical-sizing:auto;color-scheme:dark}
   :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
   @scope (body) to (.legacy){.px{font-family:var(--font-px);font-weight:400;line-height:var(--px-lh);letter-spacing:.01em}}

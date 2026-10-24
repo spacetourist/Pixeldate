@@ -17,7 +17,8 @@ h1.px,h2.px{font-weight:400}
 .mhead .who .sub{font:var(--t-micro);color:var(--text-muted)}
 .mhead .hp{width:96px}
 .mhead .viewtoggle em{display:none}
-.mhead .viewtoggle>span{min-height:34px;padding:0 9px}
+.mhead .viewtoggle>:is(span,button){min-height:34px;padding:0 9px}
+.mhead>.viewtoggle,.mhead>.btn,.mhead>.lvbadge{flex:none}
 .hud{grid-area:hud;padding:18px 16px 10px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .hud .stage-name{font-size:84px}
 .hud .chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -29,6 +30,8 @@ h1.px,h2.px{font-weight:400}
 .chat{grid-area:chat;display:flex;flex-direction:column;min-height:0;padding:0 12px 10px;gap:10px}
 .chat .chead{display:none}
 .chat .chatlog{flex:1;min-height:0;overflow:hidden;justify-content:flex-end;padding:4px 2px}
+.chat .sys .ico{vertical-align:-1px;margin-right:6px}
+.chat .sys b{color:var(--text);font-weight:600}
 .app[data-stage] .chat .sys{background:rgb(5 2 15 / .72);--s:2px;clip-path:var(--step-path)}
 .m>.tabbar{grid-area:tabs}
 /* phone: Match tab = stage + full HUD; chat hidden */
@@ -58,7 +61,7 @@ h1.px,h2.px{font-weight:400}
 
 /* ── TABLET 768+ : 2 panes, rail, floating chat ── */
 @container app (min-width:768px){
-  .m{grid-template:"rail head chat" auto "rail hud chat" 1fr / var(--rail-w) 1fr minmax(340px,var(--chat-w));}
+  .m{grid-template:"rail head chat" auto "rail hud chat" 1fr / var(--rail-w) 1fr minmax(340px,min(var(--chat-w),50cqi));}
   .m>.rail{display:flex;grid-area:rail;background:rgb(5 2 15 / .92);border-right:3px solid var(--edge)}
   .m>.tabbar{display:none}
   .mhead{background:none;border:0;padding:20px 24px 0;justify-content:flex-end}
@@ -183,7 +186,7 @@ h1.px,h2.px{font-weight:400}
  .callui .cnote{justify-content:center}
 }
 @container app (min-width:768px){ .mhead{justify-content:flex-start} .mhead .lvbadge{margin-right:auto} .mhead .viewtoggle{margin-left:auto} }
-@container app (min-width:768px) and (max-width:1199px){ .mhead .viewtoggle em{display:none} }
+@container app (min-width:768px) and (max-width:1199px){ .mhead .viewtoggle em{display:none} .mhead{gap:6px;padding-inline:10px} .mhead .viewtoggle>:is(span,button){padding:0 7px} .mhead>.btn--sm{padding-inline:10px} }
 .cab-photo .plate .chip{position:static}
 .lvbadge,.chip{white-space:nowrap;flex:none}
 @container app (min-width:768px){ .callui .toastwrap{top:28px!important;bottom:auto!important;left:50%;right:auto;transform:translateX(-50%);width:460px} }

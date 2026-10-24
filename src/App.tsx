@@ -409,6 +409,9 @@ export default function App() {
   const devPress = { onPointerDown: press, onPointerUp: unpress, onPointerLeave: unpress, onContextMenu: (e: React.MouseEvent) => e.preventDefault() }
   const setViewP = (v: 'stage' | 'compact') => { setView(v); try { localStorage.setItem('pd.view', v) } catch {} }
   const go = (t: 'profile' | 'chat' | 'call') => setTab(t)
+  // chat system lines: level-ups get a heart + bold level, my answered card a check (as in the design)
+  const sysLine = (t: string) => { const lv = /^(Now at [^·]+?)( · .*)$/.exec(t)
+    return lv ? <><Icon n="heart" c="var(--c-coral)" /><b>{lv[1]}</b>{lv[2]}</> : t.startsWith('You answered') ? <><Icon n="check" c="var(--c-mint)" />{t}</> : t }
   const dataTab = tab === 'profile' ? 'match' : tab
   const event = !!lvup
   const lvc = LV_COLOR(level)
@@ -489,7 +492,7 @@ export default function App() {
       <aside className="chat" aria-label={`Chat with ${them}`}>
         <div className="cin" />
         <div className="chead"><Av src={theirAv} level={level} size={48} />
-          <div style={{ flex: 1, minWidth: 0 }}><div className="nm">{them}</div><div className="sub">Matched · {matchedAt.current} · LV {level} {lv.name}</div></div>
+          <div style={{ flex: 1, minWidth: 0 }}><div className="nm">{them}, {bracketLabel(m.them.br)}</div><div className="sub">Matched · {matchedAt.current} · LV {level} {lv.name}</div></div>
           <button className="btn fx btn--secondary btn--icon btn--sm" aria-label="Voice call" data-t="chead-voice" onClick={() => { go('call'); if (!call && !ring) requestCall('voice') }}><Icon n="call" /></button>
           <button className="btn fx btn--secondary btn--icon btn--sm" aria-label="Video call" data-t="chead-video" onClick={() => { go('call'); if (!call && !ring) requestCall('video') }}><Icon n="cam" /></button></div>
         <div className="chatlog" role="log" aria-live="polite">
@@ -498,11 +501,11 @@ export default function App() {
               <div className="ph"><Icon n="cards" c="var(--c-mint)" /> {LEVELS[cardById(x.pair)!.level - 1].name} · {qn(x.pair)} · both answered<span className="combo-k">Combo +{METER.cardBonus}%</span></div>
               <div className="pq">{cardById(x.pair)!.text}</div>
               <div className="pa"><b>{them}</b><span data-t="pair-them">{ans[x.pair]?.them}</span><b>You</b><span>{ans[x.pair]?.me}</span></div></div>
-            : x.from === 'sys' ? <p key={i} className="sys">{x.text}</p>
+            : x.from === 'sys' ? <p key={i} className="sys">{sysLine(x.text || '')}</p>
             : x.card ? <div key={i}>{Q({ id: x.card, inChat: true })}</div>
             : <div key={i} className={`bub bub--${x.from === 'me' ? 'me' : 'them'}`} data-t={'msg-' + x.from}>{x.text}</div>)}
         </div>
-        {card && !ans[card.id]?.me && !msgs.some(x => x.card === card.id) && <div className="pinq" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
+        {card && !(ans[card.id]?.me && ans[card.id]?.them) && !msgs.some(x => x.card === card.id) && <div className="pinq" data-t="pinned-card">{Q({ id: card.id, inChat: true })}</div>}
         {devBar}
         <form className="composer" onSubmit={e => { e.preventDefault(); chat() }}>
           <label className="field fx"><input value={draft} onChange={e => setDraft(e.target.value)} placeholder={`Message ${them}…`} aria-label={`Message ${them}`} data-t="chat-input" /></label>

@@ -1,9 +1,9 @@
 // R1 screenshot harness: a mocked partner (src/mock.ts) drives the match screen; no WebRTC, no network peers.
 // Mock photos are read from the design pack and injected as data URLs; they are never copied into public/.
-// usage: node test/r1-shots.mjs [url]   (vite preview must be running)
+// usage: [URL=...] node test/r1-shots.mjs   (vite preview must be running)
 import { chromium } from '/tmp/pw/node_modules/playwright-core/index.mjs'
 import { readFileSync } from 'node:fs'
-const URL = process.argv[2] || 'http://localhost:4173/Pixeldate/app/'
+const URL = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const PH = '/workspace/design/pixeldate/player-two/assets/photos/'
 const du = f => 'data:image/webp;base64,' + readFileSync(PH + f).toString('base64')
 const OUT = n => `/workspace/pixeldate/shots/r1-${n}.png`

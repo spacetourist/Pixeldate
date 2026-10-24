@@ -14,10 +14,24 @@ export interface MockCfg {
   script?: 'chat' | 'empty'
   /** lobby (07) / finding (08) instead of a match; `them` is not needed */
   scene?: 'lobby' | 'finding'
+  /** R5: open Matches (09) / You (16) / Settings (17) over the scene or match */
+  page?: 'matches' | 'profile' | 'settings'
+  /** R5: on-device data written before the app reads it (history entries, blocked people); `ago` is minutes */
+  seed?: { history?: { uid: string; name: string; br: [number, number]; lv: number; how: string; ago: number; avPhoto?: string }[]; blocked?: { uid: string; name: string; br: [number, number]; ago: number; avPhoto?: string }[] }
+}
+async function seed(s: MockCfg['seed']) {
+  if (!s) return
+  const { coarse, AV_BLOCKS } = await import('./ui/parts')
+  const now = Date.now(), h = []
+  for (const x of s.history || []) h.push({ id: x.uid + '-' + x.ago, uid: x.uid, name: x.name, br: x.br, lv: x.lv, pct: 0, at: now - x.ago * 6e4 - 18e5, end: now - x.ago * 6e4, how: x.how, av: x.avPhoto ? coarse(await loadImage(x.avPhoto), AV_BLOCKS[x.lv - 1]) : undefined })
+  if (h.length) localStorage.setItem('pd.history', JSON.stringify(h))
+  const bl = []; for (const b of s.blocked || []) bl.push({ uid: b.uid, name: b.name, br: b.br, at: now - b.ago * 6e4, av: b.avPhoto ? coarse(await loadImage(b.avPhoto), AV_BLOCKS[0]) : undefined })
+  if (bl.length) localStorage.setItem('pd-blocked', JSON.stringify(bl))
 }
 
 export async function runMock(cfg: MockCfg, api: any) {
-  if (cfg.scene) { await api.start(cfg.me, cfg.mePhoto); api.setCode('k7q2px'); api.setScreen(cfg.scene); ;(window as any).__pdMockApi = api; ;(window as any).__pdMockReady = true; return }
+  await seed(cfg.seed)
+  if (cfg.scene) { await api.start(cfg.me, cfg.mePhoto); api.setCode('k7q2px'); api.setScreen(cfg.scene); if (cfg.page) api.setPage(cfg.page); ;(window as any).__pdMockApi = api; ;(window as any).__pdMockReady = true; return }
   const handlers: Record<string, ((d: any) => void)[]> = {}
   const emit = (ev: string, d?: any) => (handlers[ev] || []).forEach(f => f(d))
   const themImg = await loadImage(cfg.themPhoto)
@@ -54,5 +68,6 @@ export async function runMock(cfg: MockCfg, api: any) {
   }
   api.setPct(cfg.pct ?? 0)
   if (cfg.tab) api.setTab(cfg.tab)
+  if (cfg.page) api.setPage(cfg.page)
   ;(window as any).__pdMockReady = true
 }

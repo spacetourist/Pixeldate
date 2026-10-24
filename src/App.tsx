@@ -273,7 +273,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { S.setClarity(level === 5 ? 1 : Math.min(1, pct / 100)) }, [pct, level])
   useEffect(() => { const mk = (window as any).__pdMock; if (mk) import('./mock').then(x => x.runMock(mk, mockApi.current)) }, [])
   const mockApi = useRef<any>(null)
-  mockApi.current = { start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setScreen, setCode, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup, setTaps, setReadyOpen, setRing, setCall, setEnded, setCamErr, raise, leave, netStatus, setNet: (o: any) => { net.current = o },
+  mockApi.current = { setPage, start: async (p: Profile, ph: string) => { setMe(p); setPhoto(await loadImage(ph)) }, beginMatch, setScreen, setCode, setTab, setView, setPct, setMsgs, setAns, setCredited, setThemSeason, setEvt, setLvup, setTaps, setReadyOpen, setRing, setCall, setEnded, setCamErr, raise, leave, netStatus, setNet: (o: any) => { net.current = o },
     jump: (l: number) => { prevLv.current = l; setLevel(l); setPct(0) } }
   useEffect(() => { if (initial) start(initial.p, initial.photo) }, [])
   if (screen === 'boot' || !me) return null

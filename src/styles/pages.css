@@ -6,7 +6,7 @@
 .shell .rail .ri:focus-visible,.shell .stop .btn:focus-visible,.shell .stop .logo:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 .shell--page .stop button.logo{border:0;background:none;padding:0;cursor:pointer}
 .shell--page .stop .btn.is-on{box-shadow:inset 0 -3px 0 var(--cta)}
-.pgmain{max-width:1280px}
+.pgmain{min-width:0}
 .ptitle{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .ptitle h1{font-size:44px;line-height:.9;margin-top:8px;outline:0}
 .pgmain .lede{margin:0;max-width:640px}
@@ -22,6 +22,8 @@
 .rules,.ondev,.seecard{display:flex;flex-direction:column;gap:12px}
 .seecard .row{display:flex;gap:10px;flex-wrap:wrap}
 .seecard .ladder{margin:0}
+.seecard .ladder figcaption{height:auto}
+.seecard .help{margin:0}
 .seecard .ladder .lf{cursor:default}
 .ondevice{display:flex;gap:8px;align-items:center;font:var(--t-small);color:var(--c-mint)}
 .setgrp{--s:var(--step-md);--fill:var(--panel);padding:calc(var(--edge-w) + 6px) calc(var(--edge-w) + 16px)}
@@ -53,6 +55,8 @@ button.toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px;cl
 .modal .rtext{display:block;margin-top:14px}
 .modal .rtext textarea{width:100%;min-height:96px;padding:10px 12px;font:var(--t-body);color:var(--text);background:none;border:0;resize:vertical}
 .modal .rblock{display:flex;align-items:center;gap:12px;margin-top:14px;font:var(--t-ui);text-align:left}
+/* one column: the on-device note goes last, after Safety and Account (17 order) */
+@container app (max-width:1199px){ .cols2 .col{display:contents} .cols2 [data-t=on-device]{order:9} }
 @container app (min-width:1200px){
   .cols2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
   .ptitle h1{font-size:64px}

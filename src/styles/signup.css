@@ -78,6 +78,7 @@ html:has(.flow),body:has(.flow){height:auto;overflow:visible}
 .readout b{font:var(--t-title)}
 .readout .to{color:var(--cta)}
 .readout .help{display:block;margin:2px 0 0}
+.readout.err .ro{flex-wrap:nowrap;align-items:center;flex:1}.readout.err .ro>span{min-width:0;flex:1}
 .readout.err{--fill:var(--error-bg);--bev:inset 0 0 0 2px var(--error)}
 .lockhelp{display:flex;gap:8px;align-items:baseline;margin:0}
 .lockhelp .ico{position:relative;top:2px}
@@ -104,7 +105,7 @@ html:has(.flow),body:has(.flow){height:auto;overflow:visible}
 .hero-photo canvas{width:100%;height:auto;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;--s:5px;clip-path:var(--step-path)}
 .hero-photo::after{content:"";position:absolute;inset:4px;background:var(--scanlines-stage);pointer-events:none;z-index:1}
 .hero-photo>.chip{position:absolute;left:14px;top:14px;z-index:2;max-width:calc(100% - 28px)}
-.hero-photo .chip .nm{overflow:hidden;text-overflow:ellipsis;max-width:9em}
+.hero-photo .chip .ct{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .hero-photo .cap2{position:absolute;left:14px;right:14px;bottom:14px;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .cap2 .cbtn{cursor:pointer;min-height:32px;padding-inline:12px}
 .cap2 .cbtn:hover{background:var(--hover)}

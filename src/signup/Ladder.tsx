@@ -33,8 +33,8 @@ export function Ladder({ src, name, intro, onCtas }: { src: string; name: string
     <div className="hero-photo">
       <canvas ref={cv} width={512} height={512} role="img" aria-label={cur < 0 ? 'Your photo, as only you see it' : `Your photo at ${LEVELS[cur].name}, ${blocksLabel(cur)}`} />
       <span className="chip chip--edge" data-t="ladder-chip">{cur < 0
-        ? <><Icon n="lock" c="var(--text-muted)" />Your photo · only on this device</>
-        : <><Icon n="heart" c={LV_COLOR(cur + 1)} />LV {cur + 1} · <span className="nm">{n}</span> · {blocksLabel(cur)}</>}</span>
+        ? <><Icon n="lock" c="var(--text-muted)" /><span className="ct">Your photo · only on this device</span></>
+        : <><Icon n="heart" c={LV_COLOR(cur + 1)} /><span className="ct">LV {cur + 1} · <span className="nm">{n}</span> · {blocksLabel(cur)}</span></>}</span>
       <div className="cap2">
         <span className="chip chip--edge">{reduce ? 'Tap a level to preview it' : 'Plays 8 → full, then loops'}</span>
         {!st.ctas ? <button type="button" className="chip chip--edge cbtn" data-t="reveal-skip" onClick={() => ctl.current?.skip()}>Skip</button>
@@ -75,7 +75,7 @@ function Viewer({ urls, at, set }: { urls: string[]; at: number; set: (f: number
     <div className="vimg" onClick={e => e.stopPropagation()} style={{ ['--lvc' as any]: LV_COLOR(at + 1) }}><img src={urls[at]} alt="" className={at < 4 ? 'pix' : ''} /></div>
     <div className="vnav" onClick={e => e.stopPropagation()}>
       <button className="btn fx btn--secondary btn--icon" disabled={at === 0} aria-label="Previous level" onClick={() => set(at - 1)}><Icon n="back" /></button>
-      <span className="chip chip--edge" data-t="viewer-name"><Icon n="heart" c={LV_COLOR(at + 1)} />LV {at + 1} · {L.name} · {blocksLabel(at)}</span>
+      <span className="chip chip--edge" data-t="viewer-name"><Icon n="heart" c={LV_COLOR(at + 1)} /><span>LV {at + 1} · {L.name} · {blocksLabel(at)}</span></span>
       <button className="btn fx btn--secondary btn--icon" disabled={at === 4} aria-label="Next level" onClick={() => set(at + 1)}><Icon n="next" /></button>
     </div>
   </div>

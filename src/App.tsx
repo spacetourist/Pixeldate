@@ -98,6 +98,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     const [skipReq, setSkip] = useState<'in' | 'out' | null>(null)
   const [themSeason, setThemSeason] = useState<Season | null>(null); const seasonSent = useRef(false)
   const [readyOpen, setReadyOpen] = useState(false); const [lvup, setLvup] = useState<{ from: number; to: number } | null>(null); const prevLv = useRef(1); const lvCv = useRef<HTMLCanvasElement>(null); const [photoV, setPhotoV] = useState(0)
+  // refine reveal (src/refine/level, lazy): `hold` = the level whose stage paint waits for the overlay's first frame
+  const ovCv = useRef<HTMLCanvasElement>(null), hold = useRef(0), lvAt = useRef(0), rv = useRef<{ key: string; stop?: () => void } | null>(null)
   // Chat log sticks to the newest message unless the reader has scrolled up (>80px from the bottom).
   const logEl = useRef<HTMLDivElement>(null), stick = useRef(true)
   const onLogScroll = () => { const l = logEl.current; if (l) stick.current = l.scrollHeight - l.scrollTop - l.clientHeight < 80 }
@@ -223,9 +225,23 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   useEffect(() => { if (taps.them || taps.me) setReadyOpen(true) }, [taps.them, taps.me])
   // level-up event (both consented): overlay on any tab + a system card in the chat; drops are silent here
   useEffect(() => { const p = prevLv.current; prevLv.current = level
-    if (level > p && m) { sound('chime'); setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); S.begin(); const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
-  useEffect(() => { const c = lvCv.current, to = theirImgs.current[lvup?.to ?? 0]; if (!lvup || !c || !to) return
-    const from = theirImgs.current[lvup.from] || null; if (RM()) animateReveal(c, null, to); else animateReveal(c, from, to, undefined, lvup.to === 5 ? { delay: 400, dur: 2000 } : { delay: 400, dur: 1000 }) }, [lvup, photoV])
+    if (level > p && m) { sound('chime'); setReadyOpen(false); setEvt(null); setLvup({ from: p, to: level }); S.begin(); lvAt.current = performance.now(); hold.current = theirImgs.current[p] && view === 'stage' && !RM() ? level : 0; const L = LEVELS[level - 1]; setMsgs(x => [...x, { from: 'sys', text: `Now at ${L.name} · ${L.blocks ? L.blocks + ' blocks' : 'full photo'}` }]) } }, [level])
+  // Level-up refine (SPEC §5, 1.2 s): ONLY the two frames the partner sent for `from` and `to` are used (privacy:
+  // pixelation is sender-side, nothing sharper exists here). Stage view: an overlay canvas on the stage, the stage
+  // itself cuts to `to` underneath once the overlay shows `from`. Compact: the level-up card's own photo canvas.
+  useEffect(() => {
+    if (!lvup) { const i = theirImgs.current[st.current.level]; if (hold.current) { hold.current = 0; if (i) paint(i) } return }
+    const to = theirImgs.current[lvup.to], from = theirImgs.current[lvup.from], key = lvup.from + '>' + lvup.to + '@' + lvAt.current
+    if (!to || rv.current?.key === key) return
+    const onStage = view === 'stage', c = onStage ? ovCv.current : lvCv.current
+    const fail = () => { if (rv.current?.key !== key) return; rv.current = null; hold.current = 0; c?.classList.remove('on')
+      if (onStage) paint(to); else if (lvCv.current) { if (RM() || !from) animateReveal(lvCv.current, null, to); else animateReveal(lvCv.current, from, to, undefined, { delay: 400, dur: 1000 }) } }
+    rv.current?.stop?.(); rv.current = { key }
+    if (!c || !from || (onStage && RM())) { fail(); return }
+    import('./refine/level').then(M => M.playLevel({ canvas: c, a: from, b: to, fromLv: lvup.from, toLv: lvup.to, start: Math.max(performance.now(), lvAt.current + 400), reduced: RM(),
+      onShown: () => { if (rv.current?.key !== key) return; if (onStage) { c.classList.add('on'); hold.current = 0; shown.current = to; S.show(to, 'cut') } },
+      onDone: () => { if (onStage) c.classList.remove('on') } })).then(h => { if (!h) fail(); else if (rv.current?.key === key) rv.current.stop = h.stop; else h.stop() }, fail)
+  }, [lvup, photoV])
 
   function onData(d: any) {
     const s = st.current
@@ -239,7 +255,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
       case 'tap': if (d.level === s.level) setTaps(t => ({ ...t, them: true })); break
       case 'season': if (['winter', 'spring', 'summer', 'autumn'].includes(d.s)) setThemSeason(d.s); break
       case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name} lowered to ${LEVELS[d.level - 1].name}` }]); break
-      case 'photo': loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break
+      case 'photo': (window as any).__pdRecv?.push({ level: d.level, src: d.data }); loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break
       case 'skip': leave('moved', true); break
       case 'skipreq': if (DEV_SKIP_STAGE && d.level === s.level && s.level < 5) setSkip('in'); break
       case 'skipans': if (st.current.skipReq === 'out' && d.ok && d.level === s.level) raise(s.level); setSkip(null); if (!d.ok) { setMsgs(x => [...x, { from: 'sys', text: 'Skip declined' }]); toast({ id: 'skip-no', where: 'match', role: 'warn', icon: 'skip', t: 'notice-skip-declined', title: `${s.m?.them.name} said not yet`, body: 'You stay at this level.' }) } break
@@ -250,7 +266,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     }
   }
   // the stage controller decides: WebGL2 shader, Canvas 2D or static; it only animates towards a larger allowed image
-  const paint = (img: HTMLImageElement) => { shown.current = img; S.show(img, st.current.level === 5 ? 'full' : 'up') }
+  const paint = (img: HTMLImageElement) => { if (hold.current === st.current.level && st.current.level > 1) return; shown.current = img; S.show(img, st.current.level === 5 ? 'full' : 'up') }
   useEffect(() => { const i = theirImgs.current[level]; if (i) paint(i) }, [level])
   useEffect(() => { if (tab === 'chat') setUnread(0) }, [tab])
   useEffect(() => { if (evt?.kind !== 'turn') return; const t = setTimeout(() => setEvt(e => e === evt ? null : e), 6000); return () => clearTimeout(t) }, [evt])
@@ -347,6 +363,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   if (screen === 'match' && m) return <>{pagesEl}<div style={page ? { display: 'none' } : undefined} className={`app ${event ? 'is-event' : ''} ${inCall ? 'in-call' : ''}`} data-ev={lvup ? (lvup.to === 5 ? 'full' : 'up') : evt?.kind === 'pair' ? 'combo' : undefined} data-tab={dataTab} data-view={view} data-stage={view === 'stage' ? '' : undefined} data-level={level}>
     <div className="stage" style={{ ['--focal' as any]: '50% 26%', ['--clar' as any]: level === 5 ? 1 : Math.min(1, pct / 100) }} aria-hidden={view !== 'stage'}>
       {view === 'stage' && photoCanvas}
+      {view === 'stage' && <canvas ref={ovCv} className="rr-lv" data-t="lv-refine" aria-hidden="true" width={64} height={64} />}
       {remoteInStage && remoteVideo}
       <div className="tint" /><div className="tint2" /><div className="scrim-l" /><div className="scrim-b" />
     </div>

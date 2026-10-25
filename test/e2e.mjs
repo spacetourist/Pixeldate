@@ -1,6 +1,8 @@
 import puppeteer from 'puppeteer-core'
+import { cfg as mockCfg } from './r1-shots.mjs'
 const LB = !!process.env.LOOPBACK
-const URL = (process.env.URL || 'http://localhost:4173/Pixeldate/app/') + (LB ? '?loopback&dev=1' : '?dev=1')
+const BASE = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
+const URL = BASE + (LB ? '?loopback&dev=1' : '?dev=1')
 let shared, dialogs = 0
 const S = p => `/workspace/pixeldate/shots/${p}.png`
 const shot = async (p, n) => { await p.bringToFront(); await new Promise(r => setTimeout(r, 400)); await p.screenshot({ path: S(n) }) }
@@ -23,6 +25,7 @@ async function page(name, iam, seek, age, face) {
   const ctx = LB ? (shared ||= await browser.createBrowserContext()) : await browser.createBrowserContext(); const p = await ctx.newPage()
   await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
   p.on('console', m => { if (!/404/.test(m.text())) console.log(`  [${name}]`, m.text().slice(0, 150)) })
+  await p.evaluateOnNewDocument(() => { window.__pdRevealLog = []; window.__pdRecv = [] }) // refine reveal privacy log (test opt-in)
   p.on('dialog', d => { dialogs++; d.accept() }); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
   if (name === 'Sam') await shotV(p, 'v3.6-signup-empty-412')
@@ -94,7 +97,11 @@ await shot(a, '01-onboarding')
   await a.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 for (const p of [a, b]) { await p.bringToFront(); await click(p, '[data-t=start]'); step('started'); await p.waitForFunction(() => document.querySelector('[data-t=find]') && !document.querySelector('[data-t=find]').disabled, { timeout: 15000 }).catch(async e => { await p.screenshot({path: S('dbg')}); console.log(await p.evaluate(() => document.body.innerText.slice(0,200))); throw e }) }
 await shot(a, '02-lobby')
-const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t(a, '[data-t=finding]'); await shot(a, '03-finding'); await b.click('[data-t=find]')
+const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t(a, '[data-t=finding]')
+{ await a.waitForFunction(() => document.querySelector('[data-t=finding]')?.dataset.rr, { timeout: 10000 }); const r = await a.evaluate(() => ({ rr: document.querySelector('[data-t=finding]').dataset.rr, img: document.querySelector('[data-t=finding]').dataset.img, cap: document.querySelector('.rr-cap').textContent, radar: !!document.querySelector('.radar'), lede: document.querySelector('.lobbycard .lede[role=status]')?.textContent }))
+  if (r.radar || !['webgl2', '2d', 'static'].includes(r.rr) || !r.img || !r.cap.startsWith('Warming up') || !r.lede) throw 'finding refine art ' + JSON.stringify(r)
+  log('finding screen runs the refine reveal (no radar):', JSON.stringify(r)) }
+await shot(a, '03-finding'); await b.click('[data-t=find]')
 await t(a, '[data-t=their-photo]'); await t(b, '[data-t=their-photo]'); log(`matched via lobby in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
 const nameA = await b.$eval('.plate', e => e.textContent); log('B sees', nameA); if (await b.$('[data-t=season-badge]')) throw 'season shown at Stranger'; if (!nameA.includes('Sam, 25–29')) throw 'bracket not shown'
 { const th = await b.evaluate(() => window.__pdThem); const bad = ['age', 'by', 'bm'].filter(k => k in th); if (bad.length || JSON.stringify(th).includes(String(new Date().getFullYear() - 29))) throw 'birthday leaked: ' + JSON.stringify(th); log('peer received only the bracket:', JSON.stringify(th.br), 'keys', Object.keys(th).join(',')) }
@@ -142,6 +149,7 @@ await t(b, '[data-t=ready] [data-t=ready-reveal]'); await shot(b, '07-reveal-unl
 const lvlB = await b.$eval('.chip', e => e.textContent); if (!lvlB.includes('LV 1')) throw 'level rose on one tap'
 await b.click('[data-t=ready-reveal]'); await t(a, '[data-t=lvup]'); await t(b, '[data-t=lvup]'); await sleep(1300)
 await b.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await clean(b); await shot(b, 'v3.4-levelup-412'); await b.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
+for (const [n, p] of [['A', a], ['B', b]]) await revealCheck(p, n, 1, 2)
 log('level-up event on both:', await a.$eval('[data-t=lvup-name]', e => e.textContent), '/', await b.$eval('[data-t=lvup-name]', e => e.textContent))
 for (const p of [a, b]) await p.click('[data-t=lvup-close]'); await sleep(500)
 log('after both tapped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))
@@ -230,4 +238,61 @@ await Promise.all([a.waitForNavigation({ waitUntil: 'networkidle0' }), a.click('
   if (r.keys.length || r.dbs.length || r.html) throw 'delete left data ' + JSON.stringify(r)
   if (dialogs) throw dialogs + ' native dialogs were opened'
   log('delete profile (in-app confirm, 0 native dialogs) wiped local data (pd-uid / pd-dev are recreated on boot by the signup / ?dev=1): other pd.* keys', JSON.stringify(r.keys), 'IndexedDB', JSON.stringify(r.dbs), '-> signup') }
+
+// ── refine reveal privacy: the level-up refine may only use the two frames the partner sent (src/refine/level.ts) ──
+async function revealCheck(p, n, from, to) {
+  await p.waitForFunction(f => (window.__pdRevealLog || []).some(l => l.to === f), { timeout: 15000 }, to)
+  const reqs = []; const onReq = r => { const u = r.url(); if (!u.startsWith('data:') && (/\.(webp|jpe?g|png|avif|rr)(\?|$)/.test(u) || ['image', 'fetch', 'xhr'].includes(r.resourceType()))) reqs.push(u) }
+  p.on('request', onReq); const res0 = await p.evaluate(() => performance.getEntriesByType('resource').length)
+  await sleep(1900) // let the 1.2 s refine (+ the 400 ms hold) finish
+  p.off('request', onReq)
+  const r = await p.evaluate(async (from, to, res0) => {
+    const L = window.__pdRevealLog.filter(l => l.to === to).at(-1), recv = window.__pdRecv
+    const last = lv => recv.filter(x => x.level === lv).at(-1)?.src
+    const px = src => new Promise(ok => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'); c.width = i.naturalWidth; c.height = i.naturalHeight; const x = c.getContext('2d'); x.drawImage(i, 0, 0); ok({ w: c.width, d: x.getImageData(0, 0, c.width, c.height).data }) }; i.src = src })
+    const A = await px(L.srcA), B = await px(L.srcB), n = 1 << L.lo
+    // independent re-derivation from the RECEIVED frames only: cell samples of a, b (box mean only for the full photo)
+    const want = (P, m, avg) => { const o = []; const s = P.w / m; for (let y = 0; y < m; y++) for (let x = 0; x < m; x++) { let R = 0, G = 0, Bl = 0, k = 0
+      const ys = avg ? [Math.floor(y * s), Math.floor((y + 1) * s)] : [Math.floor((y + .5) * s), Math.floor((y + .5) * s) + 1], xs = avg ? [Math.floor(x * s), Math.floor((x + 1) * s)] : [Math.floor((x + .5) * s), Math.floor((x + .5) * s) + 1]
+      for (let yy = ys[0]; yy < ys[1]; yy++) for (let xx = xs[0]; xx < xs[1]; xx++) { const q = (yy * P.w + xx) * 4; R += P.d[q]; G += P.d[q + 1]; Bl += P.d[q + 2]; k++ } o.push(R / k, G / k, Bl / k, 255) } return o }
+    const diff = (got, w) => { let m = 0; for (let i = 0; i < w.length; i++) m = Math.max(m, Math.abs(got[i] - w[i])); return got.length === w.length ? m : 999 }
+    return { from: L.from, to: L.to, lo: L.lo, maxD: L.maxD, mode: L.mode, prep: L.prep, aW: A.w, bW: B.w, n,
+      srcA: L.srcA === last(from), srcB: L.srcB === last(to), coarse: diff(L.coarse, want(A, n, false)), fine: diff(L.fine, want(B, 2 * n, to === 5)),
+      newRes: performance.getEntriesByType('resource').slice(res0).map(e => e.name).filter(u => !u.startsWith('data:')), frames: L.frames.length, fmax: Math.max(...L.frames) }
+  }, from, to, res0)
+  const fullOK = to === 5 ? r.bW === 512 : r.bW === 2 * r.aW
+  if (r.from !== from || r.to !== to || !r.srcA || !r.srcB || r.maxD !== r.lo + 1 || r.aW !== r.n || !fullOK || r.coarse > 1 || r.fine > 1 || reqs.length || r.newRes.length)
+    throw `${n}: level-up refine used something other than the two received frames ` + JSON.stringify({ ...r, reqs })
+  log(`${n}: level-up refine ${from}->${to} built only from the 2 received frames (srcs match __pdRecv, tree depth ${r.lo}->${r.maxD} = ${r.n}->${2 * r.n} grid, grids re-derived from the received images: max diff coarse ${r.coarse} / fine ${r.fine}, 0 image/fetch requests during the reveal) · ${r.mode}/${r.prep}, ${r.frames} frames, worst ${r.fmax.toFixed(2)} ms`)
+}
+// ── finding loop + 4->5 reveal on the mock partner (deterministic: ?capture drives a virtual clock) ──
+async function refineMock() {
+  const ctx = await browser.createBrowserContext(); const p = await ctx.newPage(); await p.setViewport({ width: 1440, height: 900 })
+  p.on('pageerror', e => console.log('  PAGEERR mock', e.message))
+  await p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }])
+  await p.evaluateOnNewDocument(c => { window.__pdMock = c; window.__pdRevealLog = []; window.__pdRecv = [] }, mockCfg({ scene: 'finding' }))
+  await p.goto(BASE + '?capture=1&seed=4242', { waitUntil: 'networkidle0' }); await p.waitForFunction(() => window.__rr, { timeout: 15000 })
+  const r = await p.evaluate(async () => { await window.__rr.ready; const caps = [], seen = []; let ms = 0, lastPhase = ''
+    while (window.__rr.stats.shown.length < 10 && ms < 120000) { ms += 1000 / 30; await window.__rr.frame(ms); const ph = window.__rr.phase()
+      if (ph !== lastPhase) { lastPhase = ph; if (ph === 'hold') { await window.__rr.frame(ms += 400); caps.push(document.querySelector('.rr-cap').textContent) } if (ph === 'reveal') seen.push(document.querySelector('.rr-cap').textContent) } }
+    return { mode: window.__rr.mode, prep: window.__rr.prep(), shown: window.__rr.stats.shown, caps, seen: [...new Set(seen)], css: document.querySelector('.rr canvas').getBoundingClientRect().width }
+  })
+  const rep = r.shown.some((x, i) => i && x === r.shown[i - 1]), first7 = new Set(r.shown.slice(0, 7)).size
+  if (rep || first7 !== 7 || r.caps.length < 8 || !r.caps.every(c => /^Warming up: .+/.test(c)) || r.seen.join() !== 'Warming up…' || r.css < 560)
+    throw 'finding loop ' + JSON.stringify(r)
+  log(`finding loop (${r.mode}, prep in ${r.prep}): ${r.shown.length} images, all 7 in the first 7, no immediate repeats; caption "Warming up…" while refining, payoff e.g. "${r.caps[0]}"; canvas ${r.css} css px at 1440`)
+  // reduced motion: 8 -> 16 -> 32 -> sharp, no splits
+  await p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]); await p.goto(BASE + '?capture=1&seed=7', { waitUntil: 'networkidle0' }); await p.waitForFunction(() => window.__rr)
+  const rm = await p.evaluate(async () => { await window.__rr.ready; const ph = []; for (let ms = 0; ms < 5000; ms += 50) { await window.__rr.frame(ms); ph.push(window.__rr.phase()) } return { reduced: window.__rr.reduced, phases: [...new Set(ph)] } })
+  if (!rm.reduced || rm.phases.join() !== 'rm') throw 'reduced-motion finding ' + JSON.stringify(rm)
+  log('reduced motion: finding steps 8/16/32/sharp only (phases ' + rm.phases.join() + ')')
+  // the 4 -> 5 reveal (to the received full photo) on the mock partner
+  await ctx.close(); const c2 = await browser.createBrowserContext(); const q = await c2.newPage(); await q.setViewport({ width: 1440, height: 900 })
+  await q.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }])
+  await q.evaluateOnNewDocument(c => { window.__pdMock = c; window.__pdRevealLog = []; window.__pdRecv = []; try { localStorage.setItem('pd.view', 'stage') } catch {} }, mockCfg({ level: 4, pct: 100, tab: 'profile' }))
+  await q.goto(BASE, { waitUntil: 'networkidle0' }); await q.waitForFunction(() => window.__pdMockReady, { timeout: 15000 }); await sleep(800)
+  await q.evaluate(() => window.__pdMockApi.raise(4)); await revealCheck(q, 'mock 4->5', 4, 5)
+  await c2.close()
+}
+await refineMock()
 await browser.close(); console.log('ALL OK')

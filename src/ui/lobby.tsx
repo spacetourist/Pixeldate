@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { reducedMotion } from '../prefs'
 import { LEVELS } from '../config'
 import { AGE_TOP } from '../signup/shared'
 import { bracketLabel, bracketOf, type Profile } from '../net'
@@ -9,6 +10,30 @@ const B = import.meta.env.BASE_URL
 /** "k7q2px" -> "K7Q·2PX" (display only; joining accepts either form). */
 export const fmtCode = (c: string) => c ? (c.slice(0, 3) + '·' + c.slice(3)).toUpperCase() : ''
 const seekLabel = (p: Profile) => `${p.seek === 'everyone' ? 'Everyone' : p.seek === 'women' ? 'Women' : 'Men'} · ${p.min}–${p.max >= AGE_TOP ? AGE_TOP + '+' : p.max}`
+
+/** 08 finding art: the refine reveal (src/refine, its own lazy chunk + a prep Worker). The frame, canvas and caption
+    are plain markup sized by CSS, so nothing shifts when the chunk arrives. If neither WebGL2 nor Canvas 2D works, or
+    the chunk / data fail to load, it falls back to a static sharp image + caption, swapped every few seconds. */
+const POOL_STATIC: [string, string][] = [['disco-frog', 'a disco frog'], ['corgi-sunglasses', 'a corgi in shades'], ['cat-astronaut', 'a cat astronaut'], ['pizza-surfing', 'a pizza slice, surfing'], ['balloon-neon-city', 'a balloon over Neon City'], ['arcade-cabinet', 'a retro arcade cabinet'], ['strawberry-umbrella', 'a strawberry with a brolly']]
+function FindArt() {
+  const root = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), cap = useRef<HTMLSpanElement>(null), capT = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    let stop: (() => void) | null = null, dead = false, iv = 0
+    const still = () => { const r = root.current; if (dead || !r) return; r.dataset.rr = 'static'; let i = (Math.random() * 7) | 0
+      const show = () => { const [id, c] = POOL_STATIC[i++ % 7], img = r.querySelector('img')!; img.src = `${B}refine/${id}.webp`; img.hidden = false; r.dataset.img = id; cap.current!.classList.add('is-on'); capT.current!.textContent = 'Warming up: ' + c }
+      show(); iv = window.setInterval(show, 6000) }
+    let ok = false; try { ok = !!document.createElement('canvas').getContext('2d') } catch {}
+    if (!ok || (window as any).__pdRR === 'static') { still(); return () => { dead = true; clearInterval(iv) } }
+    import('../refine/finding').then(m => { if (dead) return
+      const h = m.startFinding({ canvas: cv.current!, cap: cap.current!, capT: capT.current!, root: root.current!, reduced: reducedMotion(), base: `${B}refine/` })
+      stop = h.stop; h.failed.then(f => { if (f) { h.stop(); still() } }) }, still)
+    return () => { dead = true; stop?.(); clearInterval(iv) }
+  }, [])
+  return <div className="rr" data-t="finding" ref={root}>
+    <div className="rr-frame" aria-hidden="true"><canvas ref={cv} width={256} height={256} /><img alt="" hidden width={1024} height={1024} /><i className="rr-scan" /></div>
+    <span className="chip chip--edge rr-cap" ref={cap} aria-hidden="true"><Icon n="spark" c="currentColor" /><span ref={capT}>Warming up…</span></span>
+  </div>
+}
 
 /** 07 lobby and 08 finding: app shell (top bar on phone, rail from 768), lobby art, card, and the side panel from 1200. */
 export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind, onCancel, onJoin, joining, onNav, onCall }: {
@@ -35,9 +60,7 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
       <Toasts where="page" />
       {finding
         ? <section className="lobbycard fx finding" aria-labelledby="pd-find-h">
-          <div className="radar" data-t="finding" aria-hidden="true"><i /><i /><i />
-            <Av src={avs[0]} level={1} size={64} />
-            <span className="dot" style={{ left: 18, top: 60 }} /><span className="dot" style={{ right: 30, top: 24, background: 'var(--cta)' }} /><span className="dot" style={{ right: 8, bottom: 70, background: 'var(--c-coral)' }} /></div>
+          <FindArt />
           <h1 className="px" id="pd-find-h">Finding someone…</h1>
           <p className="lede" role="status">Hang tight. As soon as someone is free, you'll both start as Strangers.</p>
           {chip}

@@ -230,3 +230,6 @@
     .bub--me{outline-color:Highlight}
   }}
 }
+/* level-up refine overlay (src/refine/level): same cover box as the photo canvas under it, shown only while it runs */
+.stage>canvas.rr-lv{opacity:0;transition:opacity 200ms linear;pointer-events:none}
+.stage>canvas.rr-lv.on{opacity:1;transition:none}

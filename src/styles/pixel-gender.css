@@ -1,0 +1,104 @@
+/* Pixel character select ("I am" / "I want to meet"): GD pixel-gender SPEC (option A), from design component/pixel-gender.css.
+   Real radio inputs inside label cards. One sprite atlas (240x104 px, 1x) drawn at an integer scale --px, so every art pixel
+   is exactly --px CSS pixels (never fractional, never smoothed). Atlas rows: man y0 (24x32 x6) · woman y32 (24x32 x6) ·
+   duo y64 (40x32 x6) · heart y96 (9x8 x3). Frames per row: 0-1 idle (breathing) · 2-5 wave.
+   Integration notes (vs the drop-in): layer screens (the drop-in was injected unlayered in the mocks and must beat .fx in
+   components); the focus ring and focus "hover" look only under html[data-kbd] like every other ring in the app; reduced
+   transparency swaps the see-through dimming for solid equivalents. The atlas is a fingerprinted file (not inlined, see
+   vite.config.ts), fetched only once a card renders; the sprite box has a fixed size, so its arrival never shifts layout. */
+@layer screens{
+.pg{--px:5px;--gap:12px;--atlas:url("../assets/pixel-gender-atlas.png");
+  display:grid;grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:var(--gap)}
+.pg--3{--n:3;--px:2px;--gap:8px}
+
+/* the radio card. The label is NOT clipped, so it can carry the lift shadow and the focus ring */
+.pg-card{position:relative;display:flex;flex-direction:column;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+  --lift:0px;transform:translateY(var(--lift));transition:transform var(--dur-instant) steps(2,end),filter var(--dur-instant) steps(2,end)}
+.pg-frame{--s:var(--step-md);--fill:var(--raised);--lipb:var(--lip);
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:calc(var(--edge-w) + 6px) 4px calc(var(--edge-w) + var(--lip) + 8px)}
+.pg-frame::after{content:"";position:absolute;inset:var(--edge-w);background:var(--scanlines);pointer-events:none;z-index:1;clip-path:var(--step-path)}
+
+/* stage = --head art px of headroom (heart beside a single character's head, above the duo's) + 32 px sprite + 1 px floor */
+.pg-stage,.pg-spr,.pg-heart,.pg-floor{display:block}
+.pg-stage{position:relative;z-index:2;width:calc(var(--fw) * var(--px));height:calc((var(--head,2) + 33) * var(--px))}
+.pg-floor{position:absolute;left:50%;bottom:0;width:calc(var(--floor,16) * var(--px));height:calc(2 * var(--px));translate:-50% 0;
+  --s:var(--px);clip-path:polygon(var(--s) 0,calc(100% - var(--s)) 0,100% var(--s),100% 100%,0 100%,0 var(--s));
+  background:var(--edge);opacity:.55}
+.pg-spr{position:absolute;left:0;bottom:var(--px);width:calc(var(--fw) * var(--px));height:calc(32 * var(--px));
+  background:var(--atlas) no-repeat;background-size:calc(240 * var(--px)) calc(104 * var(--px));
+  background-position:0 calc(var(--row) * var(--px) * -1);image-rendering:pixelated;
+  animation:pg-idle 1.2s steps(2,end) infinite}
+.pg-heart{position:absolute;top:0;left:calc(var(--hx) * var(--px));width:calc(9 * var(--px));height:calc(8 * var(--px));z-index:2;
+  background:var(--atlas) no-repeat;background-size:calc(240 * var(--px)) calc(104 * var(--px));
+  background-position:calc(-18 * var(--px)) calc(-96 * var(--px));image-rendering:pixelated;visibility:hidden}
+.pg-lab{font:var(--t-ui);color:var(--text-muted);position:relative;z-index:2;white-space:nowrap;transition:color var(--dur-instant) steps(2,end)}
+
+.pg-card[data-c=man]  {--fw:24;--row:0; --hx:-2}
+.pg-card[data-c=woman]{--fw:24;--row:32;--hx:17}
+.pg-card[data-c=duo]  {--fw:40;--row:64;--hx:16;--floor:30;--head:6}
+/* two characters side by side never bob in lockstep */
+.pg-card:nth-child(2) .pg-spr{animation-delay:-.6s}
+.pg-card:nth-child(3) .pg-spr{animation-delay:-.3s}
+/* 3-up: every card gets the duo's headroom so frames, floors and labels line up; cards stretch to the row height */
+.pg--3 .pg-card{--head:6}
+.pg--3 .pg-card:not([data-c=duo]) .pg-heart{top:calc(4 * var(--px))}
+
+@keyframes pg-idle{from{background-position-x:0}to{background-position-x:calc(var(--fw) * var(--px) * -2)}}
+/* pg-rest = pg-idle under a new name, so the bob restarts cleanly after the wave instead of resuming mid-cycle */
+@keyframes pg-rest{from{background-position-x:0}to{background-position-x:calc(var(--fw) * var(--px) * -2)}}
+@keyframes pg-wave{from{background-position-x:calc(var(--fw) * var(--px) * -2)}to{background-position-x:calc(var(--fw) * var(--px) * -6)}}
+@keyframes pg-heart{from{background-position-x:0}to{background-position-x:calc(-18 * var(--px))}}
+
+/* ── hover (pointer) / keyboard focus (rings only for keyboard users, html[data-kbd] from main.tsx): lift 3px + lilac frame ── */
+.pg-card:is(:hover,.is-hover),:root[data-kbd] .pg-card:has(input:focus-visible){--lift:-3px;filter:drop-shadow(0 3px 0 var(--edge))}
+.pg-card:is(:hover,.is-hover) .pg-frame,:root[data-kbd] .pg-card:has(input:focus-visible) .pg-frame{background:var(--text-muted);--fill:var(--hover)}
+.pg-card:is(:hover,.is-hover) .pg-lab,:root[data-kbd] .pg-card:has(input:focus-visible) .pg-lab{color:var(--text)}
+:root[data-kbd] .pg-card:has(input:focus-visible){outline:3px solid var(--focus);outline-offset:4px}
+.pg-card:active,.pg-card.is-pressed{--lift:0px;filter:none}
+.pg-card:active .pg-frame,.pg-card.is-pressed .pg-frame{--press:var(--lip)}
+
+/* ── selected: butter frame, wave once (480ms, 4 frames) then back to idle, heart pops (240ms, 3 frames) ── */
+.pg-card:has(input:checked) .pg-frame{background:var(--cta);--fill:var(--raised)}
+.pg-card:has(input:checked) .pg-lab{color:var(--text);font-weight:700}
+.pg-card:has(input:checked) .pg-floor{background:var(--cta);opacity:1}
+.pg-card:has(input:checked) .pg-spr{animation:pg-wave 480ms steps(4,end) 1,pg-rest 1.2s steps(2,end) 480ms infinite}
+.pg-card:has(input:checked) .pg-heart{visibility:visible;animation:pg-heart 240ms steps(3,jump-none) 1 both}
+/* hovering / focusing the selected card keeps the butter frame */
+.pg-card:has(input:checked):is(:hover,.is-hover) .pg-frame,:root[data-kbd] .pg-card:has(input:checked:focus-visible) .pg-frame{background:var(--c-butter-hi)}
+
+/* ── the other card(s) once a choice exists: sprite at 72% + partly desaturated, floor faded, label stays full contrast ── */
+.pg:has(input:checked) .pg-card:not(:has(input:checked)) .pg-frame{--fill:var(--panel)}
+.pg:has(input:checked) .pg-card:not(:has(input:checked)) .pg-spr{opacity:.72;filter:saturate(.7)}
+.pg:has(input:checked) .pg-card:not(:has(input:checked)) .pg-floor{opacity:.35}
+
+/* ── in the profile editor rows (flex rows that would otherwise shrink the group to its content) ── */
+.setrow .pg{flex:1 1 100%;min-width:0}
+/* the 3-up sits on its own line but keeps the SPEC card size (duo width + padding: 88 wide at 2px, 128 at 3px), all equal */
+.setrow .pg--3{grid-template-columns:repeat(3,minmax(calc(40 * var(--px) + 8px),max-content));justify-content:start}
+
+/* ── sizes: integer --px only ── */
+@container app (max-width:339px){.pg:not(.pg--3){--px:4px}}
+@container app (min-width:1024px){.pg{--gap:16px}.pg:not(.pg--3){--px:4px}.pg-lab{font:var(--t-btn)}}
+/* 5x on desktop only where step 4 (cards + age meter + 18+ + Continue) still fits without scrolling */
+@media (min-height:960px){@container app (min-width:1024px){.pg:not(.pg--3){--px:5px}}}
+@container app (min-width:768px){.pg--3{--px:3px;--gap:12px}}
+
+/* ── reduced motion (OS; the app's own setting gets the same rules via tools/prefs-css.js): no bob, no wave, no lift
+   transition. The frame colour and the heart (final frame, shown at once) still change. ── */
+@media (prefers-reduced-motion:reduce){
+  .pg-spr,.pg-card:has(input:checked) .pg-spr,.pg-card:has(input:checked) .pg-heart{animation:none}
+  .pg-card,.pg-lab{transition:none}
+}
+/* ── reduced transparency (OS + Solid panels setting): nothing see-through; the same look from solid colours ── */
+@media (prefers-reduced-transparency:reduce){
+  .pg-floor{opacity:1;background:color-mix(in srgb,var(--edge) 55%,var(--raised))}
+  .pg:has(input:checked) .pg-card:not(:has(input:checked)) .pg-spr{opacity:1;filter:saturate(.7) brightness(.74)}
+  .pg:has(input:checked) .pg-card:not(:has(input:checked)) .pg-floor{opacity:1;background:color-mix(in srgb,var(--edge) 35%,var(--panel))}
+  .pg-card:has(input:checked) .pg-floor{background:var(--cta)}
+}
+@media (forced-colors:active){
+  .pg-frame{clip-path:none!important;outline:2px solid CanvasText;outline-offset:-2px}
+  .pg-card:has(input:checked) .pg-frame{outline:4px solid Highlight;outline-offset:-4px}
+}
+}

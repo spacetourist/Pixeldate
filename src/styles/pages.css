@@ -47,7 +47,10 @@ button.toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px;cl
 .setrow .eacts{display:flex;gap:8px}
 .setrow .eseek{display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:100%}
 .setrow .range{display:flex;gap:8px;align-items:center;font:var(--t-small);color:var(--text-muted)}
-.setrow .range .field{width:84px}
+.setrow .range .field{width:auto}
+/* GD pixel-gender SPEC 11.3: at 84px wide (minus the field's 18px padding, the select's 12px padding and the native caret) the
+   age select had ~8px for its value and showed "2 ▾" for 25. The select now sizes to its value instead. */
+.setrow .range select{min-width:4.5em}
 /* dialogs over a scrolling page */
 .app:has(>.shell--page) .layer,.shell--page~.layer{position:fixed}
 .layer:has(>.modal .mbody){background:rgb(5 2 15 / .72)}

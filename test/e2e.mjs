@@ -30,8 +30,21 @@ async function page(name, iam, seek, age, face) {
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
   if (name === 'Sam') await shotV(p, 'v3.6-signup-empty-412')
   // R2: the signup is a 4-step split (You · Your photo · Birthday · Who you'd like to meet); each step has its own Continue
-  await p.type('[data-t=name]', name); await p.click(`[data-t=iam-${iam}]`)
-  if (!(await p.$eval(`[data-t=iam-${iam}] input`, e => e.checked)) || (await p.$$('[data-t^=iam-].on')).length !== 1) throw 'iam radio state'
+  await p.type('[data-t=name]', name)
+  // pixel-gender: "I am" has NO default; Continue (and Enter in the name field) wait for a pick
+  { const r = await p.evaluate(() => ({ checked: document.querySelectorAll('input[name=iam]:checked').length, on: document.querySelectorAll('[data-t^=iam-].on').length, next: document.querySelector('[data-t=next]').disabled, cards: document.querySelectorAll('.pg [data-t^=iam-].pg-card input[type=radio]').length }))
+    if (r.checked || r.on || !r.next || r.cards !== 2) throw 'step 1 default selection / Continue ' + JSON.stringify(r) }
+  await p.focus('[data-t=name]'); await p.keyboard.press('Enter'); await sleep(150); if (!(await p.$('[data-t=name]'))) throw 'Enter in name advanced without an "I am" pick'
+  if (name === 'Sam') { // keyboard: Tab from the name lands on the (unpicked) group, Space picks, arrows move; ring only for keyboard users
+    await p.keyboard.press('Tab'); const f = await p.evaluate(() => document.activeElement.closest('[data-t]')?.dataset.t); if (f !== 'iam-man') throw 'Tab did not reach the I am group: ' + f
+    await p.keyboard.press('Space'); await p.keyboard.press('ArrowRight'); await sleep(100)
+    const k = await p.evaluate(() => { const l = document.querySelector('[data-t=iam-woman]'), cs = getComputedStyle(l); return { v: document.querySelector('input[name=iam]:checked')?.value, focus: document.activeElement === l.querySelector('input'), kbd: 'kbd' in document.documentElement.dataset, ring: cs.outlineStyle + ' ' + cs.outlineWidth, next: document.querySelector('[data-t=next]').disabled } })
+    if (k.v !== 'woman' || !k.focus || !k.kbd || k.ring !== 'solid 3px' || k.next) throw 'I am radios by keyboard ' + JSON.stringify(k)
+    await p.keyboard.press('ArrowLeft'); if ((await p.$eval('input[name=iam]:checked', e => e.value)) !== 'man') throw 'ArrowLeft'
+    await p.mouse.click(5, 5); const pr = await p.$eval('[data-t=iam-man]', e => getComputedStyle(e).outlineStyle); if (pr !== 'none') throw 'focus ring shown after pointer use: ' + pr
+    log('"I am": no default, Continue + Enter blocked until a pick; Tab reaches the group, Space/arrows pick, 3px ring only for keyboard users', JSON.stringify(k)) }
+  await p.click(`[data-t=iam-${iam}]`)
+  if (!(await p.$eval(`[data-t=iam-${iam}] input`, e => e.checked)) || (await p.$$('[data-t^=iam-].on')).length !== 1 || await p.$eval('[data-t=next]', e => e.disabled)) throw 'iam radio state'
   await p.click('[data-t=next]')
   await p.waitForSelector('[data-t=add-selfie]'); if (!(await p.$eval('[data-t=next]', e => e.disabled))) throw 'photo step continues without a photo'
   await (await p.$('[data-t=gallery]')).uploadFile(`/workspace/pixeldate/test/fixtures/${face}.jpg`)
@@ -52,6 +65,12 @@ async function page(name, iam, seek, age, face) {
   if (await p.$('[data-t=under18]')) throw 'under18 shown for adult'
   if (name === 'Sam') { const r = await p.$eval('[data-t=bday-readout]', e => e.textContent); if (!r.includes("You're " + age) || !r.includes('Winter-born') || !r.includes('25–29')) throw 'readout ' + r; log('birthday readout:', r) }
   await p.click('[data-t=next]'); await p.waitForSelector('[data-t=start]')
+  // pixel-gender: "I want to meet" has NO default either; with 18+ ticked, Continue still waits for it
+  { const r = await p.evaluate(() => ({ checked: document.querySelectorAll('input[name=seek]:checked').length, on: document.querySelectorAll('[data-t^=seek-].on').length, cards: document.querySelectorAll('.pg [data-t^=seek-].pg-card input[type=radio]').length }))
+    if (r.checked || r.on || r.cards !== 2) throw 'step 4 default selection ' + JSON.stringify(r)
+    await p.$eval('[data-t=adult]', e => e.click()); if (!(await p.$eval('[data-t=start]', e => e.disabled))) throw 'start enabled with no "I want to meet" pick'; await p.$eval('[data-t=adult]', e => e.click()) }
+  if (name === 'Sam') { await p.focus('[data-t=seek-men] input'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowLeft')
+    if ((await p.$eval('input[name=seek]:checked', e => e.value)) !== 'men') throw 'seek radios by keyboard'; log('"I want to meet": no default, Continue blocked until a pick (18+ ticked), arrows pick') }
   await p.click(`[data-t=seek-${seek}]`)
   if (!(await p.$eval(`[data-t=seek-${seek}] input`, e => e.checked)) || (await p.$$('[data-t^=seek-].on')).length !== 1) throw 'seek radio state'
   if (!(await p.$eval('[data-t=start]', e => e.disabled))) throw 'start enabled before 18+ tick'
@@ -225,6 +244,20 @@ await click(a, '[data-t=top-settings]'); await t(a, '[data-t=page-settings]')
 { const r = await a.evaluate(() => Object.fromEntries(['set-motion', 'set-solid', 'set-sounds'].map(k => [k, document.querySelector(`[data-t=${k}]`).getAttribute('aria-checked')]).concat([['compact', document.querySelector('[data-t=set-view-compact]').getAttribute('aria-pressed')]])))
   if (r['set-motion'] !== 'true' || r['set-solid'] !== 'true' || r['set-sounds'] !== 'false' || r.compact !== 'true') throw 'settings UI after reload ' + JSON.stringify(r)
   log('each setting persists across a reload (view compact, reduce motion, solid panels, sounds off): storage, html[data-motion/data-solid], --dur-fast 0s, switches', JSON.stringify(r)) }
+// pixel-gender: the picks were saved, and the You editors pre-select the saved value and save a change
+{ const pr = await store(a, lb => JSON.parse((lb ? sessionStorage : localStorage).getItem('pd.profile'))); if (pr.iam !== 'woman' || pr.seek !== 'men') throw 'signup picks not saved ' + JSON.stringify(pr) }
+await click(a, '[data-t=top-profile]'); await click(a, '[data-t=edit-iam]'); await t(a, '.setrow .pg')
+{ const r = await a.evaluate(() => ({ v: [...document.querySelectorAll('input[name=iam]:checked')].map(e => e.value), on: [...document.querySelectorAll('[data-t^=iam-].on')].map(e => e.dataset.t) }))
+  if (r.v.join() !== 'woman' || r.on.join() !== 'iam-woman') throw 'I am editor does not pre-select the saved value ' + JSON.stringify(r) }
+await a.focus('[data-t=iam-woman] input'); await a.keyboard.press('ArrowLeft'); await a.click('[data-t=edit-save]'); await sleep(200)
+{ const pr = await store(a, lb => JSON.parse((lb ? sessionStorage : localStorage).getItem('pd.profile'))); if (pr.iam !== 'man') throw 'I am edit not saved ' + JSON.stringify(pr) }
+await click(a, '[data-t=edit-seek]'); await t(a, '.setrow .pg--3')
+{ const r = await a.evaluate(() => ({ v: [...document.querySelectorAll('input[name=seek]:checked')].map(e => e.value), order: [...document.querySelectorAll('.pg--3 .pg-card')].map(e => e.dataset.t), h: [...new Set([...document.querySelectorAll('.pg--3 .pg-card')].map(e => e.getBoundingClientRect().height))] }))
+  if (r.v.join() !== 'men' || r.order.join() !== 'seek-women,seek-men,seek-everyone' || r.h.length !== 1) throw 'I want to meet editor ' + JSON.stringify(r) }
+await a.click('[data-t=seek-everyone]'); await a.click('[data-t=edit-save]'); await sleep(200)
+{ const pr = await store(a, lb => JSON.parse((lb ? sessionStorage : localStorage).getItem('pd.profile'))); if (pr.iam !== 'man' || pr.seek !== 'everyone') throw 'I want to meet edit not saved ' + JSON.stringify(pr)
+  log('signup picks saved (woman / men); You editors pre-select the saved value (3-up Women/Men/Everyone, equal heights), keyboard + click changes saved:', JSON.stringify({ iam: pr.iam, seek: pr.seek })) }
+await click(a, '[data-t=top-settings]'); await t(a, '[data-t=page-settings]')
 // unblock: a blocked person (as Skip & block stores them) is listed and can be unblocked
 await store(a, lb => (lb ? sessionStorage : localStorage).setItem('pd-blocked', JSON.stringify([{ uid: 'x-robin', name: 'Robin', br: [30, 34], at: Date.now() - 864e5 }])))
 await click(a, '[data-t=top-matches]'); await click(a, '[data-t=top-settings]'); await t(a, '[data-t=blocked-row]')

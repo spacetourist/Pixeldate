@@ -8,6 +8,7 @@ import { bracketLabel, bracketOf, type Gender, type Profile, type Seek } from '.
 import { prefs, setPref, osMotion, osSolid, history, blockedList, unblock, ls, type Hist, type View } from '../prefs'
 import { Icon, Hp, Av, LV_COLOR } from './parts'
 import { Toasts, toast } from './toast'
+import { PixelPick } from './pixel-gender'
 import '../styles/pages.css'
 
 export type PageId = 'matches' | 'profile' | 'settings'
@@ -92,8 +93,6 @@ function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLIm
   const br = bracketLabel(bracketOf(Math.min(me.age, 70)))
   const btn = (k: typeof ed) => <button className="btn btn--ghost btn--sm fx" data-t={'edit-' + k} onClick={() => edit(k)}>Edit</button>
   const acts = (ok: boolean, p: Profile) => <span className="eacts"><button className="btn fx btn--ghost btn--sm" onClick={() => setEd('')}>Cancel</button><button className="btn fx btn--sm" data-t="edit-save" disabled={!ok} onClick={() => save(p)}>Save</button></span>
-  const seg = <V extends string>(v: V, opts: [V, string][], on: (v: V) => void, lab: string) => <div className="seg seg--sm" role="group" aria-label={lab}>{opts.map(([k, l]) =>
-    <button key={k} type="button" className={v === k ? 'on' : ''} aria-pressed={v === k} data-t={'opt-' + k} onClick={() => on(k)}>{l}</button>)}</div>
   const s = seasonOf(me.bm)
   return <>
     <Title icon="user" eb="You" h={me.name} t="you-h" />
@@ -108,12 +107,12 @@ function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLIm
       <div className="setgrp fx"><h3>Profile</h3>
         <div className="setrow"><div className="tx"><b>Name</b>{ed === 'name' ? null : <span data-t="you-name">{me.name}</span>}</div>
           {ed === 'name' ? <><label className="field fx efield"><input autoFocus value={d.name} maxLength={20} aria-label="Name" data-t="edit-name-input" onChange={e => setD({ ...d, name: e.target.value })} onKeyDown={e => { if (e.key === 'Enter' && d.name.trim()) save({ ...d, name: d.name.trim() }) }} /></label>{acts(!!d.name.trim(), { ...d, name: d.name.trim() })}</> : btn('name')}</div>
-        <div className="setrow"><div className="tx"><b>I am</b><span>{cap(me.iam)}</span></div>
-          {ed === 'iam' ? <>{seg<Gender>(d.iam, [['man', 'Man'], ['woman', 'Woman']], v => setD({ ...d, iam: v }), 'I am')}{acts(true, d)}</> : btn('iam')}</div>
+        <div className="setrow"><div className="tx"><b id="lab-you-iam">I am</b><span>{cap(me.iam)}</span></div>
+          {ed === 'iam' ? <><PixelPick<Gender> labelledby="lab-you-iam" name="iam" value={d.iam} onChange={v => setD({ ...d, iam: v })} opts={[['man', 'Man', 'man'], ['woman', 'Woman', 'woman']]} />{acts(true, d)}</> : btn('iam')}</div>
         <div className="setrow"><div className="tx"><b>Age bracket</b><span>{br} · from your birthday, which stays on this device</span></div></div>
         <div className="setrow"><div className="tx"><b>Birth season badge</b><span>Shown from Spark</span></div><span className="chip chip--edge"><Icon n={s} c="var(--c-mint)" /> {cap(s)}-born</span></div>
-        <div className="setrow"><div className="tx"><b>I want to meet</b><span data-t="you-seek">{seekLabel(me)}</span></div>
-          {ed === 'seek' ? <div className="eseek">{seg<Seek>(d.seek, [['women', 'Women'], ['men', 'Men'], ['everyone', 'Everyone']], v => setD({ ...d, seek: v }), 'I want to meet')}
+        <div className="setrow"><div className="tx"><b id="lab-you-seek">I want to meet</b><span data-t="you-seek">{seekLabel(me)}</span></div>
+          {ed === 'seek' ? <div className="eseek"><PixelPick<Seek> labelledby="lab-you-seek" name="seek" value={d.seek} onChange={v => setD({ ...d, seek: v })} opts={[['women', 'Women', 'woman'], ['men', 'Men', 'man'], ['everyone', 'Everyone', 'duo']]} />
             <span className="range"><label className="field fx"><select aria-label="From age" value={d.min} onChange={e => { const [a, b] = snapRange(+e.target.value, Math.max(d.max, +e.target.value)); setD({ ...d, min: a, max: b }) }}>{EDGES.slice(0, -1).map(x => <option key={x} value={x}>{x}</option>)}</select></label>
               <span>to</span><label className="field fx"><select aria-label="To age" value={d.max} onChange={e => setD({ ...d, max: +e.target.value })}>{EDGES.slice(1).map(x => x === 70 ? 70 : x - 1).filter(x => x > d.min).map(x => <option key={x} value={x}>{x === 70 ? '70+' : x}</option>)}</select></label></span>
             {acts(true, d)}</div> : btn('seek')}</div>

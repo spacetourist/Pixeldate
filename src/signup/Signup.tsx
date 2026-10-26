@@ -5,6 +5,7 @@ import { store, bracketOf, bracketLabel, type Profile, type Gender, type Seek } 
 import { Icon } from '../ui/parts'
 import type { IconName } from '../ui/icons'
 import { Ladder } from './Ladder'
+import { PixelPick } from '../ui/pixel-gender'
 import { toast, dismiss, Toasts } from '../ui/toast'
 import { AGE_TOP, EDGES, ageFrom, reduceMotion, seasonOf, snapRange } from './shared'
 
@@ -13,12 +14,6 @@ const STEPS = ['You', 'Your photo', 'Birthday', 'Who you’d like to meet']
 // per tab, so two tabs in one browser are different people
 const uid = () => { let u = sessionStorage.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); sessionStorage.setItem('pd-uid', u) } return u }
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
-
-function Seg<V extends string>({ name, value, opts, onChange, label }: { name: string; value: V; opts: [V, string][]; onChange: (v: V) => void; label: string }) {
-  return <div className="seg" role="radiogroup" aria-labelledby={label}>{opts.map(([v, l]) =>
-    <label key={v} className={value === v ? 'on' : ''} data-t={name + '-' + v}>
-      <input className="vh" type="radio" name={name} value={v} checked={value === v} onChange={() => onChange(v)} />{l}</label>)}</div>
-}
 
 function AgeRange({ min, max, onChange }: { min: number; max: number; onChange: (a: number, b: number) => void }) {
   const i = EDGES.indexOf(min), j = max >= AGE_TOP ? 7 : EDGES.indexOf(max + 1), f = (k: number) => k / 7 * 100 + '%'
@@ -72,11 +67,11 @@ const Eyebrow = ({ n, c, children }: { n: IconName; c: string; children: React.R
 
 export default function Signup({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const [step, setStep] = useState(1)
-  const [name, setName] = useState(''); const [iam, setIam] = useState<Gender>('man')
+  const [name, setName] = useState(''); const [iam, setIam] = useState<Gender | null>(null)
   const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const [ctas, setCtas] = useState(false)
   const saved = useMemo(() => { try { return JSON.parse(store.getItem('pd-bday') || '') } catch { return null } }, [])
   const [by, setBy] = useState<number>(saved?.by || NOW_Y - 25); const [bm, setBm] = useState<number>(saved?.bm || 0); const age = bm ? ageFrom(by, bm) : 0
-  const [seek, setSeek] = useState<Seek>('women'); const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP); const [adult, setAdult] = useState(false)
+  const [seek, setSeek] = useState<Seek | null>(null); const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP); const [adult, setAdult] = useState(false)
   const [cam, setCam] = useState<MediaStream | null>(null); const vid = useRef<HTMLVideoElement>(null); const fileIn = useRef<HTMLInputElement>(null)
   const h1 = useRef<HTMLHeadingElement>(null), moved = useRef(false)
   useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
@@ -94,7 +89,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPic(String(r.result)); r.readAsDataURL(f) } }
   const openCam = async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { toast({ id: 'cam', role: 'error', icon: 'cam', t: 'notice-cam', title: 'Camera unavailable', body: 'Another app may be using it, or access is blocked. Try Gallery instead.' }) } }
   const minor = bm > 0 && age < 18
-  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }
+  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }
 
   const ladder = step === 2 && !!photo
   const next = (label: string, enabled: boolean, onClick: () => void, t = 'next') =>
@@ -107,11 +102,11 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
       <div><Eyebrow n="heart" c="var(--c-coral)">Create your profile</Eyebrow>{H('Blurry until you both choose.')}</div>
       <div><label className="fl" htmlFor="pd-name">Name</label>
         <span className="field fx"><input id="pd-name" value={name} maxLength={20} autoComplete="given-name" enterKeyHint="next" onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) go(2) }} placeholder="Your first name" data-t="name" aria-describedby="pd-name-h" /></span>
+          onKeyDown={e => { if (e.key === 'Enter' && name.trim() && iam) go(2) }} placeholder="Your first name" data-t="name" aria-describedby="pd-name-h" /></span>
         <div className="help" id="pd-name-h">This is what matches see, with your age bracket. Max 20 characters.</div></div>
-      <div><span className="fl" id="lab-iam">I am</span><Seg label="lab-iam" name="iam" value={iam} onChange={setIam} opts={[['man', 'Man'], ['woman', 'Woman']]} /></div>
+      <div><span className="fl" id="lab-iam">I am</span><PixelPick labelledby="lab-iam" name="iam" value={iam} onChange={setIam} opts={[['man', 'Man', 'man'], ['woman', 'Woman', 'woman']]} /></div>
     </>
-    foot = next('Continue', !!name.trim(), () => go(2))
+    foot = next('Continue', !!(name.trim() && iam), () => go(2)) // no default "I am": Continue waits for a pick
   } else if (step === 2 && !ladder) {
     body = <>
       <div><Eyebrow n="heart" c="var(--c-coral)">Create your profile</Eyebrow>{H('Add a selfie')}
@@ -145,12 +140,12 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
   } else {
     body = <>
       <div><Eyebrow n="heart" c="var(--c-coral)">Last step</Eyebrow>{H('Who would you like to meet?')}</div>
-      <div><span className="fl" id="lab-seek">I want to meet</span><Seg label="lab-seek" name="seek" value={seek} onChange={setSeek} opts={[['men', 'Men'], ['women', 'Women']]} /></div>
+      <div><span className="fl" id="lab-seek">I want to meet</span><PixelPick labelledby="lab-seek" name="seek" value={seek} onChange={setSeek} opts={[['men', 'Men', 'man'], ['women', 'Women', 'woman']]} /></div>
       <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
       <label className="tick"><input className="vh" type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" />
         <span className={'check' + (adult ? ' is-on' : '')} data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <Icon n="check" c="var(--edge)" />}</span>I'm 18 or over</label>
     </>
-    const ok = !!(name.trim() && photo && okPhoto && adult && bm > 0 && age >= 18)
+    const ok = !!(name.trim() && iam && seek && photo && okPhoto && adult && bm > 0 && age >= 18)
     foot = next('Continue', ok, finish, 'start')
   }
   const back = step === 1 ? <a className="btn fx btn--ghost btn--icon btn--sm" href={B} aria-label="Back to home" data-t="back"><Icon n="back" c="var(--text)" /></a>

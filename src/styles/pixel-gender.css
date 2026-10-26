@@ -74,8 +74,9 @@
 
 /* ── in the profile editor rows (flex rows that would otherwise shrink the group to its content) ── */
 .setrow .pg{flex:1 1 100%;min-width:0}
-/* the 3-up sits on its own line but keeps the SPEC card size (duo width + padding: 88 wide at 2px, 128 at 3px), all equal */
-.setrow .pg--3{grid-template-columns:repeat(3,minmax(calc(40 * var(--px) + 8px),max-content));justify-content:start}
+/* the 3-up sits on its own line. Phone: three equal columns filling the row (sprites stay 2px, centred in each card).
+   ≥768: the SPEC card size (duo width + padding: 128 wide at 3px), all equal, the group centred in the row */
+@container app (min-width:768px){.setrow .pg--3{grid-template-columns:repeat(3,minmax(calc(40 * var(--px) + 8px),max-content));justify-content:center}}
 
 /* ── sizes: integer --px only ── */
 @container app (max-width:339px){.pg:not(.pg--3){--px:4px}}

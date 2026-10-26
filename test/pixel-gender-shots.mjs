@@ -1,6 +1,7 @@
 // Pixel gender character cards: checkpoint shots of the real build (no injection), motion + reduced motion, at 390x844,
 // 1440x900 and 1920x1080, plus the settings age dropdown at 390 and an mp4 of the select interaction at 390.
-// usage: [URL=https://…/Pixeldate/app/] node test/pixel-gender-shots.mjs [filter]   (default: local vite preview :4173)
+// usage: [URL=https://…/Pixeldate/app/] [SET=live] node test/pixel-gender-shots.mjs [filter]   (default: local vite preview :4173)
+// SET=live: quick subset for a live check: step1-none, step1-man, step4-women, settings-seek-everyone at the 3 sizes (motion on)
 // Output: /workspace/pixeldate/shots/pixel-gender/
 import { chromium } from '/tmp/pw/node_modules/playwright-core/index.mjs'
 import { mkdirSync, copyFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
@@ -11,17 +12,18 @@ const { open } = await import('./r1-shots.mjs')
 const DIR = '/workspace/pixeldate/shots/pixel-gender/', OUT = n => DIR + n + '.png'
 mkdirSync(DIR, { recursive: true })
 const PHOTO = '/tmp/r2-kofi.webp'; copyFileSync('/workspace/design/pixeldate/player-two/assets/photos/kofi-full.webp', PHOTO)
-const only = process.argv[2] || ''
+const only = process.argv[2] || '', LIVE = process.env.SET === 'live'
+const LIVESET = ['step1-none', 'step1-man', 'step4-women', 'settings-seek-everyone']
 const SIZES = [[390, 844, 'p390'], [1440, 900, 'd1440'], [1920, 1080, 'd1920']]
 const measure = p => p.evaluate(() => {
   const g = document.querySelector('.pg'); if (!g) return { pg: null }
   const r = e => { const b = e.getBoundingClientRect(); return Math.round(b.width) + 'x' + Math.round(b.height) }
   const cta = document.querySelector('[data-t=next],[data-t=start]')
-  return { vw: innerWidth, px: getComputedStyle(g).getPropertyValue('--px').trim(), cards: [...g.querySelectorAll('.pg-card')].map(r), sprite: r(g.querySelector('.pg-spr')),
+  return { vw: innerWidth, px: getComputedStyle(g).getPropertyValue('--px').trim(), cards: [...g.querySelectorAll('.pg-card')].map(r), x: [...g.querySelectorAll('.pg-card')].map(c => Math.round(c.getBoundingClientRect().left)), row: (() => { const w = g.parentElement.getBoundingClientRect(); return Math.round(w.left) + '-' + Math.round(w.right) })(), sprX: [...g.querySelectorAll('.pg-card')].map(c => { const a = c.getBoundingClientRect(), b = c.querySelector('.pg-spr').getBoundingClientRect(); return Math.round((b.left - a.left) - (a.right - b.right)) }), sprite: r(g.querySelector('.pg-spr')),
     checked: [...g.querySelectorAll('input')].filter(i => i.checked).map(i => i.value), hOverflow: document.scrollingElement.scrollWidth > innerWidth,
     labelFont: getComputedStyle(g.querySelector('.pg-lab')).fontFamily.split(',')[0], cta: cta ? { bottom: Math.round(cta.getBoundingClientRect().bottom), disabled: cta.disabled } : null }
 })
-const snap = async (p, n, settle = 700) => { await p.mouse.move(1, 1); await p.waitForTimeout(settle); console.log(n.padEnd(30), JSON.stringify(await measure(p))); await p.screenshot({ path: OUT(n), animations: 'disabled' }) }
+const snap = async (p, n, settle = 700) => { if (LIVE && !LIVESET.some(k => n.startsWith(k + '-'))) return; await p.mouse.move(1, 1); await p.waitForTimeout(settle); console.log(n.padEnd(30), JSON.stringify(await measure(p))); await p.screenshot({ path: OUT(n), animations: 'disabled' }) }
 
 async function signup(b, w, h, rm) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, reducedMotion: rm ? 'reduce' : 'no-preference' }); const p = await ctx.newPage()
@@ -41,7 +43,7 @@ const profile = async (b, w, h, rm, k) => { const p = await open(b, w, h, { page
   await p.click(`[data-t=edit-${k}]`); await p.waitForSelector('.setrow .pg'); await p.$eval('.setrow .pg', g => g.closest('.setrow').scrollIntoView({ block: 'center' })); return p }
 
 const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] })
-for (const [w, h, tag] of SIZES) for (const rm of [false, true]) {
+for (const [w, h, tag] of SIZES) for (const rm of LIVE ? [false] : [false, true]) {
   const sfx = `-${tag}${rm ? '-rm' : ''}`
   if (!only || only === 'step1') { const { ctx, p } = await signup(b, w, h, rm)
     await snap(p, 'step1-none' + sfx); await p.click('[data-t=iam-man]'); await snap(p, 'step1-man' + sfx); await p.click('[data-t=iam-woman]'); await snap(p, 'step1-woman' + sfx); await ctx.close() }
@@ -49,17 +51,17 @@ for (const [w, h, tag] of SIZES) for (const rm of [false, true]) {
     await snap(p, 'step4-none' + sfx); await p.click('[data-t=seek-women]'); await snap(p, 'step4-women' + sfx); await ctx.close() }
   if (!only || only === 'settings') { const p = await profile(b, w, h, rm, 'seek') // saved seek = women → preselected
     await snap(p, 'settings-seek-saved' + sfx); await p.click('[data-t=seek-everyone]'); await snap(p, 'settings-seek-everyone' + sfx)
-    if (tag === 'p390' && !rm) { const r = await p.$eval('.setrow .range', e => { const b = e.getBoundingClientRect(); return { x: 0, y: Math.max(0, b.top - 340), width: innerWidth, height: 420 } })
+    if (tag === 'p390' && !rm && !LIVE) { const r = await p.$eval('.setrow .range', e => { const b = e.getBoundingClientRect(); return { x: 0, y: Math.max(0, b.top - 340), width: innerWidth, height: 420 } })
       const sel = await p.$$eval('.setrow .range select', s => s.map(e => ({ value: e.value, w: Math.round(e.getBoundingClientRect().width), fits: e.scrollWidth <= e.clientWidth })))
       console.log('age selects', JSON.stringify(sel)); await p.screenshot({ path: OUT('settings-age-dropdown-p390'), clip: r, animations: 'disabled' }) }
     await p.context().close() }
-  if (!only || only === 'iam') { const p = await profile(b, w, h, rm, 'iam') // saved iam = man → preselected
+  if ((!only || only === 'iam') && !LIVE) { const p = await profile(b, w, h, rm, 'iam') // saved iam = man → preselected
     await snap(p, 'profile-iam-saved' + sfx); await p.click('[data-t=iam-woman]'); await snap(p, 'profile-iam-woman' + sfx); await p.context().close() }
 }
-if (!only || only === 'rt') { // reduced transparency (CDP media emulation) on step 1 after a pick
+if ((!only || only === 'rt') && !LIVE) { // reduced transparency (CDP media emulation) on step 1 after a pick
   const { ctx, p } = await signup(b, 390, 844, false); const s = await ctx.newCDPSession(p)
   await s.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] }); await p.click('[data-t=iam-woman]'); await snap(p, 'step1-woman-p390-solid'); await ctx.close() }
-if (!only || only === 'video') { // the select interaction at 390: hover, pick Man, change to Woman (real-time, motion on)
+if ((!only || only === 'video') && !LIVE) { // the select interaction at 390: hover, pick Man, change to Woman (real-time, motion on)
   const vd = '/tmp/pg-video/'; rmSync(vd, { recursive: true, force: true })
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, reducedMotion: 'no-preference', recordVideo: { dir: vd, size: { width: 390, height: 844 } } }); const p = await ctx.newPage()
   await p.goto(APP); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), null, { timeout: 15000 }); await p.fill('[data-t=name]', 'Kofi'); await p.waitForTimeout(1500)

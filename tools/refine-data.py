@@ -12,9 +12,9 @@ The sharp images are copied as-is. Usage: python3 tools/refine-data.py   (needs 
 import os, shutil, struct
 from PIL import Image
 
-SRC = '/workspace/design/pixeldate/refine-reveal/images'
+SRC = '/workspace/design/pixeldate/finding-set-options/date-night'  # GD's Date Night set (1024² webp q82)
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'refine')
-IDS = ['disco-frog', 'corgi-sunglasses', 'cat-astronaut', 'pizza-surfing', 'balloon-neon-city', 'arcade-cabinet', 'strawberry-umbrella']
+IDS = ['cinema-seats', 'diner-milkshake', 'shared-umbrella', 'dusk-picnic', 'ferris-wheel', 'coffee-cups', 'rooftop-bikes']
 MAXD = 7
 
 def build(path):

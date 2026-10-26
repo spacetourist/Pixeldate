@@ -2,6 +2,8 @@
 //   URL=https://<host>/Pixeldate/app/ node test/refine-shots.mjs
 // SET=checkpoint captures only: finding mid + sharp at 390 and 1440, one level-up mid (390, 2->3) and the ringing
 // call screen at 390 (bright + dim step of the pd-ring blink). Default SET=all adds every still, fallback and video.
+// SET=datenight (Date Night set check, into shots/date-night/): at 390x844 and 1440x900, one mid-reveal of the first
+// image (always cinema-seats) and the first 3 images sharp with their caption chip. URL= aware like the rest.
 // Finding stills use ?capture (a virtual clock driven through window.__rr.frame) so they are frame-exact;
 // level-up stills and all videos are real time on the mock partner (src/mock.ts via window.__pdMock).
 import { chromium } from '/tmp/pw/node_modules/playwright-core/index.mjs'
@@ -12,7 +14,8 @@ const URL = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const OUT = '/workspace/pixeldate/shots/refine/', VT = OUT + '.vtmp/'
 const SIZES = [[390, 844], [1440, 900]], ALL = (process.env.SET || 'all') !== 'checkpoint', SEED = process.env.SEED || '20261025'
 const FF = existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : readdirSync(process.env.HOME + '/.cache/ms-playwright').filter(d => d.startsWith('ffmpeg')).map(d => `${process.env.HOME}/.cache/ms-playwright/${d}/ffmpeg-linux`)[0]
-mkdirSync(OUT, { recursive: true }); const made = []
+const DN = process.env.SET === 'datenight', DNOUT = '/workspace/pixeldate/shots/date-night/'
+mkdirSync(OUT, { recursive: true }); if (DN) mkdirSync(DNOUT, { recursive: true }); const made = []
 const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 async function open(w, h, c, { q = '', motion = 'no-preference', video = false, transparency = null, init = null } = {}) {
@@ -32,6 +35,20 @@ async function mp4(p, n, keepFrom = 0) {
 // drive the virtual clock to `to` ms in 1/60 s steps (the capture api waits for the next image when it needs it)
 const drive = (p, from, to) => p.evaluate(async ([a, z]) => { for (let ms = a; ms <= z; ms += 1000 / 60) await window.__rr.frame(ms); await window.__rr.frame(z) }, [from, to])
 
+// drive the virtual clock in 1/60 s steps until the k-th image (1-based) has held its caption for 420 ms; returns the clock
+const toSharp = (p, from, k) => p.evaluate(async ([a, k]) => { let ms = a, held = -1
+  for (; ms < a + 120000; ms += 1000 / 60) { await window.__rr.frame(ms); if (window.__rr.stats.shown.length === k && window.__rr.phase() === 'hold') { if (held < 0) held = ms; if (ms - held >= 420) break } }
+  return ms }, [from, k])
+if (DN) {
+  for (const [w, h] of SIZES) { const tag = `${w}x${h}`
+    const p = await open(w, h, cfg({ scene: 'finding' }), { q: `?capture=1&seed=${SEED}` }); await p.waitForFunction(() => window.__rr); await p.evaluate(() => window.__rr.ready)
+    const st = () => p.evaluate(() => ({ img: document.querySelector('[data-t=finding]').dataset.img, cap: document.querySelector('.rr-cap').textContent, phase: window.__rr.phase() }))
+    const dn = async n => { await sleep(60); const f = DNOUT + n + '.png'; await p.screenshot({ path: f }); made.push(f) }
+    await drive(p, 0, 2500); let s = await st(); console.log(tag, 'mid', JSON.stringify(s)); await dn(`finding-mid-1-${s.img}-${tag}`)
+    let t = 2500; for (let k = 1; k <= 3; k++) { t = await toSharp(p, t, k); s = await st(); console.log(tag, 'sharp', k, JSON.stringify(s)); await dn(`finding-sharp-${k}-${s.img}-${tag}`) }
+    console.log(tag, 'mode', await p.evaluate(() => window.__rr.mode)); await p.context().close() }
+  await b.close(); console.log(made.join('\n')); process.exit(0)
+}
 for (const [w, h] of SIZES) {
   const tag = `${w}x${h}`
   // ── finding loop stills (SPEC: intro 380 ms, dur 4600, xfade 360, caption pops at hold start, 260 ms) ──

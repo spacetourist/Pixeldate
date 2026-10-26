@@ -14,13 +14,13 @@ const seekLabel = (p: Profile) => `${p.seek === 'everyone' ? 'Everyone' : p.seek
 /** 08 finding art: the refine reveal (src/refine, its own lazy chunk + a prep Worker). The frame, canvas and caption
     are plain markup sized by CSS, so nothing shifts when the chunk arrives. If neither WebGL2 nor Canvas 2D works, or
     the chunk / data fail to load, it falls back to a static sharp image + caption, swapped every few seconds. */
-const POOL_STATIC: [string, string][] = [['disco-frog', 'a disco frog'], ['corgi-sunglasses', 'a corgi in shades'], ['cat-astronaut', 'a cat astronaut'], ['pizza-surfing', 'a pizza slice, surfing'], ['balloon-neon-city', 'a balloon over Neon City'], ['arcade-cabinet', 'a retro arcade cabinet'], ['strawberry-umbrella', 'a strawberry with a brolly']]
+const POOL_STATIC: [string, string][] = [['cinema-seats', 'Movie night'], ['diner-milkshake', 'Two straws'], ['shared-umbrella', 'Stay dry?'], ['dusk-picnic', 'Picnic?'], ['ferris-wheel', 'Top view'], ['coffee-cups', 'Coffee?'], ['rooftop-bikes', 'Ride along']]
 function FindArt() {
   const root = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), cap = useRef<HTMLSpanElement>(null), capT = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     let stop: (() => void) | null = null, dead = false, iv = 0
-    const still = () => { const r = root.current; if (dead || !r) return; r.dataset.rr = 'static'; let i = (Math.random() * 7) | 0
-      const show = () => { const [id, c] = POOL_STATIC[i++ % 7], img = r.querySelector('img')!; img.src = `${B}refine/${id}.webp`; img.hidden = false; r.dataset.img = id; cap.current!.classList.add('is-on'); capT.current!.textContent = 'Warming up: ' + c }
+    const still = () => { const r = root.current; if (dead || !r) return; r.dataset.rr = 'static'; let i = 0 // cinema first, like the live loop
+      const show = () => { const [id, c] = POOL_STATIC[i++ % 7], img = r.querySelector('img')!; img.src = `${B}refine/${id}.webp`; img.hidden = false; r.dataset.img = id; cap.current!.classList.add('is-on'); capT.current!.textContent = c }
       show(); iv = window.setInterval(show, 6000) }
     let ok = false; try { ok = !!document.createElement('canvas').getContext('2d') } catch {}
     if (!ok || (window as any).__pdRR === 'static') { still(); return () => { dead = true; clearInterval(iv) } }

@@ -1,5 +1,6 @@
 /* Finding screen loop (SPEC §5, port of finding.js): reveal -> crossfade to sharp -> caption payoff -> hold ->
-   reverse merge -> root-colour tween -> next image from a shuffle bag (never the same image twice in a row).
+   reverse merge -> root-colour tween -> next image from a shuffle bag (never the same image twice in a row; the first
+   bag of a session opens on cinema-seats, the other six shuffled after it).
    Trees + schedules are prebuilt at build time (tools/refine-data.py) and finished in the Worker together with the
    sharp image's decode + resize, so the main thread only swaps typed arrays in. React stays out of the frame path. */
 import { Refiner, clamp01, easeInOut, lerpPacked } from './engine'
@@ -8,15 +9,16 @@ import { R2D } from './r2d'
 import { RGL, glOK } from './gl'
 import { prep, prepWhere } from './client'
 
-export const POOL = [
-  { id: 'disco-frog', cap: 'a disco frog' },
-  { id: 'corgi-sunglasses', cap: 'a corgi in shades' },
-  { id: 'cat-astronaut', cap: 'a cat astronaut' },
-  { id: 'pizza-surfing', cap: 'a pizza slice, surfing' },
-  { id: 'balloon-neon-city', cap: 'a balloon over Neon City' },
-  { id: 'arcade-cabinet', cap: 'a retro arcade cabinet' },
-  { id: 'strawberry-umbrella', cap: 'a strawberry with a brolly' },
+export const POOL = [ // GD's Date Night set (brick-built dioramas); cap = the board's caption chip, shown alone as the payoff
+  { id: 'cinema-seats', cap: 'Movie night' },
+  { id: 'diner-milkshake', cap: 'Two straws' },
+  { id: 'shared-umbrella', cap: 'Stay dry?' },
+  { id: 'dusk-picnic', cap: 'Picnic?' },
+  { id: 'ferris-wheel', cap: 'Top view' },
+  { id: 'coffee-cups', cap: 'Coffee?' },
+  { id: 'rooftop-bikes', cap: 'Ride along' },
 ]
+export const FIRST = 'cinema-seats' // every session opens on the cinema (strongest read at 8 across)
 type Entry = typeof POOL[number]
 interface Item { e: Entry; tree: Tree; sch: Schedule; bmp: ImageBitmap | null }
 export interface FindOpts { canvas: HTMLCanvasElement; cap: HTMLElement; capT: HTMLElement; root: HTMLElement; reduced: boolean; base: string; seed?: number; seq?: string[]; capture?: boolean; mode?: 'webgl2' | '2d' }
@@ -33,10 +35,12 @@ export function startFinding(o: FindOpts) {
   R.attach(r); fit()
   const reduced = q.get('motion') === 'reduce' || (q.get('motion') !== 'full' && o.reduced)
 
-  const rnd = mulberry32(seed); let bag: Entry[] = [], last: Entry | null = null
+  const rnd = mulberry32(seed); let bag: Entry[] = [], last: Entry | null = null, fresh = true
   const nextEntry = (): Entry => {
     if (seq.length) { const id = seq.shift(); return (last = POOL.find(p => p.id === id) || POOL[0]) }
-    if (!bag.length) { bag = POOL.slice(); for (let i = bag.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; [bag[i], bag[j]] = [bag[j], bag[i]] } if (bag[bag.length - 1] === last) bag.unshift(bag.pop()!) }
+    if (!bag.length) { const lead = fresh ? POOL.find(p => p.id === FIRST)! : null; fresh = false
+      bag = POOL.filter(p => p !== lead); for (let i = bag.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; [bag[i], bag[j]] = [bag[j], bag[i]] }
+      if (lead) bag.push(lead); else if (bag[bag.length - 1] === last) bag.unshift(bag.pop()!) }
     return (last = bag.pop()!)
   }
   const stats = { prepMs: [] as number[], applyMs: [] as number[], shown: [] as string[] }
@@ -45,7 +49,7 @@ export function startFinding(o: FindOpts) {
 
   let capState = -1
   const setCap = (on: number, k: number, text: string) => {
-    if (on !== capState) { capState = on; o.cap.classList.toggle('is-on', !!on); o.capT.textContent = on ? 'Warming up: ' + text : 'Warming up…' }
+    if (on !== capState) { capState = on; o.cap.classList.toggle('is-on', !!on); o.capT.textContent = on ? text : 'Warming up…' }
     const s = on ? (k < .34 ? .82 : k < .67 ? 1.1 : 1) : 1; o.cap.style.transform = s === 1 ? '' : `scale(${s})`
   }
 

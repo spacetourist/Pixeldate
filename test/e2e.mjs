@@ -118,7 +118,7 @@ for (const p of [a, b]) { await p.bringToFront(); await click(p, '[data-t=start]
 await shot(a, '02-lobby')
 const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t(a, '[data-t=finding]')
 { await a.waitForFunction(() => document.querySelector('[data-t=finding]')?.dataset.rr, { timeout: 10000 }); const r = await a.evaluate(() => ({ rr: document.querySelector('[data-t=finding]').dataset.rr, img: document.querySelector('[data-t=finding]').dataset.img, cap: document.querySelector('.rr-cap').textContent, radar: !!document.querySelector('.radar'), lede: document.querySelector('.lobbycard .lede[role=status]')?.textContent }))
-  if (r.radar || !['webgl2', '2d', 'static'].includes(r.rr) || !r.img || !r.cap.startsWith('Warming up') || !r.lede) throw 'finding refine art ' + JSON.stringify(r)
+  if (r.radar || !['webgl2', '2d', 'static'].includes(r.rr) || r.img !== 'cinema-seats' || !['Warming up…', 'Movie night'].includes(r.cap) || !r.lede) throw 'finding refine art ' + JSON.stringify(r)
   log('finding screen runs the refine reveal (no radar):', JSON.stringify(r)) }
 await shot(a, '03-finding'); await b.click('[data-t=find]')
 await t(a, '[data-t=their-photo]'); await t(b, '[data-t=their-photo]'); log(`matched via lobby in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
@@ -311,9 +311,15 @@ async function refineMock() {
     return { mode: window.__rr.mode, prep: window.__rr.prep(), shown: window.__rr.stats.shown, caps, seen: [...new Set(seen)], css: document.querySelector('.rr canvas').getBoundingClientRect().width }
   })
   const rep = r.shown.some((x, i) => i && x === r.shown[i - 1]), first7 = new Set(r.shown.slice(0, 7)).size
-  if (rep || first7 !== 7 || r.caps.length < 8 || !r.caps.every(c => /^Warming up: .+/.test(c)) || r.seen.join() !== 'Warming up…' || r.css < 560)
+  // the Date Night set: the caption payoff is the board's chip text alone, per image
+  const DN = { 'cinema-seats': 'Movie night', 'diner-milkshake': 'Two straws', 'shared-umbrella': 'Stay dry?', 'dusk-picnic': 'Picnic?', 'ferris-wheel': 'Top view', 'coffee-cups': 'Coffee?', 'rooftop-bikes': 'Ride along' }
+  const capsOK = r.caps.every((c, i) => c === DN[r.shown[i]]), setOK = r.shown.every(x => x in DN) && new Set(r.shown.slice(0, 7)).size === 7
+  if (rep || first7 !== 7 || !setOK || r.shown[0] !== 'cinema-seats' || r.caps.length < 8 || !capsOK || r.seen.join() !== 'Warming up…' || r.css < 560)
     throw 'finding loop ' + JSON.stringify(r)
-  log(`finding loop (${r.mode}, prep in ${r.prep}): ${r.shown.length} images, all 7 in the first 7, no immediate repeats; caption "Warming up…" while refining, payoff e.g. "${r.caps[0]}"; canvas ${r.css} css px at 1440`)
+  log(`finding loop (${r.mode}, prep in ${r.prep}): ${r.shown.length} images, first cinema-seats, all 7 Date Night images in the first 7, no immediate repeats; caption "Warming up…" while refining, payoff = chip text (${r.caps.slice(0, 3).map(c => '"' + c + '"').join(', ')}…); canvas ${r.css} css px at 1440`)
+  // a second seed also opens on the cinema
+  await p.goto(BASE + '?capture=1&seed=99', { waitUntil: 'networkidle0' }); await p.waitForFunction(() => window.__rr)
+  const f2 = await p.evaluate(async () => { await window.__rr.ready; return window.__rr.stats.shown[0] }); if (f2 !== 'cinema-seats') throw 'finding first image ' + f2
   // reduced motion: 8 -> 16 -> 32 -> sharp, no splits
   await p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]); await p.goto(BASE + '?capture=1&seed=7', { waitUntil: 'networkidle0' }); await p.waitForFunction(() => window.__rr)
   const rm = await p.evaluate(async () => { await window.__rr.ready; const ph = []; for (let ms = 0; ms < 5000; ms += 50) { await window.__rr.frame(ms); ph.push(window.__rr.phase()) } return { reduced: window.__rr.reduced, phases: [...new Set(ph)] } })

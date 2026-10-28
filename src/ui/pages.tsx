@@ -88,7 +88,17 @@ function Matches({ current, onOpen, onFind }: { current: Current | null; onOpen(
 
 /* ── 16 · You ── */
 function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLImageElement | null; level: number; inMatch: boolean; onSave(p: Profile, photo?: string): Promise<void> | void }) {
-  const lad = useMemo(() => photo ? LEVELS.map((_, i) => pixelatePhoto(photo, i + 1)) : [], [photo])
+  // The 5 ladder thumbnails (LV5 is a 512 px JPEG) cost ~250 ms of main thread on a slow phone; doing them inside the
+  // first render held back the page's first paint (its LCP). Build them after that paint, one level per task, and
+  // show them together: same thumbnails, same pop-in, the frames just reserve their square until then.
+  const [lad, setLad] = useState<{ ph: HTMLImageElement; src: string[] } | null>(null)
+  useEffect(() => {
+    if (!photo) return
+    let dead = false, t = 0; const out: string[] = []
+    const next = () => { if (dead) return; out.push(pixelatePhoto(photo, out.length + 1)); if (out.length < LEVELS.length) t = window.setTimeout(next); else setLad({ ph: photo, src: out }) }
+    t = window.setTimeout(next); return () => { dead = true; clearTimeout(t) }
+  }, [photo])
+  const thumbs = lad && lad.ph === photo ? lad.src : null
   const [ed, setEd] = useState<'' | 'name' | 'iam' | 'seek'>(''); const [d, setD] = useState(me); const file = useRef<HTMLInputElement>(null)
   const edit = (k: typeof ed) => { setD(me); setEd(k) }
   const save = async (p: Profile) => { await onSave(p); setEd('') }
@@ -104,7 +114,7 @@ function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLIm
     <div className="cols2">
       <div className="card fx seecard"><div className="eyebrow"><Icon n="eye" c="var(--cta)" />How matches see you right now</div>
         <div className="ladder" data-t="you-ladder">{LEVELS.map((L, i) => <figure key={i} className={i + 1 === level ? 'on' : ''}>
-          <span className="lf"><span><img src={lad[i]} alt={`You at ${L.name}`} /></span></span>
+          <span className="lf"><span>{thumbs ? <img src={thumbs[i]} alt={`You at ${L.name}`} /> : <i className="lf-hold" />}</span></span>
           <figcaption><b style={{ color: LV_COLOR(i + 1) }}>LV {i + 1}</b></figcaption></figure>)}</div>
         <p className="help">{inMatch ? `Your match sees LV ${level} · ${LEVELS[level - 1].name}.` : 'Every match starts at LV 1 · Stranger.'} The photo is pixelated on this device before it's sent.</p>
         <div className="row"><button className="btn btn--secondary fx btn--sm" data-t="change-photo" onClick={() => file.current?.click()}><Icon n="image" />Change photo</button>

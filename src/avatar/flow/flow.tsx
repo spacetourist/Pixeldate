@@ -38,10 +38,12 @@ function Meter({ p }: { p: Progress | null }) {
 }
 
 /** Where the flow is running: the signup step label and its Back, or the profile editor's. */
-const Ctx = createContext<{ step: string; onExit?: () => void }>({ step: 'Step 3 of 6' })
+const Ctx = createContext<{ step?: string; onExit?: () => void }>({})
+/** raw options JSON and raw exception text are developer-only: ?avatar=flow&avatar=debug */
+const DBG = /[?&]avatar=debug\b/.test(location.search)
 function Top({ onBack }: { onBack?: () => void }) {
   const { step, onExit } = useContext(Ctx)
-  return <div className="av-top"><button className="av-back" aria-label="Back" onClick={onBack ?? onExit} data-t="av-back">‹</button><div className="av-step" data-t="av-step">{step}</div></div>
+  return <div className="av-top"><button className="av-back" aria-label="Back" onClick={onBack ?? onExit} data-t="av-back">‹</button>{step && <div className="av-step" data-t="av-step">{step}</div>}</div>
 }
 
 function Upload({ onPhoto, onHand, onCurrent, onSkip, progress, busy, error }: { onPhoto: (f: File) => void; onHand: () => void; onCurrent?: () => void; onSkip?: () => void; progress: Progress | null; busy: string; error: { message: string; detail?: string } | null }) {
@@ -164,13 +166,13 @@ function Tweak({ atlas, o, setO, m, tab, setTab, onDone, onBack }: { atlas: Atla
 }
 
 export type FlowProps = {
-  /** header label, e.g. the signup's "Step 3 of 5" */ step?: string
+  /** header label, e.g. the signup's "Step 3 of 5"; none on the standalone ?avatar=flow page (it isn't inside signup) */ step?: string
   /** options JSON already on the profile (edit): offers "Tweak my current character" */ initial?: string | null
   /** embedded: called with the options JSON from the done screen's Continue (nothing is written to localStorage) */ onSave?: (json: string) => void
   /** signup: "Skip for now" */ onSkip?: () => void
   /** Back from the first screen */ onExit?: () => void
 }
-export function Flow({ step = 'Step 3 of 6', initial, onSave, onSkip, onExit }: FlowProps = {}) {
+export function Flow({ step, initial, onSave, onSkip, onExit }: FlowProps = {}) {
   const current = useMemo(() => parseOptions(initial), [initial])
   const [screen, setScreen] = useState<Screen>('upload'), [atlas, setAtlas] = useState<Atlas | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null), [busy, setBusy] = useState(''), [error, setError] = useState<{ message: string; detail?: string } | null>(null)
@@ -191,7 +193,7 @@ export function Flow({ step = 'Step 3 of 6', initial, onSave, onSkip, onExit }: 
       if (photo) URL.revokeObjectURL(photo)
       const mapped = mapDescriptor(r.descriptor)
       setPhoto(URL.createObjectURL(f)); setRes(r); setM(mapped); setScreen('got')
-    } catch (e) { setError({ message: "Couldn't get the pixel kit ready", detail: String((e as Error)?.message ?? e) + ' · try again or build it by hand' }) }
+    } catch (e) { setError({ message: "Couldn't get the pixel kit ready", detail: (DBG ? String((e as Error)?.message ?? e) + ' · ' : '') + 'Try again, or build it by hand.' }) }
     finally { setBusy('') }
   }
   const hand = () => { setM(null); setRes(null); setO(NEUTRAL); setTab('Body'); setFrom('upload'); setScreen('tweak') }
@@ -204,10 +206,10 @@ export function Flow({ step = 'Step 3 of 6', initial, onSave, onSkip, onExit }: 
     {screen === 'got' && res && m && <Got atlas={atlas} res={res} photo={photo} m={m} setM={setM} onTweak={tweak} onDone={() => finish(preview(m.options))} onBack={() => setScreen('upload')} />}
     {screen === 'tweak' && <Tweak atlas={atlas} o={o} setO={setO} m={m} tab={tab} setTab={setTab} onDone={() => finish(o)} onBack={() => setScreen(from)} />}
     {screen === 'done' && <><Top onBack={() => setScreen('tweak')} /><h1 className="av-t">That's <b>you</b></h1>
-      <p className="av-p">{onSave ? 'Kept with your profile' : 'Saved on this phone'} as {new Blob([saved]).size} bytes of options. No photo is kept.</p>
+      <p className="av-p">Saved as a tiny character file. Your photo is never kept.</p>
       <div className="av-big"><Px atlas={atlas} o={o} scale={8} /></div>
       {onSave ? <div className="av-cta"><button className="av-btn y" onClick={() => onSave(saved)} data-t="av-continue">Continue</button></div>
-        : <pre className="av-json" id="av-saved">{saved}</pre>}</>}
+        : DBG && <pre className="av-json" id="av-saved">{saved}</pre>}</>}
   </div></div></Ctx.Provider>
 }
 // test hook (flag route only): lets the harness check the TS compose against GD's kit.py renders pixel-for-pixel

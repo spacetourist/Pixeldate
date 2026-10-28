@@ -63,6 +63,7 @@ async function page(name, iam, seek, age, face) {
     if (r.step !== 'Step 3 of 5' || !r.skip || r.cur || r.ds !== '3') throw 'signup avatar step ' + JSON.stringify(r) }
   if (name === 'Sam') {
     await p.click('[data-t=av-hand]'); await p.waitForSelector('[data-t=av-looks]'); await p.click('[data-t=av-looks]'); await p.waitForSelector('[data-t=av-continue]')
+    { const r = await p.evaluate(() => ({ copy: document.querySelector('.av-p')?.textContent, json: !!document.querySelector('#av-saved,.av-json') })); if (r.copy !== 'Saved as a tiny character file. Your photo is never kept.' || r.json) throw 'signup saved screen ' + JSON.stringify(r) }
     const saved = await p.evaluate(() => window.__pdFlow.saved); await p.click('[data-t=av-continue]'); await p.waitForSelector('[data-t=bday]')
     if (await p.evaluate(() => localStorage.getItem('pd.avatar'))) throw 'embedded flow wrote pd.avatar'
     // Back from Birthday returns to the character step, which now offers "Tweak my current character"
@@ -144,7 +145,9 @@ const prof = p => p.evaluate(() => JSON.parse(sessionStorage.getItem('pd.profile
   await a.click('[data-t=edit-avatar]'); await a.waitForSelector('[data-t=av-current]'); if ((await a.$eval('[data-t=av-step]', e => e.textContent)) !== 'Your character' || await a.$('[data-t=av-skip]')) throw 'edit flow header/skip'
   await a.click('[data-t=av-current]'); await a.waitForSelector('[data-t=av-looks]')
   await a.evaluate(() => { const b = [...document.querySelectorAll('.av-sw button')].find(x => !x.classList.contains('sel')); b.click() }); await sleep(150)
-  await a.click('[data-t=av-looks]'); await a.waitForSelector('[data-t=av-continue]'); await a.click('[data-t=av-continue]')
+  await a.click('[data-t=av-looks]'); await a.waitForSelector('[data-t=av-continue]')
+  { const r = await a.evaluate(() => ({ copy: document.querySelector('.av-p')?.textContent, json: !!document.querySelector('#av-saved,.av-json') })); if (r.copy !== 'Saved as a tiny character file. Your photo is never kept.' || r.json) throw 'edit saved screen ' + JSON.stringify(r) }
+  await a.click('[data-t=av-continue]')
   await a.waitForFunction(b => !document.querySelector('[data-t=av-flow]') && document.querySelector('[data-t=you-char]')?.dataset.av !== b, { timeout: 5000 }, before)
   const after = (await prof(a)).pav; if (after === before || (await a.$eval('[data-t=you-char]', e => e.dataset.av)) !== after) throw 'edit did not update the stored character'
   { const b = await b_noChar(); if (b) throw 'Alex (skipped) shows a character row: ' + b }
@@ -386,4 +389,17 @@ async function refineMock() {
   await c2.close()
 }
 await refineMock()
+// standalone ?avatar=flow (reachable on the live site): no step label (it isn't inside signup), no raw options JSON;
+// the JSON shows only with &avatar=debug
+async function flowPage() {
+  const ctx = await browser.createBrowserContext(), p = await ctx.newPage(); await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
+  const run = async q => { await p.goto(BASE + q, { waitUntil: 'networkidle0' }); await p.waitForSelector('[data-t=av-hand]'); const s0 = await p.$('[data-t=av-step]')
+    await p.click('[data-t=av-hand]'); await p.waitForSelector('[data-t=av-looks]'); await p.click('[data-t=av-looks]'); await p.waitForFunction(() => document.documentElement.dataset.avatarFlow === 'done')
+    return p.evaluate(s0 => ({ step: s0 || !!document.querySelector('[data-t=av-step]'), copy: document.querySelector('.av-p')?.textContent, json: document.querySelector('#av-saved')?.textContent ?? null, body: document.body.innerText }), !!s0) }
+  const r = await run('?avatar=flow')
+  if (r.step || r.copy !== 'Saved as a tiny character file. Your photo is never kept.' || r.json !== null || /\{"v"|bytes|Step \d of/.test(r.body)) throw 'flow page leaks debug/step text ' + JSON.stringify(r)
+  const d = await run('?avatar=flow&avatar=debug'); if (!d.json?.startsWith('{')) throw 'flow&debug should show the options JSON ' + JSON.stringify(d)
+  log('?avatar=flow: no step label, no raw JSON, new saved copy; &avatar=debug shows the options JSON'); await ctx.close()
+}
+await flowPage()
 await browser.close(); console.log('ALL OK')

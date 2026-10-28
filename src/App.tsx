@@ -292,7 +292,9 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const remoteV = useRef<HTMLVideoElement>(null); const localV = useRef<HTMLVideoElement>(null)
   useEffect(() => { if (remoteV.current && call?.remote) { remoteV.current.srcObject = call.remote; remoteV.current.play().catch(() => {}) } if (localV.current && call) { localV.current.srcObject = call.kind === 'video' ? new MediaStream(call.cam.out.getVideoTracks()) : null; localV.current.play().catch(() => {}) } }, [call, tab, view])
 
-  const myAv = useMemo(() => coarse(photo ?? undefined, AV_BLOCKS[level - 1]), [photo, level])
+  // only the match screen's question card shows it; while a page (You, Matches, Settings) covers the match it's
+  // display:none, so skip the full-photo downsample there: it sat in the page's first render (its LCP)
+  const covered = !!page, myAv = useMemo(() => covered ? undefined : coarse(photo ?? undefined, AV_BLOCKS[level - 1]), [photo, level, covered])
   const theirAv = useMemo(() => coarse(theirImgs.current[level], AV_BLOCKS[level - 1]), [level, photoV])
   // the photo canvas moves between the stage (WebGL2 when available) and the compact plate (2D); the controller repaints on attach
   const attachCv = useCallback((c: HTMLCanvasElement | null) => { (cv as any).current = c; S.attach(c, view === 'stage') }, [view, glKey])

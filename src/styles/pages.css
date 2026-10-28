@@ -25,6 +25,8 @@
 .seecard .ladder figcaption{height:auto}
 .seecard .help{margin:0}
 .seecard .ladder .lf{cursor:default}
+/* holds the thumbnail's square until it's built (after first paint), so nothing shifts */
+.seecard .ladder .lf-hold{display:block;width:100%;aspect-ratio:1}
 .ondevice{display:flex;gap:8px;align-items:center;font:var(--t-small);color:var(--c-mint)}
 .setgrp{--s:var(--step-md);--fill:var(--panel);padding:calc(var(--edge-w) + 6px) calc(var(--edge-w) + 16px)}
 .setgrp h3{font:var(--t-label);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding:12px 0 6px}

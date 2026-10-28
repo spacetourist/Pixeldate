@@ -29,7 +29,7 @@ async function page(name, iam, seek, age, face) {
   p.on('dialog', d => { dialogs++; d.accept() }); p.on('pageerror', e => console.log('  PAGEERR', name, e.message))
   step('goto ' + name); await p.goto(URL, { waitUntil: 'networkidle0' }); step('loaded'); await p.waitForFunction(() => !document.querySelector('[data-t=splash]'), { timeout: 10000 })
   if (name === 'Sam') await shotV(p, 'v3.6-signup-empty-412')
-  // R2: the signup is a 4-step split (You · Your photo · Birthday · Who you'd like to meet); each step has its own Continue
+  // R2 + v0.4: the signup is a 5-step split (You · Your photo · Your character · Birthday · Who you'd like to meet); each step has its own Continue
   await p.type('[data-t=name]', name)
   // pixel-gender: "I am" has NO default; Continue (and Enter in the name field) wait for a pick
   { const r = await p.evaluate(() => ({ checked: document.querySelectorAll('input[name=iam]:checked').length, on: document.querySelectorAll('[data-t^=iam-].on').length, next: document.querySelector('[data-t=next]').disabled, cards: document.querySelectorAll('.pg [data-t^=iam-].pg-card input[type=radio]').length }))
@@ -55,7 +55,27 @@ async function page(name, iam, seek, age, face) {
   if (name === 'Sam') { await p.click('[data-t=mini-3]'); await p.waitForSelector('[data-t=viewer]'); const w = await p.$eval('[data-t=viewer] img', e => e.naturalWidth); if (w !== 32) throw 'viewer not 32 blocks: ' + w
     await shotV(p, 'v3.6-viewer-412', false); await p.click('[aria-label="Next level"]'); if (!(await p.$eval('[data-t=viewer-name]', e => e.textContent)).includes('LV 4')) throw 'viewer next'
     await p.click('[data-t=viewer-close]'); await sleep(200); if (await p.$('[data-t=viewer]')) throw 'viewer did not close'; log('5 minis; viewer opens at 32 blocks, next works, X closes') }
-  await p.click('[data-t=photo-confirm]'); await p.waitForSelector('[data-t=bday]')
+  await p.click('[data-t=photo-confirm]')
+  // v0.4 Pixel You: signup step 3 (SPEC "step 3 of signup"), a lazy chunk, skippable. Sam builds it by hand, everyone else skips.
+  await p.waitForSelector('[data-t=av-flow] [data-t=av-hand]', { timeout: 15000 })
+  const avReq = () => p.evaluate(() => performance.getEntriesByType('resource').map(e => e.name).filter(u => /\/avatar\/(models|wasm)\/|\/(engine|bundler|worker)-[\w-]+\.js/.test(u)))
+  { const r = await p.evaluate(() => ({ step: document.querySelector('[data-t=av-step]').textContent, skip: !!document.querySelector('[data-t=av-skip]'), cur: !!document.querySelector('[data-t=av-current]'), ds: document.querySelector('.app.flow')?.dataset.step }))
+    if (r.step !== 'Step 3 of 5' || !r.skip || r.cur || r.ds !== '3') throw 'signup avatar step ' + JSON.stringify(r) }
+  if (name === 'Sam') {
+    await p.click('[data-t=av-hand]'); await p.waitForSelector('[data-t=av-looks]'); await p.click('[data-t=av-looks]'); await p.waitForSelector('[data-t=av-continue]')
+    const saved = await p.evaluate(() => window.__pdFlow.saved); await p.click('[data-t=av-continue]'); await p.waitForSelector('[data-t=bday]')
+    if (await p.evaluate(() => localStorage.getItem('pd.avatar'))) throw 'embedded flow wrote pd.avatar'
+    // Back from Birthday returns to the character step, which now offers "Tweak my current character"
+    await p.click('[data-t=back]'); await p.waitForSelector('[data-t=av-current]'); await p.click('[data-t=av-current]'); await p.waitForSelector('[data-t=av-looks]')
+    const o = await p.evaluate(() => window.__pdFlow.o); if (JSON.stringify({ ...o, v: 1 }) !== saved) throw 'tweak-current did not start from the saved options'
+    await p.click('[data-t=av-looks]'); await p.waitForSelector('[data-t=av-continue]'); await p.click('[data-t=av-continue]'); await p.waitForSelector('[data-t=bday]')
+    const ar = await avReq(); if (ar.length) throw 'Build it by hand downloaded the engine/models: ' + ar
+    log(`signup step 3 "Your character": Build it by hand -> Looks like me -> Continue (${saved.length} B options JSON, not in pd.avatar); Back offers Tweak my current character; 0 engine/model requests`)
+  } else {
+    await p.click('[data-t=av-skip]'); await p.waitForSelector('[data-t=bday]')
+    const ar = await avReq(); if (ar.length) throw 'Skip downloaded the engine/models: ' + ar
+    log(name + ': signup step 3 "Skip for now" goes straight to Birthday, 0 engine/model requests')
+  }
   if (name === 'Sam') { // under-18 block: born this month next year-boundary -> 17
     const now = new Date(), m = now.getMonth() + 2
     if (m <= 12) { await pickBday(p, now.getFullYear() - 18, m); await p.waitForSelector('[data-t=under18]')
@@ -115,6 +135,21 @@ await shot(a, '01-onboarding')
   for (const [w, n] of [[412, 'v3.5-signup-412'], [360, 'v3.5-signup-360']]) { await a.setViewport({ width: w, height: 915, deviceScaleFactor: 2 }); await sleep(200); await a.screenshot({ path: S(n), fullPage: true }) }
   await a.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 for (const p of [a, b]) { await p.bringToFront(); await click(p, '[data-t=start]'); step('started'); await p.waitForFunction(() => document.querySelector('[data-t=find]') && !document.querySelector('[data-t=find]').disabled, { timeout: 15000 }).catch(async e => { await p.screenshot({path: S('dbg')}); console.log(await p.evaluate(() => document.body.innerText.slice(0,200))); throw e }) }
+// v0.4 You › Profile › Your character: the character from the stored JSON, and Edit reopens the flow (tweak current)
+async function b_noChar() { await click(b, '[data-t=top-profile]'); await t(b, '[data-t=edit-avatar]'); const r = await b.evaluate(() => (document.querySelector('[data-t=you-char]') ? 'canvas ' : '') + document.querySelector('[data-t=edit-avatar]').textContent); await click(b, '[data-t=top-back]'); await t(b, '[data-t=find]'); return r === 'Make one' ? '' : r }
+const prof = p => p.evaluate(() => JSON.parse(sessionStorage.getItem('pd.profile') || localStorage.getItem('pd.profile')))
+{ await click(a, '[data-t=top-profile]'); await a.waitForSelector('[data-t=you-char][data-drawn]', { timeout: 15000 })
+  const before = (await prof(a)).pav, shown = await a.$eval('[data-t=you-char]', e => e.dataset.av); if (!before || shown !== before) throw 'You page character ' + shown
+  if ((await a.$eval('[data-t=edit-avatar]', e => e.textContent)) !== 'Edit') throw 'edit entry label'
+  await a.click('[data-t=edit-avatar]'); await a.waitForSelector('[data-t=av-current]'); if ((await a.$eval('[data-t=av-step]', e => e.textContent)) !== 'Your character' || await a.$('[data-t=av-skip]')) throw 'edit flow header/skip'
+  await a.click('[data-t=av-current]'); await a.waitForSelector('[data-t=av-looks]')
+  await a.evaluate(() => { const b = [...document.querySelectorAll('.av-sw button')].find(x => !x.classList.contains('sel')); b.click() }); await sleep(150)
+  await a.click('[data-t=av-looks]'); await a.waitForSelector('[data-t=av-continue]'); await a.click('[data-t=av-continue]')
+  await a.waitForFunction(b => !document.querySelector('[data-t=av-flow]') && document.querySelector('[data-t=you-char]')?.dataset.av !== b, { timeout: 5000 }, before)
+  const after = (await prof(a)).pav; if (after === before || (await a.$eval('[data-t=you-char]', e => e.dataset.av)) !== after) throw 'edit did not update the stored character'
+  { const b = await b_noChar(); if (b) throw 'Alex (skipped) shows a character row: ' + b }
+  log(`You › Profile shows the character from pd.profile.pav (${after.length} B); Edit -> Tweak my current character -> a skin swatch -> Continue updates it`)
+  await click(a, '[data-t=top-back]'); await t(a, '[data-t=find]') }
 await shot(a, '02-lobby')
 const t0 = Date.now(); await a.click('[data-t=find]'); await sleep(300); await t(a, '[data-t=finding]')
 { await a.waitForFunction(() => document.querySelector('[data-t=finding]')?.dataset.rr, { timeout: 10000 }); const r = await a.evaluate(() => ({ rr: document.querySelector('[data-t=finding]').dataset.rr, img: document.querySelector('[data-t=finding]').dataset.img, cap: document.querySelector('.rr-cap').textContent, radar: !!document.querySelector('.radar'), lede: document.querySelector('.lobbycard .lede[role=status]')?.textContent }))
@@ -124,6 +159,23 @@ await shot(a, '03-finding'); await b.click('[data-t=find]')
 await t(a, '[data-t=their-photo]'); await t(b, '[data-t=their-photo]'); log(`matched via lobby in ${((Date.now() - t0) / 1000).toFixed(1)} s`)
 const nameA = await b.$eval('.plate', e => e.textContent); log('B sees', nameA); if (await b.$('[data-t=season-badge]')) throw 'season shown at Stranger'; if (!nameA.includes('Sam, 25–29')) throw 'bracket not shown'
 { const th = await b.evaluate(() => window.__pdThem); const bad = ['age', 'by', 'bm'].filter(k => k in th); if (bad.length || JSON.stringify(th).includes(String(new Date().getFullYear() - 29))) throw 'birthday leaked: ' + JSON.stringify(th); log('peer received only the bracket:', JSON.stringify(th.br), 'keys', Object.keys(th).join(',')) }
+// v0.4: the peer gets the character as the options JSON in the hello profile and draws it with the kit (no image sent)
+{ const pavA = (await prof(a)).pav, th = await b.evaluate(() => window.__pdThem), tha = await a.evaluate(() => window.__pdThem)
+  if (th.pav !== pavA) throw 'peer pav ' + JSON.stringify(th.pav) + ' != ' + pavA
+  if ('pav' in tha) throw 'Alex skipped, but Sam received a pav'
+  const KNOWN = ['v', 'build', 'hair', 'top', 'bottom', 'shoes', 'beard', 'acc', 'face', 'skin', 'hairc', 'topc', 'bottomc', 'shoec', 'accc', 'tights'], j = JSON.parse(th.pav)
+  if (th.pav.length > 512 || /data:|base64|blob:/i.test(th.pav) || Object.keys(j).some(k => !KNOWN.includes(k)) || Object.values(j).some(v => v !== null && typeof v !== 'string' && v !== 1)) throw 'pav is not plain kit options: ' + th.pav
+  await b.waitForSelector('[data-t=their-char][data-drawn]', { timeout: 15000 })
+  const px = await b.evaluate(async () => { const c = document.querySelector('[data-t=their-char]'), k = window.__pdKit, at = await k.loadAtlas(), want = k.composeRGBA(at, JSON.parse(c.dataset.av)), s = c.width / 24, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+    let bad = 0; for (let y = 0; y < 32; y++) for (let x = 0; x < 24; x++) { const i = ((y * s + 1) * c.width + x * s + 1) * 4, w = (y * 24 + x) * 4; for (let q = 0; q < 4; q++) if (d[i + q] !== want[w + q]) { bad++; break } } return { bad, s, av: c.dataset.av } })
+  if (px.bad || px.av !== pavA) throw 'their character render ' + JSON.stringify(px)
+  { const z = await b.evaluate(() => { const c = document.querySelector('[data-t=their-char]'), r = c.getBoundingClientRect(), k = c.closest('[data-t=their-char-card]'), l = k.querySelector('.label'), kr = k.getBoundingClientRect(), lr = l.getBoundingClientRect()
+      return { w: c.clientWidth, h: c.clientHeight, bw: c.width, bh: c.height, ir: getComputedStyle(c).imageRendering, fits: lr.right <= kr.right + 0.5 && l.scrollWidth <= l.clientWidth + 1 && kr.right <= innerWidth } })
+    if (z.w !== 72 || z.h !== 96 || z.bw % 24 || z.bw / 24 !== z.bh / 32 || (z.bw / 24) % 3 || z.ir !== 'pixelated' || !z.fits) throw 'their character size/crisp/layout ' + JSON.stringify(z)
+    log('their character card at 390: sprite 72x96 CSS px (3x integer, bitmap ' + z.bw + 'x' + z.bh + ', pixelated), text fits the card') }
+  if (await a.$('[data-t=their-char]')) throw 'Sam shows a character for Alex, who skipped'
+  log(`peer sees the character from the JSON: Alex got pav (${th.pav.length} B, kit names only, keys ${Object.keys(j).length}) in the hello profile and draws it at ${px.s}x, 0/768 cells differ from composeRGBA; Sam shows none for Alex (skipped)`) }
+await shot(b, 'v04-match-their-char')
 await sleep(1500)
 const pw = async p => p.evaluate(() => window.__pd?.photoW)
 const ph = async p => p.evaluate(() => window.__pd?.photoH)

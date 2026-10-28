@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node tools/fetch-avatar-assets.mjs",
     "build": "tsc -b && vite build",
+    "avatar-kit": "python3 tools/avatar-kit.py",
     "lint": "oxlint",
     "preview": "vite preview",
     "refine-data": "python3 tools/refine-data.py"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.2.0",
     "peerjs": "^1.5.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

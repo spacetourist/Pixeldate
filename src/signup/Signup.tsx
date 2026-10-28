@@ -1,6 +1,7 @@
-/* R2 signup: a 4-step split. 1 You · 2 Your photo (+ 2b the ladder) · 3 Birthday · 4 Who you'd like to meet.
+/* R2 signup: a 5-step split. 1 You · 2 Your photo (+ 2b the ladder) · 3 Your character (Pixel You, SPEC step 3, lazy,
+   skippable) · 4 Birthday · 5 Who you'd like to meet.
    Photos are only ever pixelated on this device; the raw image stays in memory here and is handed to the app. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { store, bracketOf, bracketLabel, type Profile, type Gender, type Seek } from '../net'
 import { Icon } from '../ui/parts'
 import type { IconName } from '../ui/icons'
@@ -10,7 +11,11 @@ import { toast, dismiss, Toasts } from '../ui/toast'
 import { AGE_TOP, EDGES, ageFrom, reduceMotion, seasonOf, snapRange } from './shared'
 
 const B = import.meta.env.BASE_URL
-const STEPS = ['You', 'Your photo', 'Birthday', 'Who you’d like to meet']
+const STEPS = ['You', 'Your photo', 'Your character', 'Birthday', 'Who you’d like to meet']
+const N = STEPS.length
+// Pixel You (flow + kit atlas) is its own lazy chunk; the detection engine and models load only on its photo route
+const loadFlow = () => import('../avatar/flow/flow')
+const AvatarFlow = lazy(loadFlow)
 // per tab, so two tabs in one browser are different people
 const uid = () => { let u = sessionStorage.getItem('pd-uid'); if (!u) { u = crypto.randomUUID(); sessionStorage.setItem('pd-uid', u) } return u }
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
@@ -68,7 +73,7 @@ const Eyebrow = ({ n, c, children }: { n: IconName; c: string; children: React.R
 export default function Signup({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
   const [step, setStep] = useState(1)
   const [name, setName] = useState(''); const [iam, setIam] = useState<Gender | null>(null)
-  const [photo, setPhoto] = useState(''); const [okPhoto, setOkPhoto] = useState(false); const [ctas, setCtas] = useState(false)
+  const [photo, setPhoto] = useState(''); const [pav, setPav] = useState<string | null>(null); const [okPhoto, setOkPhoto] = useState(false); const [ctas, setCtas] = useState(false)
   const saved = useMemo(() => { try { return JSON.parse(store.getItem('pd-bday') || '') } catch { return null } }, [])
   const [by, setBy] = useState<number>(saved?.by || NOW_Y - 25); const [bm, setBm] = useState<number>(saved?.bm || 0); const age = bm ? ageFrom(by, bm) : 0
   const [seek, setSeek] = useState<Seek | null>(null); const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP); const [adult, setAdult] = useState(false)
@@ -89,7 +94,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPic(String(r.result)); r.readAsDataURL(f) } }
   const openCam = async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { toast({ id: 'cam', role: 'error', icon: 'cam', t: 'notice-cam', title: 'Camera unavailable', body: 'Another app may be using it, or access is blocked. Try Gallery instead.' }) } }
   const minor = bm > 0 && age < 18
-  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid() }, photo) }
+  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid(), ...(pav ? { pav } : {}) }, photo) }
 
   const ladder = step === 2 && !!photo
   const next = (label: string, enabled: boolean, onClick: () => void, t = 'next') =>
@@ -129,14 +134,18 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
     footCls = 'rv-acts' + (ctas ? '' : ' hid')
     foot = <>
       <button type="button" className="btn fx btn--ghost btn--lg" data-t="photo-change" tabIndex={ctas ? 0 : -1} onClick={() => setPic('')}>Change photo</button>
-      <button type="button" className="btn fx btn--lg" data-t="photo-confirm" tabIndex={ctas ? 0 : -1} onClick={() => { setOkPhoto(true); go(3) }}>Looks good, continue<Icon n="next" c="var(--edge)" /></button>
+      <button type="button" className="btn fx btn--lg" data-t="photo-confirm" tabIndex={ctas ? 0 : -1} onClick={() => { setOkPhoto(true); go(3) }} onPointerEnter={() => void loadFlow()} onFocus={() => void loadFlow()}>Looks good, continue<Icon n="next" c="var(--edge)" /></button>
     </>
   } else if (step === 3) {
+    // SPEC: "Screens (step 3 of signup ...)". The flow is a full-screen phone layout of its own; Skip keeps signup moving.
+    return <div className="app flow" data-step="3"><Suspense fallback={<div className="avf-wait" data-t="av-wait" />}>
+      <AvatarFlow step={`Step 3 of ${N}`} initial={pav} onExit={() => go(2)} onSkip={() => { setPav(null); go(4) }} onSave={j => { setPav(j); go(4) }} /></Suspense></div>
+  } else if (step === 4) {
     body = <>
       <div><Eyebrow n="spring" c="var(--c-mint)">When did your story start?</Eyebrow>{H('Your birthday')}<p className="lede">Matches only ever see your age bracket.</p></div>
       <Birthday by={by} bm={bm} onChange={(y, m) => { setBy(y); setBm(m) }} />
     </>
-    foot = next('Continue', bm > 0 && !minor, () => go(4))
+    foot = next('Continue', bm > 0 && !minor, () => go(5))
   } else {
     body = <>
       <div><Eyebrow n="heart" c="var(--c-coral)">Last step</Eyebrow>{H('Who would you like to meet?')}</div>
@@ -161,8 +170,8 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
             <b>{i + 1 < step ? <Icon n="check" c="var(--edge)" /> : i + 1}</b>{s}</li>)}</ol></div>
         <p className="label">18+ · Skip or block anytime</p></aside>
       <main className="pmain">
-        <div className="ptop">{back}<span className="label" data-t="step-label">Step {step} of 4 · {STEPS[step - 1]}</span><span className="sp" /></div>
-        <div className="stepper" aria-hidden="true">{[1, 2, 3, 4].map(i => <i key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>
+        <div className="ptop">{back}<span className="label" data-t="step-label">Step {step} of {N} · {STEPS[step - 1]}</span><span className="sp" /></div>
+        <div className="stepper" aria-hidden="true">{STEPS.map((_, k) => k + 1).map(i => <i key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>
         <Toasts where="page" cls="ptoasts" />
         <div className="pbody" key={step + (photo && step === 2 ? 'b' : '')}>{body}</div>
         <div className={'pfoot ' + footCls}>{foot}</div>

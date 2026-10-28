@@ -508,3 +508,9 @@ button.tmain{cursor:pointer}
 @layer screens{ .shell--lobby .stop{min-height:68px} }
 /* R5: lobby gets real You / Settings / Call items and a way to the matches history */
 @layer screens{ .shell .rail .ri{cursor:pointer} .lobbycard .who .tomatches{margin-left:auto;flex:none} @container app (max-width:419px){ .lobbycard .who{flex-wrap:wrap} } }
+/* Pixel You: their character (from the options JSON they sent), shown until photos clear at LV 5 */
+.hud .theirchar{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:14px;padding:10px 14px 10px 10px;background:var(--panel,#161033);border:3px solid var(--edge,#05020F);align-self:stretch;max-width:440px;box-sizing:border-box}
+.hud .theirchar .pchar{flex:none;width:72px;height:96px;box-sizing:content-box;background:#0C0722;border:3px solid var(--edge,#05020F);image-rendering:pixelated}
+.hud .theirchar .label{display:flex;flex-direction:column;gap:6px;min-width:0;font:600 15px/1.25 var(--font-ui);text-transform:none;letter-spacing:0;color:var(--text,#F4F0FF);overflow-wrap:anywhere}
+.hud .theirchar small{color:var(--text-muted);font:400 13px/1.35 var(--font-ui);text-transform:none;letter-spacing:0}
+.app[data-view=compact][data-tab=chat] .hud .theirchar{display:none}

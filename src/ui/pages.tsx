@@ -1,6 +1,6 @@
 /* R5 · You (16), Settings (17) and Matches history (09). Lazy chunk: none of this is in the first paint.
    Everything shown or changed here lives on this device only (src/prefs.ts). */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { LEVELS } from '../config'
 import { pixelatePhoto } from '../pixel'
 import { AGE_TOP, EDGES, seasonOf, snapRange } from '../signup/shared'
@@ -10,6 +10,9 @@ import { Icon, Hp, Av, LV_COLOR } from './parts'
 import { Toasts, toast } from './toast'
 import { PixelPick } from './pixel-gender'
 import '../styles/pages.css'
+// Pixel You: the character canvas (compose + atlas) and the editor flow are separate lazy chunks
+const Char = lazy(() => import('../avatar/kit/Char'))
+const AvatarFlow = lazy(() => import('../avatar/flow/flow'))
 
 export type PageId = 'matches' | 'profile' | 'settings'
 export interface Current { name: string; br: [number, number]; lv: number; pct: number; av?: string; sub: string }
@@ -94,7 +97,9 @@ function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLIm
   const btn = (k: typeof ed) => <button className="btn btn--ghost btn--sm fx" data-t={'edit-' + k} onClick={() => edit(k)}>Edit</button>
   const acts = (ok: boolean, p: Profile) => <span className="eacts"><button className="btn fx btn--ghost btn--sm" onClick={() => setEd('')}>Cancel</button><button className="btn fx btn--sm" data-t="edit-save" disabled={!ok} onClick={() => save(p)}>Save</button></span>
   const s = seasonOf(me.bm)
+  const [av, setAv] = useState(false)
   return <>
+    {av && <Suspense fallback={null}><AvatarFlow step="Your character" initial={me.pav} onExit={() => setAv(false)} onSave={async j => { await onSave({ ...me, pav: j }); setAv(false) }} /></Suspense>}
     <Title icon="user" eb="You" h={me.name} t="you-h" />
     <div className="cols2">
       <div className="card fx seecard"><div className="eyebrow"><Icon n="eye" c="var(--cta)" />How matches see you right now</div>
@@ -109,6 +114,9 @@ function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLIm
           {ed === 'name' ? <><label className="field fx efield"><input autoFocus value={d.name} maxLength={20} aria-label="Name" data-t="edit-name-input" onChange={e => setD({ ...d, name: e.target.value })} onKeyDown={e => { if (e.key === 'Enter' && d.name.trim()) save({ ...d, name: d.name.trim() }) }} /></label>{acts(!!d.name.trim(), { ...d, name: d.name.trim() })}</> : btn('name')}</div>
         <div className="setrow"><div className="tx"><b id="lab-you-iam">I am</b><span>{cap(me.iam)}</span></div>
           {ed === 'iam' ? <><PixelPick<Gender> labelledby="lab-you-iam" name="iam" value={d.iam} onChange={v => setD({ ...d, iam: v })} opts={[['man', 'Man', 'man'], ['woman', 'Woman', 'woman']]} />{acts(true, d)}</> : btn('iam')}</div>
+        <div className="setrow charrow" data-t="you-char-row">{me.pav && <Suspense fallback={<span className="pchar-ph" />}><Char json={me.pav} scale={2} t="you-char" label="Your pixel character" /></Suspense>}
+          <div className="tx"><b>Your character</b><span>{me.pav ? 'Matches see it before your photo unlocks. Only its options are shared, never a photo.' : 'Not made yet. Build one that dresses like you.'}</span></div>
+          <button className="btn btn--ghost btn--sm fx" data-t="edit-avatar" onClick={() => setAv(true)}>{me.pav ? 'Edit' : 'Make one'}</button></div>
         <div className="setrow"><div className="tx"><b>Age bracket</b><span>{br} · from your birthday, which stays on this device</span></div></div>
         <div className="setrow"><div className="tx"><b>Birth season badge</b><span>Shown from Spark</span></div><span className="chip chip--edge"><Icon n={s} c="var(--c-mint)" /> {cap(s)}-born</span></div>
         <div className="setrow"><div className="tx"><b id="lab-you-seek">I want to meet</b><span data-t="you-seek">{seekLabel(me)}</span></div>

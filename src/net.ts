@@ -30,14 +30,19 @@ export const store = ls
 export type Gender = 'man' | 'woman'
 export type Seek = 'men' | 'women' | 'everyone'
 /** Local profile. by/bm (birth year/month) and the exact age NEVER leave this device. */
-export interface Profile { name: string; age: number; by: number; bm: number; min: number; max: number; iam: Gender; seek: Seek; uid: string }
+export interface Profile { name: string; age: number; by: number; bm: number; min: number; max: number; iam: Gender; seek: Seek; uid: string
+  /** Pixel You: the character's options JSON (~240 B of kit names, never an image); absent if skipped */ pav?: string }
 /** What a peer receives: the age bracket only (no year, month or exact age). */
-export interface PeerProfile { name: string; br: [number, number]; min: number; max: number; iam: Gender; seek: Seek; uid: string }
+export interface PeerProfile { name: string; br: [number, number]; min: number; max: number; iam: Gender; seek: Seek; uid: string; pav?: string }
 export const BRACKETS: [number, number][] = [[18, 24], [25, 29], [30, 34], [35, 39], [40, 49], [50, 59], [60, 999]]
 export const bracketOf = (age: number) => BRACKETS.find(([lo, hi]) => age >= lo && age <= hi) || BRACKETS[0]
 export const bracketLabel = ([lo, hi]: [number, number]) => hi >= 999 ? `${lo}+` : `${lo}–${hi}`
 /** The only profile shape ever sent over the wire. */
-export const wire = (p: Profile): PeerProfile => ({ name: p.name, br: bracketOf(Math.min(p.age, 70)), min: p.min, max: p.max, iam: p.iam, seek: p.seek, uid: p.uid })
+export const PAV_MAX = 512
+/** Pixel You options JSON only: a short JSON object string (kit names), never a data URL or other image bytes; the
+    receiver validates it against the kit again before drawing (avatar/kit/map.ts parseOptions). */
+export const okPav = (s: unknown): s is string => typeof s === 'string' && s.length <= PAV_MAX && s[0] === '{' && !/data:|base64|blob:/i.test(s)
+export const wire = (p: Profile): PeerProfile => ({ name: p.name, br: bracketOf(Math.min(p.age, 70)), min: p.min, max: p.max, iam: p.iam, seek: p.seek, uid: p.uid, ...(okPav(p.pav) ? { pav: p.pav } : {}) })
 
 const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman'] }
 const SEEKS: Seek[] = ['men', 'women', 'everyone']

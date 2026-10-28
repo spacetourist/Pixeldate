@@ -7,6 +7,8 @@ type PagesT = typeof import('./ui/pages').default
 let PagesC: PagesT | null = null
 export const loadPages = () => import('./ui/pages').then(m => (PagesC = m.default))
 const PagesLazy = lazy(() => loadPages().then(d => ({ default: d })))
+// Pixel You: their character from the options JSON they sent (compose + atlas chunk, loaded only if they have one)
+const Char = lazy(() => import('./avatar/kit/Char'))
 // warm the Matches / You / Settings chunk once the lobby is idle, so the first tap on You or Settings is instant
 const idle = (f: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 4000 }) : setTimeout(f, 2500))
 import type { MediaConnection } from 'peerjs'
@@ -391,6 +393,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
           <div className="plate"><span className="px">{them}, <span data-t="them-bracket">{bracketLabel(m.them.br)}</span></span>{view === 'compact' && seasonChip && <span className="chip chip--edge"><Icon n={themSeason!} c="var(--c-mint)" /> {themSeason![0].toUpperCase() + themSeason!.slice(1)}-born</span>}</div></div>
         <div className="stage-name px on-stage">{them}</div>
         <p className="lvdesc on-stage">{LV_DESC[level - 1]}</p>
+        {m.them.pav && level < 5 && <div className="theirchar" data-t="their-char-card"><Suspense fallback={null}><Char json={m.them.pav} scale={3} t="their-char" label={`${them}'s pixel character`} /></Suspense>
+          <span className="label">{them}'s pixel character<small>Dressed like them · photo unlocks as you level up</small></span></div>}
         <div className="chips"><span className="chip chip--edge">{bracketLabel(m.them.br)}</span>
           {seasonChip || <span className="chip chip--locked"><Icon n="lock" c="var(--locked)" /> Birth season unlocks at Spark</span>}</div>
         <div className="meterpanel panel panel--stage fx">

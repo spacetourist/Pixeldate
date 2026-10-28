@@ -1,0 +1,65 @@
+/* ?avatar=flow screens (GD mocks m1/m2/m3). Lazy chunk CSS: never part of the app's initial load. */
+.avf{z-index:60;--bg:#0C0722;--panel:#161033;--tile:#1E1640;--sec:#281D52;position:fixed;inset:0;overflow-y:auto;--foot:172px;scroll-padding-bottom:calc(var(--foot) + 16px);background:#08041A;color:var(--text,#FFF6EC);font:15px/1.4 var(--font-ui);display:flex;justify-content:center}
+.avf *{box-sizing:border-box}
+.av-ph{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);position:relative;display:flex;flex-direction:column}
+@media (min-width:700px){.avf{align-items:safe center;padding:24px 0}.avf .av-cta{bottom:-24px}.av-ph{min-height:844px;max-height:none;border:3px solid #05020F;width:390px}}
+.av-top{display:flex;align-items:center;gap:10px;padding:18px 20px 6px}
+.av-back{width:36px;height:36px;background:var(--tile);border:3px solid #05020F;display:grid;place-items:center;font-weight:800;color:inherit;font-size:18px;padding:0;cursor:pointer}
+.av-step{color:#A49CC2;font-size:13px;margin-left:auto}
+.av-t{font-family:var(--font-px);font-size:40px;line-height:1;padding:8px 20px 0;font-weight:400;margin:0}
+.av-t b{color:#FFD84D;font-weight:400}
+.av-p{padding:8px 20px 0;color:#A49CC2;margin:0}
+.av-drop{margin:20px;height:360px;background:var(--panel);border:3px dashed #6E6596;display:grid;place-items:center;text-align:center}
+.av-drop img{display:block;margin:0 auto;image-rendering:pixelated}
+.av-drop small{display:block;color:#A49CC2;font-size:13px;margin-top:8px}
+.av-chip{display:inline-flex;gap:6px;align-items:center;background:#0E2E33;color:#8DF2DA;border:2px solid #05020F;padding:6px 10px;font-size:13px;font-weight:600}
+.av-cta{margin-top:auto;padding:16px 20px 20px;display:flex;flex-direction:column;gap:14px;position:sticky;bottom:0;z-index:3;background:var(--bg)}
+/* v0.2 sticky footer: 24px fade from night to transparent above it; --foot = 16 + 56+5 + 14 + 56+5 + 20 (two buttons) */
+.av-cta::before{content:"";position:absolute;left:0;right:0;top:-24px;height:24px;background:linear-gradient(to top,var(--bg),transparent);pointer-events:none}
+.av-cta.foot{margin-top:16px}
+.av-btn{height:56px;border:3px solid #05020F;box-shadow:0 5px 0 #05020F;display:grid;place-items:center;font:800 17px var(--font-ui);background:var(--sec);color:var(--text,#FFF6EC);cursor:pointer;width:100%;position:relative}
+.av-btn.y{background:#FFD84D;color:#05020F}
+.av-btn:disabled,.av-btn.y:disabled{background:#281D52;color:#A49CC2;cursor:not-allowed}
+.av-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.av-link{background:none;border:0;color:#8DF2DA;font:700 15px var(--font-ui);text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:6px;align-self:center}
+.av-load{margin:0 20px;padding:14px;background:var(--panel);border:3px solid #05020F}
+.av-load .meterhead{display:flex;justify-content:space-between;margin-bottom:8px;font-weight:700}
+.av-load .meterhead span{color:#FFD84D;font-family:var(--font-px);font-size:20px;font-weight:400}
+.av-load small{display:block;color:#A49CC2;margin-top:8px;font-size:12px}
+.av-err{margin:0 20px 10px;padding:10px 12px;background:#2E2614;border:3px solid #05020F;color:#FFD84D;font-weight:700}
+.av-err small{display:block;color:#A49CC2;font-weight:400}
+.av-got{display:flex;gap:14px;padding:16px 20px 0}
+.av-photo{position:relative;width:150px;height:232px;border:3px solid #05020F;overflow:hidden;flex:none;background:#000}
+.av-photo img{width:100%;height:100%;object-fit:cover;filter:saturate(.9)}
+.av-photo::after{content:"";position:absolute;inset:0;background:rgba(12,7,34,.35)}
+.av-photo i{position:absolute;border:2px solid;z-index:1}
+.av-photo span{position:absolute;bottom:0;left:0;right:0;background:#05020F;font-size:11px;text-align:center;padding:3px;color:#A49CC2;z-index:2}
+.av-stage{flex:1;background:var(--panel);border:3px solid #05020F;display:grid;place-items:end center;padding-bottom:10px;background-image:linear-gradient(var(--panel) 78%,var(--tile) 78%);min-height:232px;height:232px}
+.av-stage canvas,.av-tile canvas{image-rendering:pixelated;display:block}
+.av-h{font:700 13px var(--font-ui);color:#A49CC2;padding:14px 20px 0;margin:0;display:flex;align-items:center;gap:8px}
+.av-h em{font-style:normal;color:#FFD84D;font-size:11px;font-weight:800;letter-spacing:.04em}
+.av-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px 20px 0}
+.av-tiles.three{grid-template-columns:repeat(3,1fr)}
+.av-tile{background:var(--tile);border:3px solid #05020F;height:118px;display:grid;place-items:end center;position:relative;overflow:hidden;cursor:pointer;padding:0;color:inherit}
+.av-tile.sel{border-color:#FFD84D}
+.av-tile.zoom canvas{margin-bottom:-28px}
+.av-tile b{position:absolute;top:4px;left:6px;font-size:10px;color:#8DF2DA;font-weight:700}
+.av-tile span{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:11px;font-weight:700;text-shadow:0 1px 0 #05020F}
+.av-tiles.three .av-tile{padding-bottom:20px}
+.av-rows{padding:12px 20px 0}
+.av-row{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;background:none;border:0;color:inherit;padding:0;width:100%;text-align:left;cursor:pointer;font-family:inherit}
+.av-row i{width:20px;height:20px;border:3px solid #05020F;flex:none}
+.av-row span{color:#A49CC2;width:52px;flex:none}
+.av-check{margin-left:auto;background:#2E2614;color:#FFD84D;border:2px solid #05020F;font-size:10px;font-weight:800;padding:1px 6px;letter-spacing:.04em}
+.av-big{margin:6px 20px 0;height:270px;background:var(--panel);border:3px solid #05020F;display:grid;place-items:end center;background-image:linear-gradient(var(--panel) 82%,var(--tile) 82%)}
+.av-big canvas{margin-bottom:4px}
+.av-tabs{display:flex;gap:4px;padding:14px 20px 0;justify-content:space-between}
+.av-tabs button{padding:7px 8px;font:700 12px var(--font-ui);border:3px solid #05020F;background:var(--tile);color:inherit;cursor:pointer;position:relative}
+.av-tabs button.on{background:#FFD84D;color:#05020F}
+.av-tabs button sup{position:absolute;top:-7px;right:-5px;width:10px;height:10px;background:#FFD84D;border:2px solid #05020F}
+.av-sw{display:flex;gap:6px;padding:8px 20px 0;flex-wrap:wrap}
+.av-sw button{width:30px;height:30px;border:3px solid #05020F;padding:0;cursor:pointer}
+.av-sw button.sel{border-color:#FFF6EC}
+.av-sw button.none{background:repeating-linear-gradient(45deg,#2A2150 0 4px,#161033 4px 8px)}
+.av-json{margin:12px 20px 0;padding:10px;background:#05020F;color:#8DF2DA;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
+.avf .hp{--hp-h:22px}

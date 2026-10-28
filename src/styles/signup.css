@@ -164,3 +164,4 @@ html:has(.flow),body:has(.flow){height:auto;overflow:visible}
 }}
 /* GD R4 fix 3: the phone ladder step fits 390x844 with no scrolling (20px tighter: body gap, wrap gap, label gap, ladder margin) */
 @container app (max-width:767px){ .page .pbody:has(.ladder-wrap){gap:12px} .ladder-wrap{gap:10px} .ladder figure{gap:4px} .ladder{margin-bottom:8px} }
+.avf-wait{position:fixed;inset:0;background:#08041A}

@@ -70,13 +70,16 @@ function Birthday({ by, bm, onChange }: { by: number; bm: number; onChange: (by:
 
 const Eyebrow = ({ n, c, children }: { n: IconName; c: string; children: React.ReactNode }) => <div className="eyebrow"><Icon n={n} c={c} />{children}</div>
 
-export default function Signup({ onDone }: { onDone: (p: Profile, photo: string) => void }) {
-  const [step, setStep] = useState(1)
-  const [name, setName] = useState(''); const [iam, setIam] = useState<Gender | null>(null)
-  const [photo, setPhoto] = useState(''); const [pav, setPav] = useState<string | null>(null); const [okPhoto, setOkPhoto] = useState(false); const [ctas, setCtas] = useState(false)
-  const saved = useMemo(() => { try { return JSON.parse(store.getItem('pd-bday') || '') } catch { return null } }, [])
+/** `resume`: a stored profile that is under 18 or has no valid birthday. It re-enters at Birthday (re-pick, so the
+    bracket is rebuilt) and must pass the 18+ confirmation again before the app opens. */
+export default function Signup({ onDone, resume }: { onDone: (p: Profile, photo: string) => void; resume?: { p: Profile; photo: string } }) {
+  const R = resume?.p
+  const [step, setStep] = useState(R ? 4 : 1)
+  const [name, setName] = useState(R?.name || ''); const [iam, setIam] = useState<Gender | null>(R?.iam || null)
+  const [photo, setPhoto] = useState(resume?.photo || ''); const [pav, setPav] = useState<string | null>(R?.pav || null); const [okPhoto, setOkPhoto] = useState(!!R); const [ctas, setCtas] = useState(false)
+  const saved = useMemo(() => { if (R) return null; try { return JSON.parse(store.getItem('pd-bday') || '') } catch { return null } }, []) // resume: no prefilled birthday
   const [by, setBy] = useState<number>(saved?.by || NOW_Y - 25); const [bm, setBm] = useState<number>(saved?.bm || 0); const age = bm ? ageFrom(by, bm) : 0
-  const [seek, setSeek] = useState<Seek | null>(null); const [min, setMin] = useState(18); const [max, setMax] = useState(AGE_TOP); const [adult, setAdult] = useState(false)
+  const [seek, setSeek] = useState<Seek | null>(R?.seek || null); const [min, setMin] = useState(R ? snapRange(R.min, R.max)[0] : 18); const [max, setMax] = useState(R ? snapRange(R.min, R.max)[1] : AGE_TOP); const [adult, setAdult] = useState(false)
   const [cam, setCam] = useState<MediaStream | null>(null); const vid = useRef<HTMLVideoElement>(null); const fileIn = useRef<HTMLInputElement>(null)
   const h1 = useRef<HTMLHeadingElement>(null), moved = useRef(false)
   useEffect(() => { if (cam && vid.current) { vid.current.srcObject = cam; vid.current.play() } }, [cam])
@@ -94,7 +97,7 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPic(String(r.result)); r.readAsDataURL(f) } }
   const openCam = async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { toast({ id: 'cam', role: 'error', icon: 'cam', t: 'notice-cam', title: 'Camera unavailable', body: 'Another app may be using it, or access is blocked. Try Gallery instead.' }) } }
   const minor = bm > 0 && age < 18
-  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: uid(), ...(pav ? { pav } : {}) }, photo) }
+  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: R?.uid || uid(), ...(pav ? { pav } : {}) }, photo) }
 
   const ladder = step === 2 && !!photo
   const next = (label: string, enabled: boolean, onClick: () => void, t = 'next') =>
@@ -143,6 +146,8 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
   } else if (step === 4) {
     body = <>
       <div><Eyebrow n="spring" c="var(--c-mint)">When did your story start?</Eyebrow>{H('Your birthday')}<p className="lede">Matches only ever see your age bracket.</p></div>
+      {R && <div className="readout fx err" role="alert" data-t="recheck"><span className="ro"><Icon n="alert" c="var(--error)" s={3} />
+        <span><b>Pixeldate is 18+.</b><span className="help">Pick your birthday again and confirm you're 18 or over to continue.</span></span></span></div>}
       <Birthday by={by} bm={bm} onChange={(y, m) => { setBy(y); setBm(m) }} />
     </>
     foot = next('Continue', bm > 0 && !minor, () => go(5))
@@ -150,9 +155,11 @@ export default function Signup({ onDone }: { onDone: (p: Profile, photo: string)
     body = <>
       <div><Eyebrow n="heart" c="var(--c-coral)">Last step</Eyebrow>{H('Who would you like to meet?')}</div>
       <div><span className="fl" id="lab-seek">I want to meet</span><PixelPick labelledby="lab-seek" name="seek" value={seek} onChange={setSeek} opts={[['men', 'Men', 'man'], ['women', 'Women', 'woman']]} /></div>
+      <label className={'card fx adult' + (adult ? ' is-on' : '')} data-t="adult-card">
+        <span className="tx"><b id="adult-l">I'm 18 or over</b><span className="help" id="adult-h">Pixeldate is for adults only. Confirm to continue.</span></span>
+        <input className="vh" type="checkbox" role="switch" required aria-required="true" aria-labelledby="adult-l" aria-describedby="adult-h" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" />
+        <span className={'toggle' + (adult ? ' is-on' : '')} data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true"><i /></span></label>
       <AgeRange min={min} max={max} onChange={(a, b) => { setMin(a); setMax(b) }} />
-      <label className="tick"><input className="vh" type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} data-t="adult" />
-        <span className={'check' + (adult ? ' is-on' : '')} data-t="adult-box" data-on={adult ? 1 : 0} aria-hidden="true">{adult && <Icon n="check" c="var(--edge)" />}</span>I'm 18 or over</label>
     </>
     const ok = !!(name.trim() && iam && seek && photo && okPhoto && adult && bm > 0 && age >= 18)
     foot = next('Continue', ok, finish, 'start')

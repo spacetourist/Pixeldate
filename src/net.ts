@@ -35,6 +35,8 @@ export interface Profile { name: string; age: number; by: number; bm: number; mi
 /** What a peer receives: the age bracket only (no year, month or exact age). */
 export interface PeerProfile { name: string; br: [number, number]; min: number; max: number; iam: Gender; seek: Seek; uid: string; pav?: string }
 export const BRACKETS: [number, number][] = [[18, 24], [25, 29], [30, 34], [35, 39], [40, 49], [50, 59], [60, 999]]
+/** 18+: the bracket for an adult age. Under-18 ages have no bracket; signup and the restore gate (main.tsx) keep them
+    out of the app, so the 18–24 fallback below is only ever reached for an age the gate already refused. */
 export const bracketOf = (age: number) => BRACKETS.find(([lo, hi]) => age >= lo && age <= hi) || BRACKETS[0]
 export const bracketLabel = ([lo, hi]: [number, number]) => hi >= 999 ? `${lo}+` : `${lo}–${hi}`
 /** The only profile shape ever sent over the wire. */
@@ -42,7 +44,7 @@ export const PAV_MAX = 512
 /** Pixel You options JSON only: a short JSON object string (kit names), never a data URL or other image bytes; the
     receiver validates it against the kit again before drawing (avatar/kit/map.ts parseOptions). */
 export const okPav = (s: unknown): s is string => typeof s === 'string' && s.length <= PAV_MAX && s[0] === '{' && !/data:|base64|blob:/i.test(s)
-export const wire = (p: Profile): PeerProfile => ({ name: p.name, br: bracketOf(Math.min(p.age, 70)), min: p.min, max: p.max, iam: p.iam, seek: p.seek, uid: p.uid, ...(okPav(p.pav) ? { pav: p.pav } : {}) })
+export const wire = (p: Profile): PeerProfile => ({ name: p.name, br: bracketOf(Math.min(p.age, 70)), min: Math.max(18, p.min), max: Math.max(18, p.max), iam: p.iam, seek: p.seek, uid: p.uid, ...(okPav(p.pav) ? { pav: p.pav } : {}) })
 
 const G: Record<Seek, Gender[]> = { men: ['man'], women: ['woman'], everyone: ['man', 'woman'] }
 const SEEKS: Seek[] = ['men', 'women', 'everyone']
@@ -73,7 +75,15 @@ export function dlog(s: string) {
 }
 export const blocked = blockedUids
 export const block = (uid: string) => blockUser({ uid })
-const okWith = (me: Profile, them: PeerProfile, byCode: boolean) => !blocked().includes(them.uid) && them.uid !== me.uid && (byCode || compatible(me, them))
+const GENDERS: Gender[] = ['man', 'woman']
+/** Validate a peer's hello/ok profile. 18+: `br` must be exactly one of BRACKETS (all start at 18); a missing, invalid
+    or under-18 bracket (or a range reaching below 18) is refused, as is any malformed field. */
+export const okPeer = (p: any): p is PeerProfile => !!p && typeof p === 'object'
+  && typeof p.name === 'string' && p.name.length <= 40 && typeof p.uid === 'string' && p.uid.length > 0 && p.uid.length <= 64
+  && Array.isArray(p.br) && p.br.length === 2 && BRACKETS.some(([lo, hi]) => p.br[0] === lo && p.br[1] === hi)
+  && Number.isFinite(p.min) && Number.isFinite(p.max) && p.min >= 18 && p.max >= p.min
+  && GENDERS.includes(p.iam) && SEEKS.includes(p.seek) && (p.pav === undefined || okPav(p.pav))
+const okWith = (me: Profile, them: PeerProfile, byCode: boolean) => okPeer(them) && !blocked().includes(them.uid) && them.uid !== me.uid && (byCode || compatible(me, them))
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 async function openPeer(id?: string): Promise<Peer> {
@@ -144,7 +154,7 @@ export class Net {
   async joinCode(code: string): Promise<Match> {
     const c = await openConn(this.peer, 'pd-' + code.replace(/[^a-z0-9]/gi, '').toLowerCase(), 8000)
     c.send({ t: 'hello', p: wire(this.me) }); const r = await onceData(c, 10000)
-    if (r?.t !== 'ok') { c.close(); throw new Error("They're busy or unavailable") }
+    if (r?.t !== 'ok' || !okPeer(r.p)) { c.close(); throw new Error("They're busy or unavailable") }
     this.busy = true; return { conn: c, them: r.p, peer: c.peer }
   }
   cancel() { this.searching = false }
@@ -182,7 +192,7 @@ export class Net {
         c.on('open', () => log('open from ' + c.peer))
         ;(async () => {
           const hi = await h
-          if (this.lock || !this.searching || hi?.t !== 'hello' || !okWith(this.me, hi.p, false) || skipUids.has(hi.p.uid)) { log('declined ' + (hi?.p?.uid === this.me.uid ? '(same uid)' : '')); c.send({ t: 'no' }); setTimeout(() => c.close(), 500); return }
+          if (this.lock || !this.searching || hi?.t !== 'hello' || !okWith(this.me, hi.p, false) || skipUids.has(hi.p.uid)) { log('declined ' + (hi?.p?.uid === this.me.uid ? '(same uid)' : !okPeer(hi?.p) ? '(invalid or under-18 profile)' : '')); c.send({ t: 'no' }); setTimeout(() => c.close(), 500); return }
           this.lock = true; const g = onceData(c, 8000); c.send({ t: 'ok', p: wire(this.me), id: this.peer.id })
           if ((await g)?.t !== 'go') throw new Error('no go')
           win({ conn: buffer(c), them: hi.p, peer: hi.id })

@@ -45,6 +45,8 @@ s = s.replace('<div class="demo2">', '<div class="demo2" role="img" aria-label="
 s = re.sub(r'class="hp\s+"', 'class="hp"', s).replace(' style=""', '').replace('qcard fx "', 'qcard fx"')
 # contractions, same strings as the app (GD R3 fix 4)
 s = s.replace('Now it is getting interesting.', "Now it&#x27;s getting interesting.").replace('you would only ask', "you&#x27;d only ask")
+# 18+: footer line (the design footer has About · Safety · Privacy · Terms only)
+s = s.replace('<footer class="ld-foot"><span>About', '<footer class="ld-foot"><span>18+ only · You must be 18 or over to use Pixeldate</span><span>About', 1)
 s = re.sub(r'\n +', '\n', s)
 
 print(f'''<!doctype html>
@@ -52,7 +54,7 @@ print(f'''<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0C0722">
 <title>Pixeldate · Dating, one pixel at a time</title>
-<meta name="description" content="Pixeldate pairs you with someone at random. Photos and video calls start as 8 blurry blocks and get sharper as you both answer questions.">
+<meta name="description" content="Pixeldate pairs you with someone at random. Photos and video calls start as 8 blurry blocks and get sharper as you both answer questions. 18+ only.">
 <link rel="preload" as="image" href="{A}art/landing-hero-tall.webp" media="(max-width: 767px)" fetchpriority="high">
 <link rel="preload" as="image" href="{A}art/landing-hero-wide.webp" media="(min-width: 768px)" fetchpriority="high">
 <link rel="preload" href="{A}fonts/BricolageGrotesque-latin.woff2" as="font" type="font/woff2" crossorigin>

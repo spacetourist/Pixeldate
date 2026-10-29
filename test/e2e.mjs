@@ -86,6 +86,11 @@ async function page(name, iam, seek, age, face) {
   if (await p.$('[data-t=under18]')) throw 'under18 shown for adult'
   if (name === 'Sam') { const r = await p.$eval('[data-t=bday-readout]', e => e.textContent); if (!r.includes("You're " + age) || !r.includes('Winter-born') || !r.includes('25–29')) throw 'readout ' + r; log('birthday readout:', r) }
   await p.click('[data-t=next]'); await p.waitForSelector('[data-t=start]')
+  // GD: on step-5 first load (390x844) the sticky Continue bar must not cover the 18+ panel; OFF track has the #4A3C85 edge
+  { await sleep(150); const r = await p.evaluate(() => { const c = document.querySelector('[data-t=adult-card]').getBoundingClientRect(), f = document.querySelector('.pfoot').getBoundingClientRect(), t = getComputedStyle(document.querySelector('[data-t=adult-box]')).boxShadow
+      return { top: c.top, bot: c.bottom, bar: f.top, vh: innerHeight, edge: /rgb\(74, 60, 133\)/.test(t) } })
+    if (!(r.bot <= r.bar || r.top >= r.vh) || !r.edge) throw '18+ panel covered by the Continue bar or OFF edge missing ' + JSON.stringify(r)
+    if (name === 'Sam') log('step 5 first load: 18+ panel fully above the sticky Continue bar, OFF toggle edge #4A3C85', JSON.stringify(r)) }
   // pixel-gender: "I want to meet" has NO default either; with 18+ ticked, Continue still waits for it
   { const r = await p.evaluate(() => ({ checked: document.querySelectorAll('input[name=seek]:checked').length, on: document.querySelectorAll('[data-t^=seek-].on').length, cards: document.querySelectorAll('.pg [data-t^=seek-].pg-card input[type=radio]').length }))
     if (r.checked || r.on || r.cards !== 2) throw 'step 4 default selection ' + JSON.stringify(r)
@@ -124,15 +129,15 @@ await setR(a, '[data-t=min]', 1); await setR(a, '[data-t=max]', 4) // stops: 25 
   await setR(a, '[data-t=min]', 6); if (await a.$eval('[data-t=range-val]', e => e.textContent) !== '35 – 39') throw 'thumbs crossed'; await setR(a, '[data-t=min]', 1)
   if (await b.$eval('[data-t=range-val]', e => e.textContent) !== '18 – 70+') throw 'default range'; log('age range slider snaps to bracket edges: 25 – 39, thumbs cannot cross, default 18 – 70+') }
 await shot(a, '01-onboarding')
-{ const st = () => a.evaluate(() => ({ c: document.querySelector('[data-t=adult]').checked, svg: !!document.querySelector('[data-t=adult-box] svg'), btn: !document.querySelector('[data-t=start]').disabled }))
-  const lab = async () => { const r = await a.evaluate(() => { const b = document.querySelector('label.tick').getBoundingClientRect(); return [b.right - 30, b.top + b.height / 2] }); await a.mouse.click(...r) }
+{ const st = () => a.evaluate(() => ({ c: document.querySelector('[data-t=adult]').checked, svg: document.querySelector('[data-t=adult-box]').classList.contains('is-on') && document.querySelector('[data-t=adult-card]').classList.contains('is-on'), btn: !document.querySelector('[data-t=start]').disabled }))
+  const lab = async () => { const r = await a.evaluate(() => { const b = document.querySelector('[data-t=adult-card]').getBoundingClientRect(); return [b.left + 40, b.top + b.height / 2] }); await a.mouse.click(...r) }
   const box = async () => { const r = await a.evaluate(() => { const b = document.querySelector('[data-t=adult-box]').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2] }); await a.mouse.click(...r) }
-  await a.$eval('label.tick', e => e.scrollIntoView({ block: 'center' })); await sleep(200)
+  await a.$eval('[data-t=adult-card]', e => e.scrollIntoView({ block: 'center' })); await sleep(200)
   const seq = [lab, lab, lab, box, box, lab, box, box, box]  // 9 taps, no waits: ends unchecked->checked toggles; initial checked
   for (const f of seq) await f()
   await sleep(100); const r = await st(); if (r.c !== r.svg || r.c !== r.btn || r.c !== false) throw 'tick desync ' + JSON.stringify(r)
   await box(); await sleep(50); const r2 = await st(); if (!r2.c || !r2.svg || !r2.btn) throw 'tick desync2 ' + JSON.stringify(r2)
-  log('18+ tick: 10 rapid label/box taps, tick, input and Continue stay in sync')
+  log('18+ confirmation panel: 10 rapid panel/toggle taps, toggle, input and Continue stay in sync')
   for (const [w, n] of [[412, 'v3.5-signup-412'], [360, 'v3.5-signup-360']]) { await a.setViewport({ width: w, height: 915, deviceScaleFactor: 2 }); await sleep(200); await a.screenshot({ path: S(n), fullPage: true }) }
   await a.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }
 for (const p of [a, b]) { await p.bringToFront(); await click(p, '[data-t=start]'); step('started'); await p.waitForFunction(() => document.querySelector('[data-t=find]') && !document.querySelector('[data-t=find]').disabled, { timeout: 15000 }).catch(async e => { await p.screenshot({path: S('dbg')}); console.log(await p.evaluate(() => document.body.innerText.slice(0,200))); throw e }) }
@@ -402,4 +407,46 @@ async function flowPage() {
   log('?avatar=flow: no step label, no raw JSON, new saved copy; &avatar=debug shows the options JSON'); await ctx.close()
 }
 await flowPage()
+// 18+ (LOOPBACK): the confirmation panel is required and accessible; a peer hello with an under-18, missing or invalid
+// bracket is refused (a valid one is accepted, so the harness itself is proven); a stored under-18 profile is sent back
+// through Birthday + the 18+ confirmation on the next load
+async function ageGate() {
+  const k = await page('Kim', 'woman', 'men', 27, 'sam')
+  const ui = await k.evaluate(() => { const i = document.querySelector('[data-t=adult]'), r = i.getBoundingClientRect(), tg = document.querySelector('[data-t=adult-box]').getBoundingClientRect(), card = document.querySelector('[data-t=adult-card]')
+    return { role: i.getAttribute('role'), req: i.required, lab: document.getElementById(i.getAttribute('aria-labelledby'))?.textContent, desc: document.getElementById(i.getAttribute('aria-describedby'))?.textContent,
+      hidden: r.width <= 1, toggle: tg.width >= 40, panel: card.tagName === 'LABEL' && card.classList.contains('card') && card.classList.contains('fx'), checked: i.checked } })
+  if (ui.role !== 'switch' || !ui.req || ui.lab !== "I'm 18 or over" || !/adults only/.test(ui.desc) || !ui.hidden || !ui.toggle || !ui.panel || !ui.checked) throw '18+ confirmation ' + JSON.stringify(ui)
+  await k.$eval('[data-t=adult]', e => e.click()); if (!(await k.$eval('[data-t=start]', e => e.disabled))) throw 'start enabled without 18+ confirmation'
+  await k.focus('[data-t=adult]'); await k.keyboard.press('Space'); await sleep(100); if (await k.$eval('[data-t=start]', e => e.disabled)) throw 'Space did not confirm 18+'
+  log('18+ confirmation: card panel + pixel toggle (role=switch, required, labelled + described), Continue disabled until confirmed, Space confirms', JSON.stringify(ui))
+  await click(k, '[data-t=start]'); await k.waitForFunction(() => /\w{6}/.test(document.querySelector('[data-t=code]')?.textContent.replace(/\W/g, '') || ''), { timeout: 20000 })
+  const code = (await k.$eval('[data-t=code]', e => e.textContent)).replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const ev = wrap(await shared.newPage()); await ev.goto(new globalThis.URL('../', BASE).href, { waitUntil: 'domcontentloaded' })
+  const hello = (p) => ev.evaluate((to, p) => new Promise(ok => { const bc = new BroadcastChannel('pd-loopback'), cid = Math.random().toString(36).slice(2, 10)
+    const done = v => { bc.close(); ok(v) }; setTimeout(() => done('timeout'), 12000)
+    bc.onmessage = ({ data: m }) => { if (m.cid !== cid) return
+      if (m.k === 'ack') setTimeout(() => bc.postMessage({ k: 'data', cid, side: false, d: { t: 'hello', p } }), 300)
+      else if (m.k === 'data' && m.side === true) done(m.d?.t) }
+    bc.postMessage({ k: 'conn', to, from: 'pd-agetest', cid }) }), 'pd-' + code, p)
+  const base = { name: 'Eve', min: 18, max: 70, iam: 'man', seek: 'women', uid: 'agetest-' + Date.now() }
+  const cases = [['under-18 bracket', { ...base, br: [16, 17] }], ['missing bracket', { ...base }], ['invalid bracket', { ...base, br: [18, 30] }], ['bracket not numbers', { ...base, br: ['18', '24'] }], ['range below 18', { ...base, br: [18, 24], min: 16 }], ['no profile', undefined]]
+  for (const [n, p] of cases) { const r = await hello(p); if (r !== 'no') throw `hello with ${n} was not refused: ${r}` }
+  const okr = await hello({ ...base, br: [18, 24] }); if (okr !== 'ok') throw 'valid 18+ hello was refused: ' + okr
+  log('hello validation: under-18 / missing / invalid / non-numeric bracket, range below 18 and no profile all get "no"; a valid 18–24 hello gets "ok"')
+  await ev.close()
+  // restore gate: make the stored profile 16 and reload
+  const y16 = new Date().getFullYear() - 16
+  await k.evaluate(y => { const p = JSON.parse(sessionStorage.getItem('pd.profile')); p.by = y; sessionStorage.setItem('pd.profile', JSON.stringify(p)) }, y16)
+  await k.reload({ waitUntil: 'networkidle0' }); await t(k, '[data-t=recheck]')
+  { const r = await k.evaluate(() => ({ step: document.querySelector('.app.flow')?.dataset.step, next: document.querySelector('[data-t=next]').disabled, lobby: !!document.querySelector('[data-t=find]'), month: document.querySelectorAll('[data-t^=month-][aria-checked=true]').length }))
+    if (r.step !== '4' || !r.next || r.lobby || r.month) throw 'under-18 stored profile not sent back to Birthday ' + JSON.stringify(r) }
+  await pickBday(k, new Date().getFullYear() - 27, 1); await click(k, '[data-t=next]'); await t(k, '[data-t=start]')
+  { const r = await k.evaluate(() => ({ adult: document.querySelector('[data-t=adult]').checked, start: document.querySelector('[data-t=start]').disabled, seek: document.querySelector('input[name=seek]:checked')?.value }))
+    if (r.adult || !r.start || r.seek !== 'men') throw 'restore: 18+ confirmation not required again ' + JSON.stringify(r) }
+  await k.$eval('[data-t=adult]', e => e.click()); await click(k, '[data-t=start]'); await t(k, '[data-t=find]')
+  const by = await k.evaluate(() => JSON.parse(sessionStorage.getItem('pd.profile')).by); if (by !== new Date().getFullYear() - 27) throw 'restore: birthday not re-saved ' + by
+  log('stored under-18 profile: next load opens Birthday (month re-pick, Continue blocked), then requires the 18+ confirmation again before the lobby')
+  await k.close()
+}
+if (LB) await ageGate()
 await browser.close(); console.log('ALL OK')

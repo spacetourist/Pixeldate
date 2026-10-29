@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import Signup from './signup/Signup'
 import type { Profile } from './net'
 import { applyPrefs, savedProfile, saveProfile, loadPhoto, logOut } from './prefs'
-import { AGE_TOP, ageFrom } from './signup/shared'
+import { adultAge, snapRange } from './signup/shared'
 import './styles/index.css'
 // R5: the app's own Reduce motion / Solid panels settings apply before the first paint
 applyPrefs()
@@ -29,12 +29,18 @@ const boot: Promise<unknown> | null = mock ? Promise.all([loadApp().then(m => (w
 function Root() {
   const [done, setDone] = useState<{ p: Profile; photo: string } | null>(null)
   const [restoring, setRestoring] = useState(!!saved)
+  // 18+: a stored profile whose birthday is missing, invalid or under 18 re-enters signup at Birthday (re-pick) and the
+  // 18+ confirmation; it never reaches the app (or the network) as it is
+  const [resume, setResume] = useState<{ p: Profile; photo: string } | null>(null)
   useEffect(() => { if (!saved) return
-    loadPhoto().then(ph => { if (ph && saved.bm) setDone({ p: { ...saved, age: Math.min(ageFrom(saved.by, saved.bm), AGE_TOP) }, photo: ph }); else void logOut() }).finally(() => setRestoring(false)) }, [])
+    loadPhoto().then(ph => { if (!ph) return void logOut()
+      const age = adultAge(saved.by, saved.bm)
+      if (age) { const [min, max] = snapRange(saved.min, saved.max); setDone({ p: { ...saved, age, min, max }, photo: ph }) } else setResume({ p: saved, photo: ph }) }).finally(() => setRestoring(false)) }, [])
   if (done || mock) { const A = AppC ?? App; return <Suspense fallback={null}><A initial={done ?? undefined} /></Suspense> }
   if (restoring) return null
-  return <Signup onDone={(p, photo) => { void saveProfile(p, photo); setDone({ p, photo }) }} />
+  return <Signup resume={resume ?? undefined} onDone={(p, photo) => { void saveProfile(p, photo); setDone({ p, photo }) }} />
 }
+
 const render = () => createRoot(document.getElementById('root')!).render(<Root />)
 // pixel-avatar: ?avatar=debug (detection debug view) and ?avatar=flow (v0.1 screens, not wired into signup yet) enter
 // through the same lazy chunk (avatar/debug routes flow onwards), so the app's initial JS stays as it was

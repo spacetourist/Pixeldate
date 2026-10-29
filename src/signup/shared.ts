@@ -11,4 +11,8 @@ export const snapRange = (min: number, max: number): [number, number] => {
   return [EDGES[i], j === 7 ? 70 : EDGES[j] - 1] }
 /** Age on the 1st of the birth month. */
 export const ageFrom = (by: number, bm: number, now = new Date()) => now.getFullYear() - by - (now.getMonth() + 1 < bm ? 1 : 0)
+/** 18+: the (capped) age for a stored birth year/month, or 0 if either is missing, invalid or the age is under 18. */
+export const adultAge = (by: unknown, bm: unknown, now = new Date()) => {
+  if (!Number.isInteger(by) || !Number.isInteger(bm) || (bm as number) < 1 || (bm as number) > 12 || (by as number) < 1900) return 0
+  const a = ageFrom(by as number, bm as number, now); return a >= 18 ? Math.min(a, AGE_TOP) : 0 }
 export { reducedMotion as reduceMotion } from '../prefs'

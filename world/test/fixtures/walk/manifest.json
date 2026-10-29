@@ -1,0 +1,643 @@
+{
+ "grid": [
+  24,
+  32
+ ],
+ "directions": [
+  "down",
+  "up",
+  "left",
+  "right"
+ ],
+ "right": "left view mirrored horizontally",
+ "frames": 4,
+ "layers": [
+  "hair_back",
+  "body",
+  "bottom",
+  "top",
+  "shoes",
+  "face",
+  "beard",
+  "hair_front",
+  "acc"
+ ],
+ "side_groups": [
+  "far_leg",
+  "far_arm",
+  "main",
+  "near_leg",
+  "skirt",
+  "near_arm"
+ ],
+ "side_bobbed": [
+  "far_arm",
+  "main",
+  "skirt",
+  "near_arm"
+ ],
+ "frame_specs": {
+  "front_back": {
+   "stand": {
+    "bob": 0,
+    "fwd_arm": null,
+    "lift": null
+   },
+   "0": {
+    "bob": 1,
+    "fwd_arm": "R",
+    "lift": null
+   },
+   "1": {
+    "bob": 0,
+    "fwd_arm": null,
+    "lift": "R"
+   },
+   "2": {
+    "bob": 1,
+    "fwd_arm": "L",
+    "lift": null
+   },
+   "3": {
+    "bob": 0,
+    "fwd_arm": null,
+    "lift": "L"
+   }
+  },
+  "side": {
+   "stand": {
+    "bob": 0,
+    "near_leg": "straight",
+    "far_leg": "straight",
+    "near_arm": "neutral",
+    "far_arm": "neutral"
+   },
+   "0": {
+    "bob": 1,
+    "near_leg": "fwd",
+    "far_leg": "back",
+    "near_arm": "back",
+    "far_arm": "fwd"
+   },
+   "1": {
+    "bob": 0,
+    "near_leg": "straight",
+    "far_leg": "lift",
+    "near_arm": "neutral",
+    "far_arm": "neutral"
+   },
+   "2": {
+    "bob": 1,
+    "near_leg": "back",
+    "far_leg": "fwd",
+    "near_arm": "fwd",
+    "far_arm": "back"
+   },
+   "3": {
+    "bob": 0,
+    "near_leg": "lift",
+    "far_leg": "straight",
+    "near_arm": "neutral",
+    "far_arm": "neutral"
+   }
+  }
+ },
+ "side_geometry": {
+  "torso": {
+   "slim": [
+    9,
+    13
+   ],
+   "regular": [
+    9,
+    14
+   ],
+   "broad": [
+    8,
+    14
+   ]
+  },
+  "leg_x_from_row_24": {
+   "straight": [
+    10,
+    10,
+    10,
+    10,
+    10,
+    10
+   ],
+   "fwd": [
+    10,
+    9,
+    9,
+    8,
+    8,
+    7
+   ],
+   "back": [
+    10,
+    11,
+    11,
+    12,
+    12,
+    13
+   ],
+   "lift": [
+    10,
+    10,
+    11,
+    12,
+    12
+   ]
+  },
+  "arm_x_from_row_15": {
+   "neutral": [
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11
+   ],
+   "fwd": [
+    11,
+    11,
+    10,
+    10,
+    9,
+    9,
+    8,
+    8
+   ],
+   "back": [
+    12,
+    12,
+    13,
+    13,
+    14,
+    14,
+    15,
+    15
+   ]
+  }
+ },
+ "parts": {
+  "up": {
+   "build": {
+    "slim": "parts/up-build-slim.png",
+    "regular": "parts/up-build-regular.png",
+    "broad": "parts/up-build-broad.png"
+   },
+   "hair": {
+    "buzz": "parts/up-hair-buzz.png",
+    "crop": "parts/up-hair-crop.png",
+    "quiff": "parts/up-hair-quiff.png",
+    "sidepart": "parts/up-hair-sidepart.png",
+    "curly": "parts/up-hair-curly.png",
+    "afro": "parts/up-hair-afro.png",
+    "bob": "parts/up-hair-bob.png",
+    "long": "parts/up-hair-long.png",
+    "wavy": "parts/up-hair-wavy.png",
+    "ponytail": "parts/up-hair-ponytail.png",
+    "bun": "parts/up-hair-bun.png",
+    "bald": "parts/up-hair-bald.png"
+   },
+   "top": {
+    "tee": "parts/up-top-tee.png",
+    "longsleeve": "parts/up-top-longsleeve.png",
+    "shirt": "parts/up-top-shirt.png",
+    "hoodie": "parts/up-top-hoodie.png",
+    "jumper": "parts/up-top-jumper.png",
+    "jacket": "parts/up-top-jacket.png",
+    "tank": "parts/up-top-tank.png",
+    "dress": "parts/up-top-dress.png"
+   },
+   "bottom": {
+    "trousers": "parts/up-bottom-trousers.png",
+    "jeans": "parts/up-bottom-jeans.png",
+    "shorts": "parts/up-bottom-shorts.png",
+    "skirt": "parts/up-bottom-skirt.png"
+   },
+   "shoes": {
+    "trainers": "parts/up-shoes-trainers.png",
+    "boots": "parts/up-shoes-boots.png",
+    "flats": "parts/up-shoes-flats.png",
+    "heels": "parts/up-shoes-heels.png"
+   },
+   "face": {
+    "beard-stubble": "parts/up-face-beard-stubble.png",
+    "beard-beard": "parts/up-face-beard-beard.png",
+    "face-b": "parts/up-face-face-b.png",
+    "glasses": "parts/up-face-glasses.png",
+    "shades": "parts/up-face-shades.png",
+    "earrings": "parts/up-face-earrings.png",
+    "beanie": "parts/up-face-beanie.png",
+    "cap": "parts/up-face-cap.png"
+   }
+  },
+  "left": {
+   "build": {
+    "slim": "parts/left-build-slim.png",
+    "regular": "parts/left-build-regular.png",
+    "broad": "parts/left-build-broad.png"
+   },
+   "hair": {
+    "buzz": "parts/left-hair-buzz.png",
+    "crop": "parts/left-hair-crop.png",
+    "quiff": "parts/left-hair-quiff.png",
+    "sidepart": "parts/left-hair-sidepart.png",
+    "curly": "parts/left-hair-curly.png",
+    "afro": "parts/left-hair-afro.png",
+    "bob": "parts/left-hair-bob.png",
+    "long": "parts/left-hair-long.png",
+    "wavy": "parts/left-hair-wavy.png",
+    "ponytail": "parts/left-hair-ponytail.png",
+    "bun": "parts/left-hair-bun.png",
+    "bald": "parts/left-hair-bald.png"
+   },
+   "top": {
+    "tee": "parts/left-top-tee.png",
+    "longsleeve": "parts/left-top-longsleeve.png",
+    "shirt": "parts/left-top-shirt.png",
+    "hoodie": "parts/left-top-hoodie.png",
+    "jumper": "parts/left-top-jumper.png",
+    "jacket": "parts/left-top-jacket.png",
+    "tank": "parts/left-top-tank.png",
+    "dress": "parts/left-top-dress.png"
+   },
+   "bottom": {
+    "trousers": "parts/left-bottom-trousers.png",
+    "jeans": "parts/left-bottom-jeans.png",
+    "shorts": "parts/left-bottom-shorts.png",
+    "skirt": "parts/left-bottom-skirt.png"
+   },
+   "shoes": {
+    "trainers": "parts/left-shoes-trainers.png",
+    "boots": "parts/left-shoes-boots.png",
+    "flats": "parts/left-shoes-flats.png",
+    "heels": "parts/left-shoes-heels.png"
+   },
+   "face": {
+    "beard-stubble": "parts/left-face-beard-stubble.png",
+    "beard-beard": "parts/left-face-beard-beard.png",
+    "face-b": "parts/left-face-face-b.png",
+    "glasses": "parts/left-face-glasses.png",
+    "shades": "parts/left-face-shades.png",
+    "earrings": "parts/left-face-earrings.png",
+    "beanie": "parts/left-face-beanie.png",
+    "cap": "parts/left-face-cap.png"
+   }
+  }
+ },
+ "down_parts": "../parts/ (kit.py front parts, unchanged)",
+ "sheets": [
+  {
+   "file": "sheet-00.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "broad",
+    "hair": "quiff",
+    "top": "jacket",
+    "bottom": "trousers",
+    "shoes": "trainers",
+    "skin": "fair",
+    "hairc": "dark-brown",
+    "topc": "mint",
+    "bottomc": "navy",
+    "shoec": "white"
+   }
+  },
+  {
+   "file": "sheet-01.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "slim",
+    "hair": "long",
+    "top": "dress",
+    "shoes": "heels",
+    "face": "b",
+    "acc": "earrings",
+    "skin": "warm",
+    "hairc": "blonde",
+    "topc": "coral",
+    "shoec": "butter"
+   }
+  },
+  {
+   "file": "sheet-02.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "regular",
+    "hair": "afro",
+    "top": "hoodie",
+    "bottom": "jeans",
+    "shoes": "trainers",
+    "beard": "beard",
+    "skin": "deep",
+    "hairc": "black",
+    "topc": "butter",
+    "bottomc": "denim",
+    "shoec": "white"
+   }
+  },
+  {
+   "file": "sheet-03.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "slim",
+    "hair": "bob",
+    "top": "jumper",
+    "bottom": "skirt",
+    "shoes": "boots",
+    "face": "b",
+    "acc": "glasses",
+    "accc": "black",
+    "tights": "black",
+    "skin": "porcelain",
+    "hairc": "auburn",
+    "topc": "violet",
+    "bottomc": "black",
+    "shoec": "black"
+   }
+  },
+  {
+   "file": "sheet-04.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "regular",
+    "hair": "sidepart",
+    "top": "shirt",
+    "bottom": "trousers",
+    "shoes": "boots",
+    "beard": "stubble",
+    "acc": "glasses",
+    "skin": "olive",
+    "hairc": "black",
+    "topc": "navy",
+    "bottomc": "khaki",
+    "shoec": "brown"
+   }
+  },
+  {
+   "file": "sheet-05.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "regular",
+    "hair": "ponytail",
+    "top": "tank",
+    "bottom": "shorts",
+    "shoes": "trainers",
+    "face": "b",
+    "skin": "tan",
+    "hairc": "brown",
+    "topc": "white",
+    "bottomc": "denim",
+    "shoec": "coral"
+   }
+  },
+  {
+   "file": "sheet-06.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "broad",
+    "hair": "buzz",
+    "top": "longsleeve",
+    "bottom": "jeans",
+    "shoes": "boots",
+    "beard": "beard",
+    "acc": "beanie",
+    "accc": "coral",
+    "skin": "brown",
+    "hairc": "black",
+    "topc": "green",
+    "bottomc": "black",
+    "shoec": "brown"
+   }
+  },
+  {
+   "file": "sheet-07.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "slim",
+    "hair": "wavy",
+    "top": "tee",
+    "bottom": "jeans",
+    "shoes": "flats",
+    "face": "b",
+    "acc": "shades",
+    "skin": "ebony",
+    "hairc": "black",
+    "topc": "pink",
+    "bottomc": "denim",
+    "shoec": "white"
+   }
+  },
+  {
+   "file": "sheet-08.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "regular",
+    "hair": "curly",
+    "top": "jacket",
+    "bottom": "jeans",
+    "shoes": "trainers",
+    "skin": "fair",
+    "hairc": "ginger",
+    "topc": "black",
+    "bottomc": "denim",
+    "shoec": "white"
+   }
+  },
+  {
+   "file": "sheet-09.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "regular",
+    "hair": "bun",
+    "top": "shirt",
+    "bottom": "trousers",
+    "shoes": "flats",
+    "face": "b",
+    "skin": "olive",
+    "hairc": "dark-brown",
+    "topc": "white",
+    "bottomc": "black",
+    "shoec": "black"
+   }
+  },
+  {
+   "file": "sheet-10.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "broad",
+    "hair": "bald",
+    "top": "jumper",
+    "bottom": "trousers",
+    "shoes": "boots",
+    "beard": "beard",
+    "skin": "tan",
+    "hairc": "grey",
+    "topc": "red",
+    "bottomc": "grey",
+    "shoec": "black"
+   }
+  },
+  {
+   "file": "sheet-11.png",
+   "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+   ],
+   "cols": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "config": {
+    "build": "regular",
+    "hair": "crop",
+    "top": "tee",
+    "bottom": "shorts",
+    "shoes": "trainers",
+    "acc": "cap",
+    "accc": "mint",
+    "skin": "porcelain",
+    "hairc": "platinum",
+    "topc": "coral",
+    "bottomc": "khaki",
+    "shoec": "white"
+   }
+  }
+ ],
+ "shots": [
+  "../../shots/walk-board.png",
+  "../../shots/walk-preview.gif"
+ ]
+}

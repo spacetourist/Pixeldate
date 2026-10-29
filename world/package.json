@@ -1,0 +1,18 @@
+{
+  "name": "pixeldate-world",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "test": "node test/run.mjs",
+    "bots": "node test/bots.mjs"
+  },
+  "dependencies": {
+    "obscenity": "^0.4.6",
+    "partyserver": "latest"
+  },
+  "devDependencies": {
+    "wrangler": "latest",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,26 @@
+# Pixeldate World · local dev: `npm run dev` (wrangler dev, miniflare). Not deployed yet: no Cloudflare account.
+name = "pixeldate-world"
+main = "src/worker.ts"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "Area"
+class_name = "Area"
+
+[[durable_objects.bindings]]
+name = "User"
+class_name = "User"
+
+[[durable_objects.bindings]]
+name = "Mod"
+class_name = "Mod"
+
+# SQLite-backed Durable Objects (the kind available on the Workers Free plan)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Area", "User", "Mod"]
+
+[vars]
+# dev-only invite list. For production, move INVITES to an encrypted secret and remove DEV.
+INVITES = "dev-invite-1,dev-invite-2,dev-invite-3"
+DEV = "1"

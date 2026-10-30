@@ -22,3 +22,8 @@ Seated people are not art files: the sit pose is `composeDir(look, dir, 'sit')` 
 `pixel-avatar/tools/kit_dir.py` (checked against `sit-sheet.png` by `world/test/walk.mjs`), so custom looks sit too.
 The sprite's top-left is the chair tile (16x32, top on the back-rest row) + (−2, −10) on a left seat (sitter faces
 right) or (−6, −10) on a right seat (sitter faces left).
+
+## Generated (not GD's files)
+- `markers/speech-bubble-9slice-mine.png`, `markers/speech-bubble-tail-mine.png`: your own bubble (GD v04, "1px mint rim").
+  `tools/import-world-art.mjs` makes them from GD's `speech-bubble-9slice.png` / `speech-bubble-tail.png`, recolouring only
+  the rim #4A3886 to mint #48E5C2. Every other pixel is unchanged. Re-run the tool if GD redraws the bubble.

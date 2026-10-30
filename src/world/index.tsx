@@ -336,7 +336,7 @@ function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, 
           {rev ? <div className="w-a mine"><Px i="tick" c="#48E5C2" /><span data-t="w-rev-mine">{rev.mine}</span></div>
             : card.mine ? <div className="w-a mine" data-t="w-mine"><Px i="tick" c="#48E5C2" /><span>{card.mine}</span><span className="w-hid" data-t="w-hid"><Px i="lock" n={1.5} /> Hidden from {name}</span></div>
             : <form className="w-a input" onSubmit={onAns}><input data-t="w-ans-input" value={ans} maxLength={MAX_ANS} onChange={e => setAns(e.target.value)} placeholder="Your answer" aria-label="Your answer" enterKeyHint="send" autoComplete="off" />
-              <button className="w-btn sm" data-t="w-ans-send" disabled={!ans.trim()}>Answer</button></form>}</div>
+              <button className="w-btn sm" data-t="w-ans-send" aria-disabled={!ans.trim() || undefined}>Answer</button></form>}</div>
         <div className="w-row"><span className="w-who2 them">{name}</span>
           {rev ? <div className="w-a"><Px i="tick" c="#48E5C2" /><span data-t="w-rev-theirs">{rev.theirs}</span></div>
             : <div className={'w-a wait' + (card.them ? ' in' : '')} data-t="w-them" data-them={card.them ? '1' : undefined}>

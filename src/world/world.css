@@ -62,7 +62,7 @@
 .w-room.phone.seated { grid-template-rows: auto 122px 1fr }
 .w-room.phone.seated .w-side { overflow-y: auto; overscroll-behavior: contain; gap: 8px; padding: 8px 8px max(10px, env(safe-area-inset-bottom)) }
 .w-room.desk.seated .w-side { overflow-y: auto }
-.w-room.seated .w-side > .w-call { margin-top: auto }
+.w-room.phone.seated .w-side > .w-call { margin-top: auto }
 .w-side svg.i { shape-rendering: crispEdges; display: block; flex: none }
 .w-who { grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 8px 6px 8px 8px }
 .w-photo { position: relative; border: 2px solid var(--edge, #05020F); box-shadow: 0 0 0 2px var(--c-track, #2A2150); background: #000; box-sizing: content-box; overflow: hidden }
@@ -116,3 +116,7 @@
 .w-link { background: none; border: 0; padding: 0 4px; min-height: 32px; color: #8F7BFF; text-decoration: underline; text-underline-offset: 2px; font: 600 12.5px/1.2 var(--font-ui); cursor: pointer }
 .w-deskhint { margin: 0; font: 500 12.5px/1.3 var(--font-ui); color: var(--text-muted, #A49CC2); text-align: center } .w-deskhint b { color: var(--text, #FFF6EC) }
 .w-pport { display: block; flex: none; width: 48px; height: 64px; margin: -4px 0 }
+
+/* v05 GD check: wide buttons put the icon inline before the label (mock .btn), the chat-bar counter only shows when it's low (mock has none) */
+.w-btn.wide { display: flex; align-items: center; justify-content: center; gap: 8px }
+.w-chat .w-left:not(.low) { display: none }

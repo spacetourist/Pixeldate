@@ -137,12 +137,30 @@ for (const e of EMOTES) for (const p of [ann, ben]) {
   ok(g(ids.stand)?.dy === -24 && g(ids.sit)?.dy === -21 && g(ids.hrt)?.dy === -35 && mk[ids.hrt]?.[1] && !mk[ids.stand]?.[1] && !mk[ids.sit]?.[1],
     `${e} on ${p.tag}'s screen: standing sy−24, seated sy−21, heart-marked sy−35 (${['stand', 'sit', 'hrt'].map(k => g(ids[k])?.dy).join('/')})`)
 }
-// a speech bubble wins the head slot: the emote goes above the bubble
-{ await sleep(EMOTE_COOLDOWN_MS + 150); stand.send({ t: 'say', text: 'hello there' }); await sleep(500); stand.send({ t: 'emote', e: 'gasp' })
-  const g = await until(async () => { const x = (await fx(ann)).find(x => x.id === stand.me); return x && x.dy < -24 && x }, 1500)
-  const bt = await ann.evaluate(id => { const r = window.__world.r, x = r.ents.get(id); return [r.bubbleTop.get(id), x?.sy] }, stand.me)
-  ok(g && bt[0] !== undefined && bt[1] + g.dy + 24 <= bt[0] && g.dy < -24, `with a bubble up the emote sits above it (emote bottom ${bt[1] + (g?.dy ?? 0) + 24} ≤ bubble top ${bt[0]?.toFixed(1)})`)
-  await shotQ(ann, 'emote-over-bubble') }
+// a speech bubble wins the head slot: the same person says something, then emotes while the bubble is up, and
+// the emote goes above *their* bubble (checked in art px against the layout and in CSS px against the bubble on screen)
+stand.send({ t: 'go', x: 30, y: 16 })   // off the lamp column, onto open floor, so the proof reads clearly
+ok(await until(() => { const e = stand.ents.get(stand.me); return e && Math.hypot(e.x - 30.5, e.y - 16.5) < 0.6 }, 6000), 'Sto walks to open floor (30,16) for the bubble proof')
+for (const p of [ann, ben]) {
+  await sleep(EMOTE_COOLDOWN_MS + 150); const said = `hello there (${p.sz})`
+  stand.send({ t: 'say', text: said })
+  await front(p); ok(await until(() => p.evaluate((id, t) => [...document.querySelectorAll('.w-bubble')].some(b => b.dataset.id === String(id) && b.textContent.includes(t)), stand.me, said), 2000), `${p.tag}: Sto's own bubble is up ("${said}")`)
+  await sleep(300); stand.send({ t: 'emote', e: 'giggle' })
+  const g = await until(async () => { const x = (await fx(p)).find(x => x.id === stand.me); return x && x.dy < -24 && x }, 1000)
+  const m = await p.evaluate((id, dy, dx) => { const r = window.__world.r, x = r.ents.get(id), cv = r.px.canvas.getBoundingClientRect()
+    const el = [...document.querySelectorAll('.w-bubble')].find(b => b.dataset.id === String(id)); if (!x || !el) return null
+    const bb = el.getBoundingClientRect(), css = v => (v * r.k - r.oy) / r.dpr, cx = v => (v * r.k - r.ox) / r.dpr
+    return { bt: r.bubbleTop.get(id), sy: x.sy, eTop: css(x.sy + dy), eBot: css(x.sy + dy + 24), eL: cx(x.sx + dx), eR: cx(x.sx + dx + 24),
+      bTop: bb.top - cv.top, bL: bb.left - cv.left, bR: bb.right - cv.left,
+      hits: [...r.ents].filter(([o]) => o !== id).filter(([, o]) => { const w = o.body.texture.width, h = o.body.texture.height, ex = x.sx + dx, ey = x.sy + dy
+        return o.sx < ex + 24 && ex < o.sx + w && o.sy < ey + 24 && ey < o.sy + h }).map(([o]) => o), others: [...document.querySelectorAll('.w-bubble')].map(b => b.dataset.id) } }, stand.me, g?.dy ?? 0, g?.dx ?? 0)
+  ok(g && m && m.bt !== undefined && m.sy + g.dy + 24 <= m.bt, `${p.tag}: Sto's emote sits above Sto's bubble in art px (emote bottom ${m && g ? m.sy + g.dy + 24 : '?'} ≤ bubble top ${m?.bt?.toFixed(1)})`)
+  ok(m && m.eBot <= m.bTop + 0.5 && m.eTop < m.bTop && m.eR > m.bL && m.eL < m.bR && m.others.every(o => o === String(stand.me)),
+    `${p.tag}: on screen the emote (y ${m?.eTop?.toFixed(1)}–${m?.eBot?.toFixed(1)}) is above the top of the same person's bubble (y ${m?.bTop?.toFixed(1)}) and over it horizontally; no one else has a bubble`)
+  ok(m && !m.hits.length, `${p.tag}: the lifted emote overlaps no one else's sprite (${JSON.stringify(m?.hits)})`)
+  await shotQ(p, 'emote-over-bubble')
+  ok((await fx(p)).some(x => x.id === stand.me && x.e === 'giggle'), `${p.tag}: the emote was still playing when shot`)
+}
 // Ben (man) → male set
 await emo(ben, 'gasp')
 const b2 = await until(async () => (await em(ann, 'played')).find(x => /gasp_m/.test(x.path))); ok(b2 && /^emotes\/gasp_m[12]$/.test(b2.path), 'Ben (man) gasps from the male set: ' + b2?.path)

@@ -440,7 +440,7 @@ function World() {
         {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
         {!playing && soloDuetAny && <NowPlaying piece={{ title: soloDuetAny.title } as any} by={`${pianist} · both parts`} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
         {duetPlaying && <NowPlaying piece={{ title: duetPlaying.title } as any} by="duet" muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
-        {duet && duetPlaying && duet.ph === 'play' && !duet.me && !seated && !sel && pa.current && near >= 0 && pa.current.gain > 0.001 && <DuetCard v={duet} who={who} A={pa.current} />}
+        {duet && duetPlaying && duet.ph === 'play' && !duet.me && !sel && pa.current && <DuetCard v={duet} who={who} A={pa.current} />}
         {invOpen && duet?.me === 'bass' && <InviteSheet people={dlist} who={who} song={duet.song} pending={!!duet.inv} onInvite={id => { dsend({ t: 'dinv', id }); setInvOpen(false) }} onClose={() => setInvOpen(false)} />}
         {dinv && pa.current && <InviteCard from={dinv.from} song={dinv.song} until={dinv.until} who={who} A={pa.current} send={dsend} />}</div>
       <aside className="w-side" data-t="w-side">

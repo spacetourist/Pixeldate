@@ -62,6 +62,9 @@ class Player {
 }
 interface Pair { tb: number; key: string; a: Player; b: Player; level: number; seg: number; up: boolean; used: Set<string>; q: Question | null
   ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null
+  /** a call the two started in the café (after both tapped): who reports it connected, and each one's
+      "Show our heart in the café" switch (on at the start of every call) */
+  live: { up: Set<Player>; sw: Map<Player, boolean> } | null
   /** pair store read done; each side's local level claim; reconciled (both claims in, or CLAIM_MS passed); tag of the other per side */
   loaded: boolean; claims: Map<Player, { lv: number; drop: boolean }>; rc: boolean; peer: Map<Player, string> }
 /** The café piano: who is on the bench, and the song (server time of its first sample, so every client schedules its audio
@@ -89,6 +92,8 @@ export class Room {
   players = new Map<Sock, Player>(); byId = new Map<number, Player>(); pending = new Set<Sock>()
   joining = 0; tickN = 0; nextId = 1; pairs = new Map<number, Pair>(); ps: PairStore
   piano: Piano = { by: null, song: null, at: 0, role: 'solo', seats: null }
+  /** tables showing the couple heart right now (GD couple/README: only on/off per table is ever broadcast) */
+  hearts = new Set<number>()
   name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
   constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
   get size() { return this.players.size }
@@ -122,6 +127,8 @@ export class Room {
       case 'nfm': return this.notForMe(p)
       case 'sofa': return this.sofaGo(p, m.i)
       case 'emote': return this.emote(p, m.e)
+      case 'callup': case 'calldown': return this.callLive(p, m.t)
+      case 'cheart': return this.coupleSwitch(p, m.on)
     }
   }
   close(s: Sock) {
@@ -159,6 +166,7 @@ export class Room {
       if (o !== me) o.sock.send(JSON.stringify({ t: 'add', p: me.pub() }))
     }
     s.send(JSON.stringify(this.pianoView(me)))   // a late joiner hears the song from where it is now
+    for (const tb of this.hearts) { const pr = this.pairs.get(tb); if (pr && !this.hidden(me, pr.a) && !this.hidden(me, pr.b)) s.send(JSON.stringify({ t: 'couple', tb, on: true })) }
   }
   private spawn(): P {
     for (const sp of SPAWNS) if (![...this.players.values()].some(o => Math.hypot(o.x - sp[0] - .5, o.y - sp[1] - .5) < 1)) return sp
@@ -257,7 +265,7 @@ export class Room {
       if (ok && a && b && !this.pairs.has(t.id)) {
         const key = pairKey(a, b)
         const pr: Pair = { tb: t.id, key, a, b, level: 1, seg: 0, up: false, used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
-          date: new Set(), call: null, loaded: false, claims: new Map(), rc: false, peer: new Map() }
+          date: new Set(), call: null, live: null, loaded: false, claims: new Map(), rc: false, peer: new Map() }
         this.pairs.set(t.id, pr); a.table = b.table = t
         for (const [x, y] of [[a, b], [b, a]]) if (!x.sets.met.has(y.uid)) { x.sets.met.add(y.uid); this.store.add(x.uid, 'met', y.uid) }
         this.deal(pr); void this.sync(pr)
@@ -365,7 +373,7 @@ export class Room {
     else {
       if (!pr.call || pr.call === p || pr.level < VIDEO_LEVEL) return
       const host = pr.call, r = crypto.getRandomValues(new Uint8Array(12)), code = [...r].map(x => (x % 36).toString(36)).join('')
-      pr.call = null
+      pr.call = null; pr.live = { up: new Set(), sw: new Map([[pr.a, true], [pr.b, true]]) }
       for (const x of [pr.a, pr.b]) x.sock.send(JSON.stringify({ t: 'call', code, host: x === host, lv: pr.level }))
     }
     this.sendCard(pr)
@@ -383,6 +391,8 @@ export class Room {
   }
   private endPair(id: number) {
     const pr = this.pairs.get(id); if (!pr) return; this.pairs.delete(id); pr.call = null
+    if (pr.live) { pr.live = null; for (const p of [pr.a, pr.b]) if (this.players.get(p.sock) === p) p.sock.send(JSON.stringify({ t: 'callend' })) }
+    this.coupleSync()
     for (const p of [pr.a, pr.b]) { p.table = null; if (this.players.get(p.sock) === p) p.sock.send(JSON.stringify({ t: 'card', q: null })) }
   }
   private unpair(p: Player) { for (const [id, pr] of this.pairs) if (pr.a === p || pr.b === p) this.endPair(id) }
@@ -432,6 +442,34 @@ export class Room {
     for (const x of [pr.a, pr.b]) this.standUp(x, x === pr.a ? tb.seats[0] : tb.seats[1])
     p.sock.send(JSON.stringify({ t: 'note', k: 'ended', id: o.id, name: o.name }))
     o.sock.send(JSON.stringify({ t: 'note', k: 'moved-on', id: p.id, name: p.name }))
+  }
+  /** The café call (both tapped Start call; the video runs between their phones): each side says when its video is
+      connected ('callup') and when it ends ('calldown': hang up, the link dropped). Either side ending it ends it for both. */
+  private callLive(p: Player, what: 'callup' | 'calldown') {
+    const pr = this.pairOf(p); if (!pr?.live) return
+    if (what === 'callup') pr.live.up.add(p)
+    else { pr.live = null; other(pr, p).sock.send(JSON.stringify({ t: 'callend' })); p.sock.send(JSON.stringify({ t: 'callend' })) }
+    this.coupleSync()
+  }
+  /** "Show our heart in the café": either of the two can turn it off; it shows only while both are on. */
+  private coupleSwitch(p: Player, on: unknown) {
+    const pr = this.pairOf(p); if (!pr?.live || typeof on !== 'boolean') return
+    pr.live.sw.set(p, on); this.coupleSync()
+  }
+  /** Which tables show the couple heart: a call both sides report connected, both seated (the pair exists), both
+      switches on. Everyone in the room (except anyone either of the two blocked) gets only on/off for the table. */
+  coupleSync() {
+    const want = new Set<number>()
+    for (const pr of this.pairs.values()) if (pr.live && pr.live.up.size === 2 && [...pr.live.sw.values()].every(Boolean)) want.add(pr.tb)
+    const ch: [number, boolean][] = []
+    for (const tb of this.hearts) if (!want.has(tb)) ch.push([tb, false])
+    for (const tb of want) if (!this.hearts.has(tb)) ch.push([tb, true])
+    if (!ch.length) return
+    this.hearts = want
+    for (const [tb, on] of ch) {
+      const pr = this.pairs.get(tb), msg = JSON.stringify({ t: 'couple', tb, on })
+      for (const v of this.players.values()) if (!on || !pr || (!this.hidden(v, pr.a) && !this.hidden(v, pr.b))) v.sock.send(msg)
+    }
   }
   /** Sofas: a casual hangout. Tapping one walks you to the floor in front of it, then you take the free slot nearest to
       where you tapped; up to SOFA_CAP a sofa, a full sofa says so. Room chat stays public; no cards. */
@@ -521,6 +559,7 @@ export class Room {
       p.sock.send(JSON.stringify({ t: 'del', id: o.id })); o.sock.send(JSON.stringify({ t: 'del', id: p.id }))
       if (p.table && p.table === o.table) this.unpair(p)
       if (this.piano.by === p || this.piano.by === o) this.pianoSend()
+      for (const tb of this.hearts) { const pr = this.pairs.get(tb); if (pr && (pr.a === o || pr.b === o)) p.sock.send(JSON.stringify({ t: 'couple', tb, on: false })); if (pr && (pr.a === p || pr.b === p)) o.sock.send(JSON.stringify({ t: 'couple', tb, on: false })) }
     } else {
       this.store.report({
         at: this.now(), inst: this.name, by: p.uid, who: o.uid, why: typeof why === 'string' && REASONS.has(why) ? why : 'other',

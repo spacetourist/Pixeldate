@@ -42,6 +42,8 @@ export type ServerMsg =
   | { t: 'tm'; c: number; s: number }
   /** a voice emote (shared/emote.ts) from player id: the take the server picked; to the sender only, ok:false + wait when on cooldown */
   | { t: 'emote'; id: number; e: string; take: string } | { t: 'emote'; ok: false; why: 'slow'; wait: number }
+  /** the café call ended (either side hung up or stood up) / the couple heart over table tb is on or off for everyone */
+  | { t: 'callend' } | { t: 'couple'; tb: number; on: boolean }
 export type ClientMsg =
   | { t: 'join'; invite: string; p: { name: string; br: [number, number]; min: number; max: number; iam: string; seek: string; uid: string; pav?: string; adult?: boolean } }
   | { t: 'go'; x: number; y: number } | { t: 'dir'; dx: number; dy: number }
@@ -55,6 +57,8 @@ export type ClientMsg =
   /** at the piano (only the one on the bench): play a manifest piece / stop it. tm: clock sync ping. */
   | { t: 'piano'; id: string } | { t: 'pstop' } | { t: 'tm'; c: number }
   | { t: 'emote'; e: string }
+  /** the café call: my video is connected / it ended; my "Show our heart in the café" switch */
+  | { t: 'callup' | 'calldown' } | { t: 'cheart'; on: boolean }
 /** What one of the two at a table sees (sent only to them): level, the card, the answers (theirs only once both are in),
     the date opt-ins, and a pending call request ('out' = I asked, 'in' = they asked). */
 export interface Table { tb: number; lv: number; seg: number; up: boolean; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null

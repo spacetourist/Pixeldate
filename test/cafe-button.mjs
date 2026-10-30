@@ -1,15 +1,16 @@
-// 'Enter the café' on the home screen (src/ui/cafe-button.tsx, GD interim style), on the built app (dist) at 390 and 1440:
-// hidden without an invite; shown with pd.invite (and after ?invite= on the app URL, which saves it); directly under
-// Find someone, full width, #281D52 fill, 2px #05020F edge, butter pixel cup + cream Bricolage label; a click opens
-// ?world=cafe (the café gate). Shots: shots/cafe-button-v1/.   usage: npm run build && node test/cafe-button.mjs
+// 'Enter the café' on the home screen (src/ui/cafe-button.tsx, GD final spec: design world/landing README §6), on the
+// built app (dist) at 390 and 1440: hidden without an invite; shown with pd.invite (and after ?invite= on the app URL,
+// which saves it); directly under Find someone, full width, 54px tall, #281D52 fill (#33276A hover), 2px #05020F edge,
+// 20px pixel cup (cream cup, coral band, butter steam) + cream #FFF1C1 Bricolage label, no friends dot without a count;
+// over the café backdrop; a click opens ?world=cafe (the café gate). Shots: shots/cafe-button-v2/.   usage: npm run build && node test/cafe-button.mjs
 import { chromium } from '/tmp/pw/node_modules/playwright-core/index.mjs'
 import { createServer } from 'node:http'
 import { readFileSync, existsSync, statSync, mkdirSync } from 'node:fs'
 import { join, extname } from 'node:path'
 const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
-const ROOT = new URL('..', import.meta.url).pathname, OUT = ROOT + 'shots/cafe-button-v1/'; mkdirSync(OUT, { recursive: true })
+const ROOT = new URL('..', import.meta.url).pathname, OUT = ROOT + 'shots/cafe-button-v2/'; mkdirSync(OUT, { recursive: true })
 const PORT = 4186, O = 'http://localhost:' + PORT, APP = O + '/Pixeldate/app/'
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.webp': 'image/webp', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.svg': 'image/svg+xml' }
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.webp': 'image/webp', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.svg': 'image/svg+xml', '.mp4': 'video/mp4' }
 const srv = await new Promise(ok => { const s = createServer((q, r) => {
   const p = decodeURIComponent(new URL(q.url, 'http://x').pathname)
   if (p === '/seed') { r.writeHead(200, { 'content-type': 'text/html' }); return r.end('<!doctype html><title>seed</title>') }
@@ -44,13 +45,21 @@ for (const sz of [390, 1440]) {
     const r = await page.evaluate(() => { const c = document.querySelector('[data-t=cafe]'), f = document.querySelector('[data-t=find]'), cb = c.getBoundingClientRect(), fb = f.getBoundingClientRect(), cs = getComputedStyle(c), bs = getComputedStyle(c, '::before')
       const ic = c.querySelector('[data-t=cafe-icon]'), ip = ic?.querySelector('path'), next = f.nextElementSibling
       return { next: next === c, gap: Math.round(cb.top - fb.bottom), w: [Math.round(cb.width), Math.round(fb.width), Math.round(cb.left), Math.round(fb.left)], fill: bs.backgroundColor, edge: cs.backgroundColor, inset: [bs.top, bs.left, bs.right], col: cs.color, font: cs.fontFamily, label: c.textContent.trim(),
-        icon: ic && { fill: getComputedStyle(ip).fill, before: ic.compareDocumentPosition(c.lastChild) & 4, w: ic.getBoundingClientRect().width }, href: c.getAttribute('href') } })
+        h: Math.round(cb.height), weight: cs.fontWeight, size: cs.fontSize, just: cs.justifyContent, dot: !!c.querySelector('.dot,[data-t=cafe-inside]'),
+        icon: ic && { fills: [...ic.querySelectorAll('path')].map(x => getComputedStyle(x).fill + (x.getAttribute('opacity') ? '@' + x.getAttribute('opacity') : '')), before: ic.compareDocumentPosition(c.querySelector('.lb')) & 4, w: ic.getBoundingClientRect().width, h: ic.getBoundingClientRect().height, crisp: ic.getAttribute('shape-rendering') }, href: c.getAttribute('href') } })
     ok(r.next && r.gap >= 0 && r.gap <= 16, `${sz}: directly under Find someone (next sibling, ${r.gap}px gap)`)
     ok(r.w[0] === r.w[1] && r.w[2] === r.w[3], `${sz}: full width, same as Find someone (${r.w})`)
     ok(r.fill === 'rgb(40, 29, 82)', `${sz}: #281D52 fill (${r.fill})`)
     ok(r.edge === 'rgb(5, 2, 15)' && r.inset[1] === '2px' && r.inset[2] === '2px', `${sz}: 2px #05020F edge (${r.edge}, inset ${r.inset})`)
-    ok(r.label === 'Enter the café' && r.col === 'rgb(255, 246, 236)' && /Bricolage/.test(r.font), `${sz}: cream Bricolage label "${r.label}" (${r.col})`)
-    ok(r.icon && r.icon.fill === 'rgb(255, 216, 77)' && r.icon.before && r.icon.w === 24, `${sz}: butter pixel cup before the label (${JSON.stringify(r.icon)})`)
+    ok(r.label === 'Enter the café' && r.col === 'rgb(255, 241, 193)' && /Bricolage/.test(r.font) && r.weight === '700' && r.size === '16px', `${sz}: cream #FFF1C1 Bricolage 700 16px label "${r.label}" (${r.col})`)
+    ok(r.h === 54 && r.just === 'center', `${sz}: 54px tall, content centred (${r.h}px, ${r.just})`)
+    ok(r.icon && r.icon.fills.join() === 'rgb(255, 216, 77)@0.85,rgb(255, 241, 193),rgb(255, 111, 89)' && r.icon.before && r.icon.w === 20 && r.icon.h === 20 && r.icon.crisp === 'crispEdges',
+      `${sz}: 20px pixel cup before the label: butter steam 85 %, cream cup, coral band (${JSON.stringify(r.icon)})`)
+    ok(!r.dot, `${sz}: no "N inside" dot without a friends count`)
+    await b.hover(); await page.waitForTimeout(300)
+    ok(await page.evaluate(() => getComputedStyle(document.querySelector('[data-t=cafe]'), '::before').backgroundColor) === 'rgb(51, 39, 106)', `${sz}: hover fill #33276A`)
+    await page.mouse.move(0, 0); await page.waitForTimeout(300)
+    ok(await page.evaluate(() => !!document.querySelector('.bgart .pd-bd--home img.pd-bd__poster') && !document.querySelector('.bgart picture')), `${sz}: home sits on the café backdrop (poster in .bgart, old art gone)`)
     await page.screenshot({ path: `${OUT}home-with-invite-${sz}.png` })
     const f = await page.locator('[data-t=find]').boundingBox(), c = await b.boundingBox()
     await page.screenshot({ path: `${OUT}button-closeup-${sz}.png`, clip: { x: Math.max(0, f.x - 16), y: f.y - 16, width: f.width + 32, height: c.y + c.height - f.y + 32 } })

@@ -23,6 +23,8 @@ const WHY: Record<string, string> = {
 const REFUSED: Record<string, string> = { invite: "That invite code isn't on the list.", adult: 'The café is 18+ only.', profile: 'Your profile needs a refresh: make it again in the app.',
   timeout: 'Took too long to join. Try again.', closed: 'Lost the connection to the café.', replaced: 'You joined from another tab.' }
 const REASONS: [string, string][] = [['rude', 'Rude or abusive'], ['sexual', 'Sexual content'], ['spam', 'Spam or selling'], ['underage', 'Might be under 18'], ['fake', 'Fake profile'], ['other', 'Something else']]
+/** GD v04: gap between stacked bubbles, in art px; desktop chat log length */
+const STACK_GAP = 2, LOG_MAX = 40
 type Bubble = { text: string; until: number; mine?: boolean; held?: string }
 /** The join profile: bracket only (never age or birthday), prefs for the server's both-ways check, character JSON (never an
     image). Kept here rather than importing net.ts's wire(), so the world chunk shares no module with the app's first load. */
@@ -42,6 +44,9 @@ function World() {
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
   const [card, setCard] = useState<{ q: { id: string; text: string }; with: number } | null>(null)
   const [note, setNote] = useState(''); const [text, setText] = useState('')
+  // desktop chat log: recent bubbles that went out (the server only relays text that passed the filter; held lines stay out)
+  const [log, setLog] = useState<{ k: number; name: string; text: string; mine: boolean }[]>([]), logEl = useRef<HTMLOListElement>(null), logK = useRef(0)
+  const addLog = (name: string, text: string, mine: boolean) => setLog(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, name, text, mine }])
   const net = useRef<WorldNet | null>(null), ren = useRef<Renderer | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), over = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null)
   const bubbles = useRef(new Map<number, Bubble>()), noteT = useRef(0), target = useRef<[number, number] | null>(null)
@@ -55,9 +60,9 @@ function World() {
       if (m.t === 'hi') { setInst(m.inst); setPhase('in') }
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
       else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size + 1); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
-      else if (m.t === 'say' && m.id !== n.me) bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS })
+      else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS }); addLog(n.pubs.get(m.id)?.name ?? 'Someone', m.text, false) }
       else if (m.t === 'said') {
-        if (m.ok) bubbles.current.set(n.me, { text: m.text, until: performance.now() + BUBBLE_MS, mine: true })
+        if (m.ok) { bubbles.current.set(n.me, { text: m.text, until: performance.now() + BUBBLE_MS, mine: true }); addLog(prof?.name ?? 'You', m.text, true) }
         else if (m.why === 'slow') flash(WHY.slow)
         else if (m.why !== 'empty') { bubbles.current.set(n.me, { text: m.text, until: performance.now() + BUBBLE_MS, mine: true, held: m.why }); flash(WHY[m.why]) }
       }
@@ -76,7 +81,7 @@ function World() {
     const r = ren.current = new Renderer(canvas.current), n = net.current!
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
     size(); const ro = new ResizeObserver(size); ro.observe(stage.current!)
-    const els = new Map<number, HTMLDivElement>(); let raf = 0, lastU = 0
+    const els = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop); r.frame(n, now)
       const me = n.ents.get(n.me); if (me && target.current && Math.floor(me.x) === target.current[0] && Math.floor(me.y) === target.current[1]) { target.current = null; r.path = [] }
@@ -98,8 +103,20 @@ function World() {
         let tx = Math.floor((cols - 1) / 2) * u, left = tip[0] - tx
         if (left < 0) left += Math.ceil(-left / u) * u; else if (left + w > W) left -= Math.ceil((left + w - W) / u) * u
         tx = Math.min(Math.max(tip[0] - left, 4 * u), w - 5 * u); left = tip[0] - tx   // tail stays ≥4 art px from either side
-        el.style.setProperty('--tx', tx + 'px'); el.style.transform = `translate(${left}px, ${tip[1] - h - 4 * u}px)`
+        lay.push({ id, el, left, top: tip[1] - h - 4 * u, w, H: h + 4 * u, tx })
       }
+      // GD v04: bubbles that would overlap stack upward, 2 art px apart (tail included), lowest first; each keeps its
+      // tail on its own speaker's column, so a nudged bubble still points down at who said it
+      lay.sort((a, b) => b.top + b.H - (a.top + a.H) || a.id - b.id)
+      const put: typeof lay = [], g = STACK_GAP * u
+      for (const b of lay) {
+        const b0 = b.top
+        for (let hit = true; hit;) { hit = false
+          for (const p of put) if (b.left < p.left + p.w + g && p.left < b.left + b.w + g && b.top < p.top + p.H + g && p.top < b.top + b.H + g) { b.top = p.top - g - b.H; hit = true } }
+        put.push(b); b.el.dataset.lift = String(Math.round((b0 - b.top) / u))
+        b.el.style.setProperty('--tx', b.tx + 'px'); b.el.style.transform = `translate(${b.left}px, ${b.top}px)`
+      }
+      lay.length = 0
       for (const [id, el] of els) if (!bubbles.current.has(id)) { el.remove(); els.delete(id) }
     }
     raf = requestAnimationFrame(loop)
@@ -110,6 +127,8 @@ function World() {
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
     return () => { cancelAnimationFrame(raf); ro.disconnect(); r.destroy() }
   }, [phase])
+
+  useEffect(() => { const e = logEl.current; if (e) e.scrollTop = e.scrollHeight }, [log])
 
   // keyboard: arrows/WASD walk, Enter talks, Esc closes
   useEffect(() => {
@@ -193,12 +212,16 @@ function World() {
       <header className="w-top"><b>Café</b><span data-t="w-inst">{inst.replace('cafe-', 'room ')}</span><span data-t="w-count">{count} here</span>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
-        <div className="w-over" ref={over} aria-live="polite" /></div>
-      <aside className="w-side">
-        {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
+        <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} /></div>
+      <aside className="w-side" data-t="w-side">
         {person}{cardEl}
-        {layout === 'desk' && !person && !cardEl && <p className="w-help">Click to walk · arrows or WASD · Enter to talk · Esc to close. Click someone for their name and options. Sit at a table with someone to get a question card.</p>}
+        {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
+        {layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
+          <h2 className="w-log-h">Chat</h2>
+          <ol ref={logEl} role="log" aria-live="polite">{log.length ? log.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined} data-mine={l.mine ? '1' : undefined}><b>{l.mine ? 'You' : l.name}</b> <span>{l.text}</span></li>)
+            : <li className="w-log-empty">What people say shows up here.</li>}</ol></section>}
         {bar}
+        {layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card</p>}
       </aside>
     </main>)
 }

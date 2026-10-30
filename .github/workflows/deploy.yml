@@ -1,0 +1,35 @@
+# The one Pixeldate site is the Cloudflare Worker pixeldate-world (https://pixeldate-world.pixeldate.workers.dev).
+# On push to main: (1) build + deploy the Worker with tools/deploy.sh (scoped API token in repo secrets);
+# (2) publish the GitHub Pages hand-off site (handoff/): every old github.io URL moves this device's data across once
+#     and redirects to the same path and query on workers.dev.
+name: Deploy
+on: { push: { branches: [main] }, workflow_dispatch: {} }
+concurrency: { group: deploy, cancel-in-progress: false }
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: 'package-lock.json' }
+      - run: npm ci && npm ci --prefix world
+      - run: bash tools/deploy.sh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  pages:
+    needs: worker
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pages: write, id-token: write }
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: node tools/build-handoff.mjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist-handoff }
+      - id: d
+        uses: actions/deploy-pages@v4

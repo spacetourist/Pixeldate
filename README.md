@@ -3,7 +3,30 @@
 A lean playable demo of a dating app where you get to know someone before you see them. Photos and video start as
 8 blocks across and sharpen as two people get closer. Tap **Find someone** and you are paired at random, with no browsing.
 
-Live: https://spacetourist.github.io/Pixeldate/
+Live (one site): **https://pixeldate-world.pixeldate.workers.dev/Pixeldate/app/**. The Cloudflare Worker `pixeldate-world`
+serves the app, the landing (`/Pixeldate/`), every asset, the café WebSocket (`/parties/area/cafe-N`) and `/turn`. `/` and
+`/Pixeldate` redirect to the app and keep the query string.
+
+The old https://spacetourist.github.io/Pixeldate/ is now only a hand-off page (`handoff/`, built by `tools/build-handoff.mjs`).
+On each device's first visit it packs that device's data (every `pd.*` / `pd-*` localStorage key and the IndexedDB photo, the
+photo re-encoded to at most about 240 kB) into the URL fragment. It then sends you to the same path and query on workers.dev.
+The new site imports that data once (`src/movein.ts`):
+- it only fills keys that are missing there;
+- it merges the blocked lists as a union;
+- the photo comes only together with a missing profile;
+- it clears the fragment and shows "Your profile moved here".
+
+After that first hand-off (flag `pd.moved`) the old site just redirects. Test: `npm run build && node test/movein-e2e.mjs`.
+
+### Deploy
+One path: push to `main`. `.github/workflows/deploy.yml` runs `tools/deploy.sh`, which builds into `deploy/site/Pixeldate`
+with `VITE_WORLD_URL=wss://pixeldate-world.pixeldate.workers.dev` (no TURN key in the bundle) and runs
+`wrangler deploy -c world/wrangler.live.toml`. It then publishes the hand-off page to GitHub Pages.
+
+The repo secrets are `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The token is the account token "pixeldate-world CI deploy
+(GitHub Actions)", limited to Workers Scripts Read/Write and Account Settings Read on this account. To deploy by hand from a
+machine with a token, run `CLOUDFLARE_ACCOUNT_ID=… tools/deploy.sh`. Worker secrets (`INVITES`, `TURN_KEY_*`,
+`CF_ANALYTICS_TOKEN`) live on Cloudflare, not in CI.
 
 ## Rules
 - Levels (blocks across): 1 Stranger (8), 2 Spark (16), 3 Crush (32), 4 Close (64), 5 Crystal clear (full).

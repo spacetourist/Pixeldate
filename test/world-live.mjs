@@ -15,6 +15,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 let bad = 0, n = 0
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
 const until = async (f, ms = 8000, step = 100) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await f().catch(() => null); if (v) return v; await sleep(step) } return null }
+// ── one site: the worker is the only Pixeldate site (bare host and /Pixeldate open the app, query kept; every asset
+// ships; the café WebSocket refuses other sites' pages)
+{ const WSO = (process.env.WS || ORIGIN.replace(/^http/, 'ws')).replace(/^ws/, 'http')
+  const r1 = await fetch(ORIGIN + '/?world=cafe&x=1', { redirect: 'manual' }); ok(r1.status === 302 && r1.headers.get('location') === '/Pixeldate/app/?world=cafe&x=1', `/ → ${r1.status} ${r1.headers.get('location')}`)
+  const r2 = await fetch(ORIGIN + '/Pixeldate?x=2', { redirect: 'manual' }); ok(r2.status === 302 && r2.headers.get('location') === '/Pixeldate/app/?x=2', `/Pixeldate → ${r2.status} ${r2.headers.get('location')}`)
+  const land = await fetch(ORIGIN + '/Pixeldate/'), app = await fetch(ORIGIN + '/Pixeldate/app/'), appH = await app.text()
+  ok(land.status === 200 && /Chemistry first/.test(await land.text()), '/Pixeldate/ serves the landing')
+  ok(app.status === 200 && /type="module"/.test(appH), '/Pixeldate/app/ serves the app')
+  const assets = [...appH.matchAll(/(?:src|href)="(\/Pixeldate\/[^"]+)"/g)].map(m => m[1]).concat(['/Pixeldate/art/landing-hero-wide.webp', '/Pixeldate/audio/piano/clair-de-lune.ogg', '/Pixeldate/audio/piano/clair-de-lune.m4a', '/Pixeldate/audio/emotes/aww_f1.ogg'])
+  const st = await Promise.all(assets.map(a => fetch(ORIGIN + a, { method: 'HEAD' }).then(r => r.status)))
+  ok(st.every(x => x === 200), `app assets ship (${st.filter(x => x === 200).length}/${st.length} 200)`)
+  ok((await (await fetch(WSO + '/health')).text()) === 'ok', '/health reaches the worker')
+  const { request } = await import(WSO.startsWith('https') ? 'node:https' : 'node:http')
+  const up = origin => new Promise(res => { const q = request(WSO + '/parties/area/cafe-1', { headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', ...(origin ? { Origin: origin } : {}) } })
+    q.on('upgrade', (r, sock) => { sock.destroy(); res(r.statusCode) }); q.on('response', r => { r.resume(); res(r.statusCode) }); q.on('error', () => res(0)); q.end() })
+  ok(await up('https://evil.example') === 403, 'café WebSocket refuses a foreign Origin (403)')
+  ok(await up(new URL(WSO).origin) === 101, 'café WebSocket accepts its own Origin')
+  ok(await up('http://localhost:5173') === 101, 'café WebSocket accepts localhost (dev, tests)')
+}
 const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 90000, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 const PHONE = { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true }, DESK = { width: 1440, height: 900, deviceScaleFactor: 1 }
 const run = Date.now().toString(36)

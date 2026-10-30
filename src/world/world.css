@@ -62,7 +62,7 @@
 .w-room.phone.seated { grid-template-rows: auto 122px 1fr }
 .w-room.phone.seated .w-side { overflow-y: auto; overscroll-behavior: contain; gap: 8px; padding: 8px 8px max(10px, env(safe-area-inset-bottom)) }
 .w-room.desk.seated .w-side { overflow-y: auto }
-.w-room.phone.seated .w-side > .w-call { margin-top: auto }
+/* GD v05 sign-off: Start call sits directly under the chat on phone too (no pinned-to-bottom gap) */
 .w-side svg.i { shape-rendering: crispEdges; display: block; flex: none }
 .w-who { grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 8px 6px 8px 8px }
 .w-photo { position: relative; border: 2px solid var(--edge, #05020F); box-shadow: 0 0 0 2px var(--c-track, #2A2150); background: #000; box-sizing: content-box; overflow: hidden }

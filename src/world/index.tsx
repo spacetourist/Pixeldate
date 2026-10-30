@@ -7,7 +7,7 @@ import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
 import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
-import { walkable, TABLES } from '../../world/shared/map.ts'
+import { walkable, isSeat, TABLES } from '../../world/shared/map.ts'
 import { WorldNet } from './net.ts'
 import { startLook } from '../avatar/kit/defaults.ts'
 import { Renderer, MW, MH, type Layout } from './render.ts'
@@ -35,7 +35,7 @@ type Bubble = { text: string; until: number; mine?: boolean; held?: string }
 const joinP = (p: Profile) => ({ name: p.name, br: BRACKETS.find(([lo, hi]) => Math.min(p.age, 70) >= lo && Math.min(p.age, 70) <= hi) ?? BRACKETS[0], min: Math.max(18, p.min), max: Math.max(18, p.max),
   iam: p.iam, seek: p.seek, uid: p.uid, adult: true, pav: typeof p.pav === 'string' && p.pav.length <= 512 && p.pav[0] === '{' ? p.pav : JSON.stringify(startLook(p.iam)) })
 /** what the server sends one of the two at a table (Table view + the card) */
-type Tbl = Table & { q: { id: string; text: string } | null; with: number }
+type Tbl = Table & { q: { id: string; text: string; lv: number; i: number } | null; with: number }
 const ANSWHY: Record<string, string> = { contact: 'Not sent: no numbers, emails, handles or links.', language: 'Not sent: keep it kind.', long: `Not sent: ${MAX_ANS} characters max.`, empty: '' }
 /** "…" over a table while the two there are talking (GD: everyone else only sees that something is being said) */
 const MURMUR_MS = 2500
@@ -64,11 +64,11 @@ function World() {
   const [inst, setInst] = useState(''); const [count, setCount] = useState(0)
   const [layout, setLayout] = useState<Layout>(layoutOf())
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
-  const [card, setCard] = useState<Tbl | null>(null)
+  const [card, setCard] = useState<Tbl | null>(null), selRef = useRef<Pub | null>(null)
   // the table for two: the date's photo (pixelated on their phone to our level), our private lines, answer box state
   const [photo, setPhoto] = useState<{ id: number; lv: number; data: string } | null>(null)
   const [priv, setPriv] = useState<{ k: number; mine: boolean; text: string }[]>([]), privEl = useRef<HTMLOListElement>(null)
-  const [ans, setAns] = useState(''), [ansErr, setAnsErr] = useState(''), [asking, setAsking] = useState(false)
+  const [ans, setAns] = useState(''), [ansErr, setAnsErr] = useState('')
   const murmurs = useRef(new Map<number, number>()), withRef = useRef(0)
   const [note, setNote] = useState(''); const [text, setText] = useState('')
   // desktop chat log: recent bubbles that went out (the server only relays text that passed the filter; held lines stay out)
@@ -76,6 +76,7 @@ function World() {
   const addLog = (name: string, text: string, mine: boolean) => setLog(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, name, text, mine }])
   const net = useRef<WorldNet | null>(null), ren = useRef<Renderer | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), over = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null)
+  const standRef = useRef<(() => void) | null>(null)
   const bubbles = useRef(new Map<number, Bubble>()), noteT = useRef(0), target = useRef<[number, number] | null>(null)
 
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
@@ -98,13 +99,13 @@ function World() {
       }
       else if (m.t === 'card') {
         const c = m.q && m.with ? m as Tbl : null
-        if (!c || c.with !== withRef.current) { setPriv([]); setPhoto(null); setAns(''); setAnsErr(''); setAsking(false) }   // a new partner (or none): start clean
+        if (!c || c.with !== withRef.current) { setPriv([]); setPhoto(null); setAns(''); setAnsErr('') }   // a new partner (or none): start clean
         withRef.current = c?.with ?? 0; setCard(c); if (c?.mine) { setAns(''); setAnsErr('') }
       }
       else if (m.t === 'ansno') setAnsErr(ANSWHY[m.why] ?? 'Not sent.')
       else if (m.t === 'photo') { if (m.id === withRef.current) setPhoto(m) }
       else if (m.t === 'note') { const who = n.pubs.get(withRef.current)?.name ?? 'They'
-        flash(m.k === 'date-no' ? `${who} said not now. You can keep talking.` : m.k === 'call-declined' ? `${who} said not now to a call.` : `${who} cancelled the call.`) }
+        flash(m.k === 'date-no' ? `${who} said not now. You can keep talking.` : m.k === 'call-declined' ? `${who} said not now to a call. You can keep talking.` : `${who} cancelled the call.`) }
       else if (m.t === 'call') { flash('Starting your video call…'); setTimeout(() => { n.close(); handoff(m) }, 700) }
       else if (m.t === 'ack') { if (m.what === 'block') { setSel(null); setMenu(''); flash("Blocked. You won't see each other in the café again.") }
         if (m.what === 'report') { setMenu(''); flash('Thanks. Report sent to the Pixeldate team.') } if (m.what === 'heart') flash('Heart sent. If it is mutual you will both know.') }
@@ -160,8 +161,9 @@ function World() {
       for (const [tb, until] of murmurs.current) {
         let el = mels.get(tb); const t = TABLES[tb]
         if (now > until || !t) { murmurs.current.delete(tb); el?.remove(); mels.delete(tb); continue }
-        if (!el) { el = document.createElement('div'); el.className = 'w-murmur'; el.dataset.t = 'w-murmur'; el.dataset.tb = String(tb); el.textContent = '…'; el.setAttribute('aria-hidden', 'true'); ov.append(el); mels.set(tb, el) }
-        const [x, y] = r.toCss(t.x + 1, t.y - 1); el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`
+        if (!el) { el = document.createElement('div'); el.className = 'w-murmur'; el.dataset.t = 'w-murmur'; el.dataset.tb = String(tb); el.setAttribute('aria-hidden', 'true'); ov.append(el); mels.set(tb, el) }
+        // GD's table-typing strip (16x16 frames): bottom-centre (the tail tip) 4 art px above the table top, snapped to art px
+        const [x, y] = r.toCss(t.x + 1, t.y - 1 - 4 / 16); el.style.transform = `translate(${Math.round(x / u) * u - 8 * u}px, ${Math.round(y / u) * u - 16 * u}px)`
       }
     }
     raf = requestAnimationFrame(loop)
@@ -187,8 +189,8 @@ function World() {
     const held = new Set<string>(), K: Record<string, [number, number]> = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] }
     const steer = () => { let dx = 0, dy = 0; for (const k of held) { dx += K[k][0]; dy += K[k][1] } net.current?.send({ t: 'dir', dx: Math.sign(dx), dy: Math.sign(dy) }); if (held.size) { target.current = null; if (ren.current) ren.current.path = [] } }
     const down = (e: KeyboardEvent) => {
-      const typing = document.activeElement === input.current
-      if (e.key === 'Escape') { if (typing) input.current!.blur(); else { setMenu(''); setSel(null); if (ren.current) ren.current.sel = 0 } return }
+      const typing = document.activeElement === input.current || document.activeElement?.tagName === 'INPUT'
+      if (e.key === 'Escape') { if (typing) (document.activeElement as HTMLElement).blur(); else if (selRef.current) { setMenu(''); setSel(null); if (ren.current) ren.current.sel = 0 } else standRef.current?.(); return }
       if (typing || (e.target as HTMLElement).closest?.('button, input, select, textarea')) return
       if (e.key === 'Enter') { e.preventDefault(); input.current?.focus(); return }
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
@@ -221,6 +223,12 @@ function World() {
   const say = (e: React.FormEvent) => { e.preventDefault(); const t = text.trim(); if (!t) return; net.current?.send({ t: 'say', text: t }); setText('') }
   const act = (t: 'heart' | 'pass' | 'block') => { if (sel) net.current?.send({ t, id: sel.id }); if (t === 'pass') { setSel(null); if (ren.current) ren.current.sel = 0 } }
   const close = () => { setSel(null); setMenu(''); if (ren.current) ren.current.sel = 0 }
+  /** X / Esc at a table: step off the seat onto the nearest free floor tile next to it (the server then ends the pair) */
+  const stand = () => { const n = net.current, me = n?.ents.get(n.me); if (!n || !me) return
+    const x = Math.floor(me.x), y = Math.floor(me.y)
+    const t = ([[0, 1], [0, -1], [-1, 0], [1, 0], [-1, 1], [1, 1], [-1, -1], [1, -1]] as const).map(([dx, dy]) => [x + dx, y + dy] as [number, number]).find(([a, b]) => walkable(a, b) && !isSeat(a, b))
+    if (!t) return; n.send({ t: 'go', x: t[0], y: t[1] }); target.current = t; if (ren.current) ren.current.path = [t] }
+  standRef.current = card?.q ? stand : null
 
   if (phase !== 'in') return (
     <main className="w-gate" data-t="w-gate">
@@ -235,10 +243,11 @@ function World() {
       </>}
     </main>)
 
+  selRef.current = sel
   const selName = sel && <>{sel.name} <span className="w-br">{bracketLabel(sel.br)}</span></>
   const person = sel && (
     <section className="w-panel w-person" data-t="w-person" aria-label={`${sel.name}`}>
-      <header><b data-t="w-person-name">{selName}</b><button className="w-x" aria-label="Close" onClick={close}>×</button></header>
+      <header>{sel.pav && <span className="w-pport"><Suspense fallback={null}><Char json={sel.pav} scale={2} label={`${sel.name}'s Pixel You`} t="w-portrait" /></Suspense></span>}<b data-t="w-person-name">{selName}</b><button className="w-x" aria-label="Close" onClick={close}>×</button></header>
       {menu === '' && <div className="w-acts">
         <button className="w-btn sm heart" data-t="w-heart" onClick={() => act('heart')}>♥ Heart</button>
         <button className="w-btn sm ghost" data-t="w-pass" onClick={() => act('pass')}>Pass</button>
@@ -251,91 +260,108 @@ function World() {
     </section>)
   const tname = card ? net.current?.pubs.get(card.with)?.name ?? 'your date' : ''
   const sendAns = (e: React.FormEvent) => { e.preventDefault(); const t = ans.trim(); if (!t) return; setAnsErr(''); net.current?.send({ t: 'ans', text: t }) }
-  const cardEl = card && card.q && <TablePanel card={card} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
-    ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} asking={asking} setAsking={setAsking}
-    send={o => net.current?.send(o as any)} />
   const left = MAX_SAY - text.length
   const bar = (
     <form className="w-say" onSubmit={say} data-t="w-say">
-      <input ref={input} data-t="w-input" value={text} maxLength={MAX_SAY} onChange={e => setText(e.target.value)} placeholder={card?.q ? `Say something to ${tname}` : layout === 'desk' ? 'Say something (Enter)' : 'Say something'} enterKeyHint="send" autoComplete="off" aria-label="Say something" />
+      <input ref={input} data-t="w-input" value={text} maxLength={MAX_SAY} onChange={e => setText(e.target.value)} placeholder={layout === 'desk' && !card?.q ? 'Say something (Enter)' : 'Say something'} enterKeyHint="send" autoComplete="off" aria-label="Say something" />
       <span className={'w-left' + (left < 10 ? ' low' : '')} aria-hidden="true">{left}</span>
-      <button className="w-btn sm" data-t="w-send" disabled={!text.trim()}>Say</button></form>)
-  const room = card?.q ? `${count} here · at a table` : `${count} here`
+      <button className={'w-btn sm' + (card?.q ? ' ghost' : '')} data-t="w-send" disabled={!text.trim()}>Say</button></form>)
+  const seated = !!card?.q
+  const cardEl = card && card.q && <TablePanel card={card} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
+    ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} say={bar} send={o => net.current?.send(o as any)} stand={stand} />
   return (
-    <main className={'w-room ' + layout} data-t="w-room" data-layout={layout}>
-      <header className="w-top"><b>Café</b><span data-t="w-inst">{inst.replace('cafe-', 'room ')}</span><span data-t="w-count" data-n={count}>{room}</span>
+    <main className={'w-room ' + layout + (seated ? ' seated' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined}>
+      <header className="w-top"><b>Café</b><span data-t="w-inst">{inst.replace('cafe-', 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} /></div>
       <aside className="w-side" data-t="w-side">
-        {person}{cardEl}
+        {person}
         {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
-        {layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
+        {cardEl}
+        {/* GD v05: at a table the "Just you two" chat (with the bar) replaces the room log */}
+        {!seated && layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
           <h2 className="w-log-h">Chat</h2>
           <ol ref={logEl} role="log" aria-live="polite">{log.length ? log.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined} data-mine={l.mine ? '1' : undefined}><b>{l.mine ? 'You' : l.name}</b> <span>{l.text}</span></li>)
             : <li className="w-log-empty">What people say shows up here.</li>}</ol></section>}
-        {bar}
-        {layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card</p>}
+        {!seated && bar}
+        {!seated && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card</p>}
       </aside>
     </main>)
 }
-/** The date's photo, as sharp as our level allows (pixelated on their phone; drawn nearest-neighbour, the app's reveal on level up) */
-function Photo({ photo, name, size }: { photo: { lv: number; data: string } | null; name: string; size: number }) {
+/** The date's photo at 64 CSS px (GD v05): 64 is a multiple of every level's block count (8/16/32/64), so the blocks stay
+    whole; pixelated on their phone, drawn nearest-neighbour, the app's reveal on level up. Until it arrives (or if they have
+    none), their Pixel You portrait, integer-scaled. */
+const PHOTO_CSS = 64
+function Photo({ photo, name, pav }: { photo: { lv: number; data: string } | null; name: string; pav?: string }) {
   const cv = useRef<HTMLCanvasElement>(null), prev = useRef<HTMLImageElement | null>(null), dpr = Math.max(1, Math.round(devicePixelRatio || 1))
   useEffect(() => { if (!photo || !cv.current) return; let live = true
     void loadImage(photo.data).then(img => { if (!live || !cv.current) return; animateReveal(cv.current, prev.current, img); prev.current = img; cv.current.dataset.lv = String(photo.lv); cv.current.dataset.px = String(img.naturalWidth) })
     return () => { live = false } }, [photo?.data])
-  return <div className="w-photo" style={{ width: size, height: size }}>
-    <canvas ref={cv} width={size * dpr} height={size * dpr} data-t="w-photo" role="img" aria-label={photo ? `${name}'s photo at level ${photo.lv}` : `${name}'s photo`} />
-    {!photo && <span className="w-photo-ph" data-t="w-photo-ph" aria-hidden="true">?</span>}</div>
+  return <div className="w-photo" style={{ width: PHOTO_CSS, height: PHOTO_CSS }}>
+    <canvas ref={cv} width={PHOTO_CSS * dpr} height={PHOTO_CSS * dpr} data-t="w-photo" hidden={!photo} role="img" aria-label={photo ? `${name}'s photo at level ${photo.lv}` : `${name}'s photo`} />
+    {!photo && <span className="w-photo-ph" data-t="w-photo-ph">{pav ? <Suspense fallback={null}><Char json={pav} scale={2} label={`${name}'s Pixel You`} t="w-portrait" /></Suspense> : <span aria-hidden="true">?</span>}</span>}</div>
 }
 type Send = (o: { t: string; [k: string]: unknown }) => void
-function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, asking, setAsking, send }: { card: Tbl; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean
+/** GD's 1-bit pixel icons from the v05 table mocks (rows of '#'), drawn as crisp rects at n CSS px per pixel */
+const ICONS = { x: '##....##/###..###/.######./..####../..####../.######./###..###/##....##', lock: '..###../.#...#./.#...#./#######/###.###/###.###/#######',
+  cam: '#######.../#######..#/#######.##/##########/#######.##/#######..#/#######...', tick: '......##/.....##./##..##../.####.../..##....' }
+function Px({ i, n = 2, c = 'currentColor' }: { i: keyof typeof ICONS; n?: number; c?: string }) {
+  const rows = ICONS[i].split('/'), w = rows[0].length, h = rows.length
+  return <svg className="i" width={w * n} height={h * n} viewBox={`0 0 ${w} ${h}`} fill={c} aria-hidden="true">
+    {rows.flatMap((r, y) => [...r].map((ch, x) => ch === '#' ? <rect key={x + ',' + y} x={x} y={y} width={1} height={1} /> : null))}</svg>
+}
+/** GD v05 table-for-two sheet: who (photo + level meter), the question card, "Just you two" chat, Start call. */
+function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, say, send, stand }: { card: Tbl; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean
   ans: string; setAns: (s: string) => void; ansErr: string; onAns: (e: React.FormEvent) => void; priv: { k: number; mine: boolean; text: string }[]; privEl: React.RefObject<HTMLOListElement | null>
-  asking: boolean; setAsking: (b: boolean) => void; send: Send }) {
-  const lv = LEVELS[card.lv - 1], dating = card.date.me && card.date.them, canCall = dating && card.lv >= card.video
-  return (
-    <section className="w-panel w-card w-table" data-t="w-card" data-lv={card.lv} aria-label={`Table for two with ${name}`}>
-      <div className="w-strip" data-t="w-strip">
-        <Photo photo={photo} name={name} size={desk ? 96 : 64} />
-        <Suspense fallback={<span className="w-port" style={{ width: (desk ? 3 : 2) * 24, height: (desk ? 3 : 2) * 32 }} />}>
-          <span className="w-port">{pav ? <Char json={pav} scale={desk ? 3 : 2} label={`${name}'s Pixel You`} t="w-portrait" /> : null}</span></Suspense>
-        <div className="w-strip-txt"><span className="w-with" data-t="w-with">{name}</span>
-          <span className="w-lv" data-t="w-lv">Lv {card.lv} · {lv?.name}</span>
-          <span className="w-meter" data-t="w-meter" role="meter" aria-valuemin={1} aria-valuemax={LEVELS.length} aria-valuenow={card.lv} aria-label="Your level together">
-            {LEVELS.map(l => <i key={l.n} className={l.n <= card.lv ? 'on' : undefined} />)}</span></div>
-      </div>
-      <p className="w-q" data-t="w-q">{card.q!.text}</p>
-      {card.rev ? <div className="w-rev" data-t="w-rev">
-          <p className="w-a mine"><b>You</b> <span data-t="w-rev-mine">{card.rev.mine}</span></p>
-          <p className="w-a"><b>{name}</b> <span data-t="w-rev-theirs">{card.rev.theirs}</span></p>
-          <p className="w-done" data-t="w-done"><span className="w-tick" aria-hidden="true">✓</span> Card done · {card.lv > 1 ? `Level ${card.lv}: ${lv?.name}` : 'answered together'}</p>
-          <button className="w-btn sm" data-t="w-next" onClick={() => send({ t: 'next' })}>Next card</button></div>
-        : <div className="w-ans" data-t="w-ans">
-          {card.mine ? <p className="w-a mine" data-t="w-mine"><span className="w-tick" aria-hidden="true">✓</span> <b>You answered</b> <span>{card.mine}</span></p>
-            : <form className="w-ansf" onSubmit={onAns}><input data-t="w-ans-input" value={ans} maxLength={MAX_ANS} onChange={e => setAns(e.target.value)} placeholder="Your answer" aria-label="Your answer" enterKeyHint="send" autoComplete="off" />
-              <button className="w-btn sm" data-t="w-ans-send" disabled={!ans.trim()}>Answer</button></form>}
-          {ansErr && <p className="w-err" role="alert" data-t="w-ans-err">{ansErr}</p>}
-          <p className={'w-them' + (card.them ? ' on' : '')} data-t="w-them">{card.them ? <><span className="w-tick" aria-hidden="true">✓</span> {name} has answered</> : card.mine ? `Waiting for ${name}…` : `${name} hasn't answered yet`}</p>
-          <p className="w-hint">You'll both see the answers once you've both answered.</p></div>}
-      <div className="w-priv" data-t="w-priv"><p className="w-priv-h" data-t="w-priv-label"><span aria-hidden="true">🔒</span> Only you two can see this</p>
-        <ol ref={privEl} role="log" aria-live="polite">{priv.length ? priv.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.mine ? 'You' : name}</b> <span>{l.text}</span></li>)
-          : <li className="w-log-empty">Say something below: only {name} sees it. Everyone else sees “…”.</li>}</ol></div>
-      <div className="w-call" data-t="w-callrow">
-        {card.call === 'in' ? <><p data-t="w-call-in">{name} tapped Start call. Nobody's on camera until you tap too.</p>
-            <div className="w-acts"><button className="w-btn sm heart" data-t="w-call-yes" onClick={() => send({ t: 'callyes' })}>Start call</button><button className="w-btn sm ghost" data-t="w-call-no" onClick={() => send({ t: 'callno' })}>Not now</button></div></>
-          : card.call === 'out' ? <><p data-t="w-call-out">Waiting for {name} to tap Start call…</p>
-            <div className="w-acts"><button className="w-btn sm ghost" data-t="w-call-cancel" onClick={() => send({ t: 'callno' })}>Cancel</button></div></>
-          : <>
-            <button className="w-btn sm heart w-callbtn" data-t="w-call" disabled={!canCall} onClick={() => send({ t: 'call' })}>Start call</button>
-            {!dating && (card.date.them ? <div className="w-ask" data-t="w-date-in"><p>{name} asked you for a date.</p>
-                <div className="w-acts"><button className="w-btn sm" data-t="w-date-yes" onClick={() => send({ t: 'date', yes: true })}>Yes</button><button className="w-btn sm ghost" data-t="w-date-no" onClick={() => send({ t: 'date', yes: false })}>Not now</button></div></div>
-              : card.date.me ? <p className="w-small" data-t="w-date-out">You asked {name} for a date · waiting for them</p>
-              : asking ? <div className="w-ask" data-t="w-date-confirm"><p>Ask {name} for a date? Video calls open once you both say yes.</p>
-                <div className="w-acts"><button className="w-btn sm" data-t="w-date-ask" onClick={() => { setAsking(false); send({ t: 'date', yes: true }) }}>Ask</button><button className="w-btn sm ghost" onClick={() => setAsking(false)}>Cancel</button></div></div>
-              : <button className="w-link" data-t="w-date" onClick={() => setAsking(true)}>Ask for a date</button>)}
-            {dating && <p className="w-small on" data-t="w-dating">You're both up for a date ♥</p>}</>}
-      </div>
-    </section>)
+  say: React.ReactNode; send: Send; stand: () => void }) {
+  const L = LEVELS[card.lv - 1], nextL = LEVELS[card.lv], vL = LEVELS[card.video - 1], q = card.q!, qL = LEVELS[(q.lv || card.lv) - 1]
+  const canCall = card.lv >= card.video, rev = card.rev, fresh = rev && !card.up && card.seg > 0 && card.lv < LEVELS.length ? card.seg - 1 : -1
+  return (<>
+    <section className="w-panel w-who" data-t="w-strip" aria-label={`Table for two with ${name}`}>
+      <Photo photo={photo} name={name} pav={pav} />
+      <div className="w-who-txt"><p className="w-with" data-t="w-with">{name}</p>
+        <p className="w-lv" data-t="w-lv"><b>Level {card.lv}</b> {L?.name}{nextL && <span className="w-to" data-t="w-to">· {card.seg}/5 to {nextL.name}</span>}</p>
+        <div className="w-meter" data-t="w-meter" data-seg={card.seg} role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={card.seg} aria-label={nextL ? `${card.seg} of 5 cards to Level ${card.lv + 1}` : 'Top level'}>
+          {[0, 1, 2, 3, 4].map(i => <i key={i} className={i === fresh ? 'new' : i < card.seg ? 'on' : undefined} data-t={i === fresh ? 'w-seg-new' : undefined} />)}
+          {rev && (card.up ? <span className="w-plus" data-t="w-plus">Level up!</span> : fresh >= 0 && <span className="w-plus" data-t="w-plus">+1</span>)}</div></div>
+      <button className="w-stand" data-t="w-stand" aria-label="Stand up" onClick={stand}><Px i="x" /></button>
+    </section>
+    <section className={'w-card' + (rev ? ' done' : '')} data-t="w-card" data-lv={card.lv} data-rev={rev ? '1' : undefined}>
+      {rev && <div className="w-stamp" data-t="w-done"><Px i="tick" />Ticked off</div>}
+      <p className="w-kick"><span className="w-tag" data-t="w-tag">{qL?.name} · Q{q.i || card.n + 1}</span>Table for two</p>
+      <p className="w-q" data-t="w-q">{q.text}</p>
+      <div className="w-rows" data-t={rev ? 'w-rev' : 'w-ans'}>
+        <div className="w-row"><span className="w-who2 me">You</span>
+          {rev ? <div className="w-a mine"><Px i="tick" c="#48E5C2" /><span data-t="w-rev-mine">{rev.mine}</span></div>
+            : card.mine ? <div className="w-a mine" data-t="w-mine"><Px i="tick" c="#48E5C2" /><span>{card.mine}</span><span className="w-hid" data-t="w-hid"><Px i="lock" n={1.5} /> Hidden from {name}</span></div>
+            : <form className="w-a input" onSubmit={onAns}><input data-t="w-ans-input" value={ans} maxLength={MAX_ANS} onChange={e => setAns(e.target.value)} placeholder="Your answer" aria-label="Your answer" enterKeyHint="send" autoComplete="off" />
+              <button className="w-btn sm" data-t="w-ans-send" disabled={!ans.trim()}>Answer</button></form>}</div>
+        <div className="w-row"><span className="w-who2 them">{name}</span>
+          {rev ? <div className="w-a"><Px i="tick" c="#48E5C2" /><span data-t="w-rev-theirs">{rev.theirs}</span></div>
+            : <div className={'w-a wait' + (card.them ? ' in' : '')} data-t="w-them" data-them={card.them ? '1' : undefined}>
+              {card.them ? <><Px i="tick" c="#48E5C2" />{name} has answered</> : card.mine ? <>{name} is thinking<span className="w-dots">…</span></> : 'Not answered yet'}</div>}</div></div>
+      {ansErr && <p className="w-err" role="alert" data-t="w-ans-err">{ansErr}</p>}
+      {rev ? <div className="w-foot"><button className="w-btn" data-t="w-next" onClick={() => send({ t: 'next' })}>Next card</button></div>
+        : card.mine && <div className="w-foot"><span className="w-fnote">Answers show when you’ve both replied.</span></div>}
+    </section>
+    <section className="w-panel w-chat" data-t="w-priv">
+      <h3 data-t="w-priv-label"><Px i="lock" n={2} />Just you two<span className="w-sub">Others see “…”</span></h3>
+      <ol ref={privEl} role="log" aria-live="polite">{priv.length ? priv.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.mine ? 'You' : name}</b> <span>{l.text}</span></li>)
+        : <li className="w-log-empty">Only {name} sees what you say here.</li>}</ol>
+      {say}
+    </section>
+    <section className="w-panel w-call" data-t="w-callrow" data-call={card.call ?? (canCall ? 'open' : 'locked')}>
+      {!canCall ? <><button className="w-btn wide" data-t="w-call" disabled><Px i="cam" />Start call</button>
+          <p className="w-why" data-t="w-call-lock"><Px i="lock" c="#6E6596" />Video unlocks at <b>Level {card.video} · {vL?.name}</b></p></>
+        : card.call === 'out' ? <><button className="w-btn wide" disabled data-t="w-call-out"><span className="w-pulse" />Waiting for {name}…</button>
+          <div className="w-both"><span className="y"><Px i="tick" c="#48E5C2" />You tapped</span><span>{name} hasn’t yet</span><button className="w-link" data-t="w-call-cancel" onClick={() => send({ t: 'callno' })}>Cancel</button></div></>
+        : card.call === 'in' ? <><button className="w-btn coral wide" data-t="w-call-yes" onClick={() => send({ t: 'callyes' })}><Px i="cam" />Start call</button>
+          <div className="w-both" data-t="w-call-in"><span>{name} tapped</span><span className="y">The call starts when you tap too.</span><button className="w-link" data-t="w-call-no" onClick={() => send({ t: 'callno' })}>Not now</button></div></>
+        : <><button className="w-btn coral wide" data-t="w-call" onClick={() => send({ t: 'call' })}><Px i="cam" />Start call</button>
+          <p className="w-why">The call starts when you both tap.</p></>}
+    </section>
+    {desk && <p className="w-deskhint" data-t="w-deskhint">Seated at table {card.tb + 1} · <b>Esc</b> or <b>X</b> to stand up</p>}
+  </>)
 }
 export function mount(el: HTMLElement) { createRoot(el).render(<World />) }

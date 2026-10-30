@@ -230,9 +230,9 @@ export class Room {
   }
   /** Each of the two gets their own view: their answer, whether the other has answered, and the other's answer only
       after both are in. Nobody else is ever sent any of it. */
-  view(pr: Pair, v: Player): TableView & { t: 'card'; q: { id: string; text: string } | null; with: number } {
+  view(pr: Pair, v: Player): TableView & { t: 'card'; q: { id: string; text: string; lv: number; i: number } | null; with: number } {
     const o = other(pr, v), mine = pr.ans.get(v) ?? null
-    return { t: 'card', q: pr.q && { id: pr.q.id, text: pr.q.text }, with: o.id, tb: pr.tb, lv: pr.level, seg: pr.seg, up: pr.up, n: pr.n, mine, them: pr.ans.has(o),
+    return { t: 'card', q: pr.q && { id: pr.q.id, text: pr.q.text, lv: pr.q.level, i: pr.q.index }, with: o.id, tb: pr.tb, lv: pr.level, seg: pr.seg, up: pr.up, n: pr.n, mine, them: pr.ans.has(o),
       rev: pr.rev ? { mine: mine ?? '', theirs: pr.ans.get(o) ?? '' } : null, date: { me: pr.date.has(v), them: pr.date.has(o) },
       call: pr.call ? (pr.call === v ? 'out' : 'in') : null, video: VIDEO_LEVEL }
   }

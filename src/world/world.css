@@ -54,3 +54,65 @@
 .w-note { margin: 0; padding: 8px 10px; background: var(--raised, #1E1640); border-left: 3px solid var(--c-mint, #48E5C2); font: var(--t-small) }
 .w-help { margin: 0; padding: 6px 8px; color: var(--text-muted, #A49CC2); font: 500 11px/1.35 var(--font-ui); background: var(--raised, #1E1640); border: 1px solid var(--c-track, #2A2150) }
 .w-say { display: flex; gap: 8px; align-items: center } .w-say input { flex: 1; min-width: 0 } .w-left { font: var(--t-micro); color: var(--text-muted); min-width: 2ch; text-align: right } .w-left.low { color: var(--c-butter) }
+/* ── v05 · table for two (GD world/table mocks: table.css) ── */
+.w-murmur { position: absolute; left: 0; top: 0; width: calc(16 * var(--u, 2px)); height: calc(16 * var(--u, 2px)); pointer-events: none; image-rendering: pixelated;
+  background: url('./art/markers/table-typing-strip.png') 0 0 / calc(48 * var(--u, 2px)) calc(16 * var(--u, 2px)) no-repeat; animation: w-type 540ms steps(3) infinite }
+@keyframes w-type { to { background-position-x: calc(-48 * var(--u, 2px)) } }
+@media (prefers-reduced-motion: reduce) { .w-murmur { animation: none; background-position-x: calc(-32 * var(--u, 2px)) } }
+.w-room.phone.seated { grid-template-rows: auto 122px 1fr }
+.w-room.phone.seated .w-side { overflow-y: auto; overscroll-behavior: contain; gap: 8px; padding: 8px 8px max(10px, env(safe-area-inset-bottom)) }
+.w-room.desk.seated .w-side { overflow-y: auto }
+.w-room.seated .w-side > .w-call { margin-top: auto }
+.w-side svg.i { shape-rendering: crispEdges; display: block; flex: none }
+.w-who { grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 8px 6px 8px 8px }
+.w-photo { position: relative; border: 2px solid var(--edge, #05020F); box-shadow: 0 0 0 2px var(--c-track, #2A2150); background: #000; box-sizing: content-box; overflow: hidden }
+.w-photo canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated }
+.w-photo-ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--c-surface-3, #281D52); color: var(--text-muted, #A49CC2); font: 400 28px/1 var(--font-px, monospace) }
+.w-who .w-with { font: 400 32px/.85 var(--font-px, monospace); color: var(--text, #FFF6EC); margin: 0 }
+.w-who .w-lv { font: 700 12.5px/1.2 var(--font-ui); color: var(--text-muted, #A49CC2); margin: 5px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap }
+.w-who .w-lv b { color: var(--c-coral, #FF6F59) } .w-to { font: 500 11px/1.2 var(--font-ui); white-space: nowrap }
+.w-meter { display: flex; gap: 3px; align-items: center }
+.w-meter i { width: 24px; height: 14px; background: var(--c-track, #2A2150); border: 2px solid var(--edge, #05020F); display: block; box-sizing: border-box }
+.w-meter i.on { background: var(--c-coral, #FF6F59); box-shadow: inset 0 2px 0 rgb(255 255 255 / .28), inset 0 -2px 0 rgb(0 0 0 / .2) }
+.w-meter i.new { background: var(--c-butter, #FFD84D); box-shadow: inset 0 2px 0 rgb(255 255 255 / .4), 0 0 0 2px var(--edge, #05020F), 0 0 14px 2px rgb(255 216 77 / .6) }
+.w-plus { white-space: nowrap; font: 800 13px/1 var(--font-ui); color: var(--edge, #05020F); background: var(--c-butter, #FFD84D); border: 2px solid var(--edge, #05020F); padding: 2px 5px 3px; margin-left: 6px; box-shadow: 0 0 12px rgb(255 216 77 / .55) }
+.w-stand { width: 44px; height: 44px; display: grid; place-items: center; align-self: start; background: none; border: 0; color: var(--text, #FFF6EC); cursor: pointer }
+.w-card { display: grid; gap: 10px; padding: 10px 12px 12px; position: relative }
+.w-card.done { border-color: var(--c-mint, #48E5C2) }
+.w-kick { font: 700 12.5px/1.2 var(--font-ui); align-items: center; gap: 8px }
+.w-tag { font: 700 11px/1 var(--font-ui); color: var(--edge, #05020F); background: var(--c-coral, #FF6F59); padding: 3px 6px 4px; border: 2px solid var(--edge, #05020F) }
+.w-card .w-q { font: 600 20px/1.25 var(--font-ui); padding-right: 8px }
+.w-card.done .w-q { padding-right: 0 }
+.w-rows { display: grid; gap: 6px }
+.w-row { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: center; min-height: 44px }
+.w-who2 { font: 700 12.5px/1.2 var(--font-ui); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis } .w-who2.me { color: var(--c-mint, #48E5C2) } .w-who2.them { color: var(--c-butter, #FFD84D) }
+.w-a { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel, #160F33); border: 2px solid var(--edge, #05020F); box-shadow: inset 0 0 0 1px var(--c-track, #2A2150); font: 500 14.5px/1.3 var(--font-ui); color: #FFF1C1; min-width: 0; box-sizing: border-box; overflow-wrap: anywhere }
+.w-a.input { padding: 4px 4px 4px 10px } .w-a.input input { flex: 1; min-width: 0; background: none; border: 0; color: var(--text); font: 500 14.5px/1.3 var(--font-ui); min-height: 34px; outline: none }
+.w-a.input:focus-within { box-shadow: inset 0 0 0 1px var(--c-butter, #FFD84D) } .w-a.input .w-btn.sm { min-height: 36px; padding: 0 12px; font-size: 14px }
+.w-a.wait { color: var(--text-muted, #A49CC2); border-style: dashed; border-color: var(--c-track, #2A2150); box-shadow: none; background: transparent } .w-a.wait.in { color: #FFF1C1 }
+.w-a.mine { box-shadow: inset 3px 0 0 var(--c-mint, #48E5C2), inset 0 0 0 1px var(--c-track, #2A2150) }
+.w-hid { margin-left: auto; font: 700 11px/1.2 var(--font-ui); color: var(--text-muted, #A49CC2); display: flex; gap: 4px; align-items: center; white-space: nowrap }
+.w-dots { margin-left: -6px; letter-spacing: 1px; color: var(--c-butter, #FFD84D); font-weight: 800 }
+.w-foot { display: flex; align-items: center; gap: 10px } .w-fnote { font: 500 12.5px/1.3 var(--font-ui); color: var(--text-muted, #A49CC2) }
+.w-err { margin: 0; font: 600 12.5px/1.3 var(--font-ui); color: var(--c-raspberry, #FF5C7A) }
+.w-stamp { position: absolute; right: 12px; top: 6px; transform: rotate(-7deg); border: 3px solid var(--c-mint, #48E5C2); color: var(--c-mint, #48E5C2); font: 800 14px/1 var(--font-ui); padding: 5px 8px 6px; display: flex; gap: 6px; align-items: center;
+  background: rgb(12 7 34 / .55); box-shadow: 0 0 0 2px var(--edge, #05020F), inset 0 0 0 2px var(--edge, #05020F); fill: var(--c-mint, #48E5C2) }
+.w-stamp svg { fill: var(--c-mint, #48E5C2) }
+.w-chat { gap: 6px; padding: 8px 10px 10px; min-height: 0 }
+.w-chat h3 { margin: 0; font: 700 12.5px/1.2 var(--font-ui); color: var(--text-muted, #A49CC2); display: flex; gap: 6px; align-items: center }
+.w-chat h3 .w-sub { font-weight: 500; color: #6E6596; margin-left: auto; font-size: 11px }
+.w-chat ol { list-style: none; margin: 0; padding: 2px 0 0; display: grid; gap: 4px; font: 500 13.5px/1.35 var(--font-ui); max-height: 9.5em; overflow-y: auto; overflow-wrap: anywhere }
+.w-chat li b { font-weight: 700; color: var(--c-butter, #FFD84D) } .w-chat li span { color: #FFF1C1 }
+.w-chat li.mine { border-left: 2px solid var(--c-mint, #48E5C2); padding-left: 6px } .w-chat li.mine b { color: var(--c-mint, #48E5C2) }
+.w-chat .w-log-empty { color: var(--text-muted, #A49CC2) }
+.w-chat .w-say { margin-top: 2px } .w-chat .w-say input { background: var(--c-surface-2, #1E1640) }
+.w-call { gap: 6px; padding: 10px 12px }
+.w-btn.wide { width: 100% } .w-btn.coral { background: var(--c-coral, #FF6F59); color: var(--edge, #05020F) } .w-btn .i { fill: currentColor }
+.w-why { font: 500 12.5px/1.3 var(--font-ui); color: var(--text-muted, #A49CC2); display: flex; gap: 6px; align-items: center; justify-content: center; margin: 0 } .w-why b { color: var(--text, #FFF6EC) }
+.w-pulse { width: 10px; height: 10px; background: var(--c-mint, #48E5C2); box-shadow: 0 0 0 3px rgb(72 229 194 / .25), 0 0 10px 3px rgb(72 229 194 / .55); display: inline-block; animation: w-pulse 1.2s steps(2) infinite }
+@keyframes w-pulse { 50% { opacity: .45 } } @media (prefers-reduced-motion: reduce) { .w-pulse { animation: none } }
+.w-both { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4px 14px; font: 600 12.5px/1.2 var(--font-ui); color: var(--text-muted, #A49CC2) }
+.w-both > span { display: flex; gap: 5px; align-items: center } .w-both .y { color: var(--c-mint, #48E5C2) }
+.w-link { background: none; border: 0; padding: 0 4px; min-height: 32px; color: #8F7BFF; text-decoration: underline; text-underline-offset: 2px; font: 600 12.5px/1.2 var(--font-ui); cursor: pointer }
+.w-deskhint { margin: 0; font: 500 12.5px/1.3 var(--font-ui); color: var(--text-muted, #A49CC2); text-align: center } .w-deskhint b { color: var(--text, #FFF6EC) }
+.w-pport { display: block; flex: none; width: 48px; height: 64px; margin: -4px 0 }

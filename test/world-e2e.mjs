@@ -16,7 +16,7 @@ const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
 const { F_HEART, F_BROKEN, F_SIT } = await import('../world/shared/proto.ts')
 const APP = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const Q = '?world=cafe&ws=ws://127.0.0.1:18793'
-const OUT = process.env.OUT || '/workspace/pixeldate/shots/world-cafe-v04/'
+const OUT = process.env.OUT || '/workspace/pixeldate/shots/world-cafe-v05/e2e/'
 const { mkdirSync: mk } = await import('node:fs'); mk(OUT, { recursive: true })
 let bad = 0, n = 0
 // GD's bubble art, as the built CSS may carry it (a hashed file or, under Vite's inline limit, a data: URI)
@@ -252,8 +252,9 @@ async function flow(p, o) {
         return { m: cs.maskImage || cs.webkitMaskImage, pe: cs.pointerEvents, first, hit, panel: getComputedStyle(ol.parentElement).backgroundColor } })
       ok(/linear-gradient/.test(f.m) && /(transparent|rgba\(0, 0, 0, 0\)) 0(px)?/.test(f.m) && /12px/.test(f.m) && f.pe !== 'none', `${L}: chat log top 12px fades out (mask-image ${f.m})`)
       ok(f.hit.every(Boolean) && f.first >= 11.5, `${L}: the fade doesn't cover the log: the top strip is still the log itself (clicks/scroll reach it), first line sits clear of it at rest (${f.first.toFixed(0)} px)`)
-      const box = await p.evaluate(() => { const ol = document.querySelector('[data-t=w-log] ol'), r = ol.getBoundingClientRect(), li = ol.children[Math.floor(ol.children.length / 2)]
-        ol.scrollTop += li.getBoundingClientRect().top - r.top + 6   // this line's top half is now scrolled past the top edge
+      const box = await p.evaluate(() => { const ol = document.querySelector('[data-t=w-log] ol'), r = ol.getBoundingClientRect(), max = ol.scrollHeight - ol.clientHeight
+        ol.scrollTop = 0; const offs = [...ol.children].map(li => li.getBoundingClientRect().top - r.top + 6).filter(d => d > 12 && d <= max)
+        ol.scrollTop = offs[offs.length - 1] ?? max   // the lowest line that can still be half-scrolled past the top edge (the log may be short of a full screen)
         return { x: r.left + 12, y: r.top, width: r.width - 24, height: 2, sec: ol.parentElement.getBoundingClientRect().toJSON() } })
       await sleep(150); const panel = f.panel.match(/\d+/g).map(Number), clip = { x: box.x, y: box.y, width: box.width, height: box.height }
       const faded = await maxOff(p, clip, panel)
@@ -291,13 +292,18 @@ async function flow(p, o) {
     ok(v && v.sit && v.dy === -10 && v.dx === want, `${L}: ${who} drawn seated on GD's chair tile (sprite at chair ${v?.dx},${v?.dy}, want ${want},-10)`)
   }
   { const c = await p.$eval('[data-t=w-card]', e => { const g = (q, k) => getComputedStyle(e.querySelector(q) || e)[k], cs = getComputedStyle(e)
-      return { bg: cs.backgroundColor, bw: cs.borderTopWidth, bc: cs.borderTopColor, with: e.querySelector('[data-t=w-with]')?.textContent, wf: g('[data-t=w-with]', 'fontFamily'), q: g('[data-t=w-q]', 'color'), nb: g('[data-t=w-next]', 'backgroundColor') } })
+      return { bg: cs.backgroundColor, bw: cs.borderTopWidth, bc: cs.borderTopColor, with: document.querySelector('[data-t=w-with]')?.textContent, wf: getComputedStyle(document.querySelector('[data-t=w-with]') || e).fontFamily, q: g('[data-t=w-q]', 'color'), nb: g('[data-t=w-next]', 'backgroundColor') } })
     const name = cast[o.partner].p.name
     ok(c.bg === 'rgb(30, 22, 64)' && c.bw === '2px' && c.bc === 'rgb(255, 216, 77)', `${L}: card is a #1E1640 panel with a 2px butter border (${c.bg}, ${c.bw} ${c.bc})`)
-    ok(c.with === 'with ' + name && /Jersey 15/.test(c.wf), `${L}: "${c.with}" in Jersey 15`)
-    ok(c.q === 'rgb(255, 246, 236)' && c.nb === 'rgb(255, 216, 77)', `${L}: question in cream (${c.q}), Next card is a butter button (${c.nb})`) }
+    ok(c.with === name && /Jersey 15/.test(c.wf), `${L}: "${c.with}" in Jersey 15`)
+    ok(c.q === 'rgb(255, 246, 236)', `${L}: question in cream (${c.q})`) }
   await shot(p, '08-card')
+  // v05: Next card only once you've both answered; then X stands you up (the room chat comes back)
+  await p.type('[data-t=w-ans-input]', 'e2e answer'); await press(p, '[data-t=w-ans-send]'); cast[o.partner].send({ t: 'ans', text: 'bot answer' })
+  ok(await until(() => p.$('[data-t=w-next]'), 6000), `${L}: both answered, Next card shows`)
+  { const nb = await p.$eval('[data-t=w-next]', e => getComputedStyle(e).backgroundColor); ok(nb === 'rgb(255, 216, 77)', `${L}: Next card is a butter button (${nb})`) }
   await press(p, '[data-t=w-next]'); ok(await until(async () => (await p.$eval('[data-t=w-q]', e => e.textContent)) !== q), `${L}: Next card`)
+  await press(p, '[data-t=w-stand]'); ok(await until(async () => !(await p.$('[data-t=w-card]')) && !!(await p.$('[data-t=w-say]')), 8000), `${L}: X stands up, the room chat bar is back`)
 
   // block: both disappear for each other
   await tapPerson(p, o.blockee); await p.waitForSelector('[data-t=w-person]'); await press(p, '[data-t=w-block]'); await p.waitForSelector('[data-t=w-confirm]'); await shot(p, '09-block')

@@ -13,6 +13,8 @@
 .w-duet .px { display: block; image-rendering: pixelated; shape-rendering: crispEdges }
 /* ours: Pixel You canvases in GD's photo boxes, the panel footers, and where the sheet / card / listener card sit in the café */
 .w-wrap-duet { display: contents }
+.w-duet .bub.w-sitpill { transform: translate(-50%, calc(-100% - 8px)); cursor: pointer; font: inherit }
+.w-duet .bub[hidden], .w-duet .tagw[hidden] { display: none }
 .w-duet .pulse.bp { background: var(--butter); box-shadow: 0 0 0 3px rgb(255 216 77 / .25), 0 0 10px 3px rgb(255 216 77 / .5) }
 .w-duet .av, .w-duet .ph { overflow: hidden; background: var(--p3) }
 .w-duet .av canvas, .w-duet .ph canvas { position: absolute; left: 50%; top: -6px; transform: translateX(-50%) }

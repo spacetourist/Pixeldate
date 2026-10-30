@@ -11,6 +11,8 @@ import { walkable, isSeat, isPianoSeat, at, TABLES } from '../../world/shared/ma
 import { PIECE, PIANO_SEAT, hears, gainAt, panAt } from '../../world/shared/piano.ts'
 import { EMOTES, EMOTE_LABEL, EMOTE_CREDIT, type Emote } from '../../world/shared/emote.ts'
 import { SOFAS, sofaAt } from '../../world/shared/sofa.ts'
+import { DUET, DUET_PX, BASS_SEAT, MELODY_SEAT, INVITE_MS } from '../../world/shared/duet.ts'
+import { DuetPanel, DuetRows, InviteSheet, InviteCard, SoloDuetPanel, DuetCard, Px as DPx, type DuetOn, type Who } from './duet.tsx'
 import { parseOptions } from '../avatar/kit/map.ts'
 import { SAMPLES } from '../avatar/kit/kit.gen.ts'
 import { PianoAudio, PianoPanel, NowPlaying, PIANO_CREDIT, usePianoSel, type PianoState } from './piano.tsx'
@@ -62,6 +64,7 @@ async function myPhotoAt(lv: number) {
 const CALLEND: Record<CallEnd | 'server', string> = { hangup: 'Call ended.', remote: 'Call ended.', server: 'Call ended.', lost: 'The call dropped.', media: "Couldn't start your camera or mic, so the call didn't start." }
 /** couple hearts that arrive before the renderer exists (a late joiner) */
 const pendingHearts = new Set<number>()
+const DUET_OFF = { on: false, bass: 0, melody: 0, ph: '', song: null, at: 0, gone: [] }
 /** PLACEHOLDER glyphs for the emote effect over the emoter (GD's art to come) */
 const EMOTE_FX: Partial<Record<Emote, string>> = { giggle: 'hehe', sigh: 'haah', gasp: '!', aww: 'aww', groan: 'ugh' }
 const layoutOf = (): Layout => innerWidth >= 900 && innerWidth > innerHeight ? 'desk' : 'phone'
@@ -105,6 +108,10 @@ function World() {
   /** the café call (both tapped Start call): the live call, my heart switch (on each call), a re-render tick */
   const callRef = useRef<CafeCall | null>(null), [call, setCall] = useState<CafeCall | null>(null), [, setCallTick] = useState(0)
   const [heartOn, setHeartOn] = useState(true)
+  /** 2c duets: the bench as the server says, the invite sheet (its list), an invite to me, the stinger played per reveal */
+  const duetRef = useRef<DuetOn | null>(null), [duet, setDuetV] = useState<DuetOn | null>(null)
+  const [invOpen, setInvOpen] = useState(false), [dlist, setDlist] = useState<{ id: number; sat: boolean }[] | null>(null)
+  const [dinv, setDinv] = useState<{ from: number; song: string; until: number } | null>(null), stingT = useRef(0)
 
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
@@ -117,6 +124,15 @@ function World() {
       if (m.t === 'hi') { setInst(m.inst); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
       else if (m.t === 'tm') A.onTm(m)
       else if (m.t === 'piano') { if (m.now) A.hint(m.now); A.set(m); setPianoS({ by: m.by, song: m.song, at: m.at }) }
+      else if (m.t === 'duet') { if (m.now) A.hint(m.now); A.setDuet(m); const v = m.on ? m as DuetOn : null; duetRef.current = v; setDuetV(v)
+        // the reveal's stinger, once per reveal, for the two players; and the chosen song's stems start loading
+        if (v?.res && v.me && stingT.current !== v.res.t0) { stingT.current = v.res.t0; A.unlock(); A.oneShot('emotes/' + (v.res.match ? 'duetMatch_1' : 'duetMiss_1')); A.warmDuet(v.res.coin) }
+        if (v?.me && v.song) A.warmDuet(v.song)
+        if (!v?.me || v.melody) setInvOpen(false) }
+      else if (m.t === 'dlist') setDlist(m.people)
+      else if (m.t === 'dinvite') { if (m.from) { setDinv({ from: m.from, song: m.song ?? '', until: performance.now() + (m.ms ?? INVITE_MS) }); if (m.song) A.warmDuet(m.song) }
+        else setDinv(d => { if (d && m.why === 'cancel') flash(`${n.pubs.get(d.from)?.name ?? 'They'} cancelled the duet invite.`); if (d && m.why === 'taken') flash('Someone else sat down first.'); return null }) }
+      else if (m.t === 'dlv') setPairLv(m.peer, m.lv)
       else if (m.t === 'emote') {
         if (m.ok === false) flash('One at a time: wait a moment.')
         else { const e = n.ents.get(m.id), me = n.ents.get(n.me), t = performance.now()
@@ -154,6 +170,7 @@ function World() {
         if (m.k === 'table-no') { flash("That table isn't for the two of you. Try another seat."); return }
         if (m.k === 'sofa-full') { flash('That sofa is full. Try the other one.'); return }
         if (m.k === 'piano-busy') { flash('Someone is at the piano.'); return }
+        if (m.k === 'duet-cant') { flash(`${n.pubs.get(m.id)?.name ?? 'They'} can't play right now`); return }
         flash(m.k === 'date-no' ? `${who} said not now. You can keep talking.` : m.k === 'call-declined' ? `${who} said not now to a call. You can keep talking.` : `${who} cancelled the call.`) }
       else if (m.t === 'call') { callRef.current?.end('hangup')
         const c = new CafeCall(m.code, m.host, m.lv); callRef.current = c; setCall(c); setHeartOn(true); flash('Starting your video call…')
@@ -177,10 +194,12 @@ function World() {
     for (const tb of pendingHearts) r.hearts.add(tb); pendingHearts.clear()
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
     size(); const ro = new ResizeObserver(size); ro.observe(stage.current!)
+    let dwrap: HTMLDivElement | null = null, pill: HTMLButtonElement | null = null; const tags: HTMLDivElement[] = []
     const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), fels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0, lastN = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
       const A = pa.current!, ps = A.state; r.piano = { by: ps.by, song: ps.song, at: ps.song ? A.perfAt(ps.at) : 0 }
+      const dv = duetRef.current; r.duet = dv ? { on: true, bass: dv.bass, melody: dv.melody, ph: dv.ph, song: dv.song, at: dv.at ? A.perfAt(dv.at) : 0, gone: dv.gone } : DUET_OFF
       r.frame(n, now)
       const me = n.ents.get(n.me)
       if (me) { A.listen(n.lerpX(me, now), n.lerpY(me, now)); const sat = (me.f & F_SIT) !== 0, fx = Math.floor(me.x), fy = Math.floor(me.y)
@@ -235,6 +254,21 @@ function World() {
         el.style.transform = `translate(${Math.round(tip[0])}px, ${Math.round(tip[1] - 2 * u)}px)`
       }
       for (const [id, el] of fels) if (!emoteFx.current.has(id)) { el.remove(); fels.delete(id) }
+      // 2c: the mint "Sit beside me" pill over the open Melody seat (everyone, while a duet waits) and, while it plays,
+      // the Bass / Melody tags under the bench (GD mock C); in art px from DUET_PX, snapped like the bubbles
+      if (!dwrap) { dwrap = document.createElement('div'); dwrap.className = 'w-duet w-wrap-duet'; ov.append(dwrap)
+        pill = document.createElement('button'); pill.className = 'bub w-sitpill'; pill.dataset.t = 'w-sit-beside'; pill.textContent = 'Sit beside me'
+        pill.onpointerdown = ev => ev.stopPropagation(); pill.onclick = () => goSeat(MELODY_SEAT)
+        for (const k of ['bass', 'mel'] as const) { const t = document.createElement('div'); t.className = 'tagw ' + k; t.dataset.t = 'w-duet-tag'; t.dataset.part = k === 'mel' ? 'melody' : 'bass'
+          t.innerHTML = `<span class="k">${k === 'mel' ? 'Melody' : 'Bass'}</span><span class="w"></span>`; tags.push(t) }
+        dwrap.append(pill, ...tags) }
+      const showPill = !!dv && dv.ph === 'wait' && !!dv.bass && !dv.melody && dv.me !== 'bass' || !!dv && dv.ph === 'wait' && dv.me === 'bass' && !dv.melody
+      pill!.hidden = !showPill; pill!.style.pointerEvents = dv?.me ? 'none' : 'auto'
+      if (showPill) { const [x, y] = r.toCss((DUET_PX.seatOpen[0] + 12) / 16, (DUET_PX.seatOpen[1] - 4) / 16); pill!.style.left = Math.round(x) + 'px'; pill!.style.top = Math.round(y) + 'px' }
+      const showTags = !!dv && (dv.ph === 'play' || dv.ph === 'count') && !dv.me
+      tags.forEach((t, i) => { const part = i ? 'melody' : 'bass', id = dv?.[part] ?? 0; t.hidden = !showTags || !id; if (t.hidden) return
+        const w = t.lastChild as HTMLElement, nm = n.pubs.get(id)?.name ?? ''; if (w.textContent !== nm) w.textContent = nm
+        const sx = i ? DUET_PX.melody[0] + 10 : DUET_PX.bass[0] + 10, [x, y] = r.toCss(sx / 16, (DUET_PX.bench[1] + 16) / 16); t.style.left = Math.round(x) + 'px'; t.style.top = Math.round(y + 2) + 'px' })
       for (const [tb, until] of murmurs.current) {
         let el = mels.get(tb); const t = TABLES[tb]
         if (now > until || !t) { murmurs.current.delete(tb); el?.remove(); mels.delete(tb); continue }
@@ -253,6 +287,7 @@ function World() {
       emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
         requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },
+      duet: { v: () => duetRef.current, r: () => ({ ...r.duetOn }), gains: () => pa.current!.duetGains(), pos: () => pa.current!.duetPos(), pv: () => pa.current!.pv?.id ?? null, pvFrac: () => pa.current!.pvFrac() },
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
     return () => { cancelAnimationFrame(raf); ro.disconnect(); r.destroy() }
   }, [phase])
@@ -307,12 +342,17 @@ function World() {
     // a sofa: walk to it and sit (the server picks a free spot, or says it's full)
     const si = sofaAt(t[0], t[1])
     if (si >= 0) { const f = SOFAS[si].front; n.send({ t: 'sofa', i: si } as any); const me = n.ents.get(n.me); r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], f) ?? [] : []; target.current = f; return }
-    // the piano or its bench: walk to the bench
-    if (at(t[0], t[1]) === 'K' || isPianoSeat(t[0], t[1])) t = [PIANO_SEAT[0], PIANO_SEAT[1]]
+    // the piano or its bench: a duet waiting with a seat open → that seat (Melody beside the one waiting); a tapped duet
+    // seat → that seat; otherwise the solo seat in the middle
+    if (at(t[0], t[1]) === 'K' || isPianoSeat(t[0], t[1])) { const d = duetRef.current
+      const open: readonly [number, number] | null = d && d.ph === 'wait' && !d.me ? (d.bass && !d.melody ? MELODY_SEAT : d.melody && !d.bass ? BASS_SEAT : null) : null
+      t = open ? [open[0], open[1]] : isPianoSeat(t[0], t[1]) ? t : [PIANO_SEAT[0], PIANO_SEAT[1]] }
     if (!walkable(t[0], t[1])) t = nearestWalkable(t[0], t[1]); if (!t) return
     n.send({ t: 'go', x: t[0], y: t[1] }); const me = n.ents.get(n.me)
     r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], t) ?? [] : []; target.current = t
   }
+  const goSeat = (s: readonly [number, number]) => { const n = net.current, r = ren.current; if (!n) return; pa.current?.unlock(); n.send({ t: 'go', x: s[0], y: s[1] }); const me = n.ents.get(n.me)
+    if (r) r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], [s[0], s[1]]) ?? [] : []; target.current = [s[0], s[1]] }
   const say = (e: React.FormEvent) => { e.preventDefault(); const t = text.trim(); if (!t) return; net.current?.send({ t: 'say', text: t }); setText('') }
   const act = (t: 'heart' | 'pass' | 'block') => { if (sel) net.current?.send({ t, id: sel.id }); if (t === 'pass') { setSel(null); if (ren.current) ren.current.sel = 0 } }
   const close = () => { setSel(null); setMenu(''); if (ren.current) ren.current.sel = 0 }
@@ -366,10 +406,19 @@ function World() {
   const cardEl = card && card.q && <TablePanel card={card} callEl={callEl} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
     ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} say={bar} send={o => net.current?.send(o as any)} stand={stand} />
   const myPav = net.current?.p.pav
-  const pianoEl = where === 'piano' && <PianoPanel mine={pianoS.by === net.current?.me} playing={pianoS.by === net.current?.me ? pianoS.song : null} near={near} sel={song}
-    setSel={id => { setSong(id); void pa.current?.load(id) }} onPlay={id => net.current?.send({ t: 'piano', id } as any)} onStop={() => net.current?.send({ t: 'pstop' } as any)} onStand={stand}
-    portrait={myPav ? <Suspense fallback={null}><Char json={myPav} scale={2} label="Your Pixel You" t="w-piano-av" /></Suspense> : null} />
-  const playing = pianoS.song ? PIECE.get(pianoS.song) : undefined
+  const myPortrait = myPav ? <Suspense fallback={null}><Char json={myPav} scale={2} label="Your Pixel You" t="w-piano-av" /></Suspense> : null
+  const nn = net.current, who: Who = { me: nn?.me ?? 0, name: id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone', pav: id => id === nn?.me ? nn?.p.pav : nn?.pubs.get(id)?.pav }
+  const dsend = (o: object) => net.current?.send(o as any)
+  const soloDuet = pianoS.by === nn?.me && pianoS.song && DUET.has(pianoS.song) ? pianoS.song : null
+  const pianoEl = where === 'piano' && (duet?.me && pa.current ? <DuetPanel v={duet} who={who} A={pa.current} send={dsend} onStand={stand} onInvite={() => { setDlist(null); setInvOpen(true); dsend({ t: 'dlist' }) }} />
+    : soloDuet && pa.current ? <SoloDuetPanel id={soloDuet} at={pianoS.at} near={near} A={pa.current} portrait={myPortrait} onStop={() => dsend({ t: 'pstop' })} onStand={stand} />
+    : <PianoPanel mine={pianoS.by === net.current?.me} playing={pianoS.by === net.current?.me ? pianoS.song : null} near={near} sel={song}
+    setSel={id => { setSong(id); if (DUET.has(id)) pa.current?.warmDuet(id); else void pa.current?.load(id) }} onPlay={id => net.current?.send({ t: 'piano', id } as any)} onStop={() => net.current?.send({ t: 'pstop' } as any)} onStand={stand}
+    portrait={myPortrait} duetRows={<DuetRows sel={song} setSel={id => { setSong(id); pa.current?.warmDuet(id) }} />}
+    duetFoot={<div className="w-pick-foot"><button className="w-btn" data-t="w-duet-start" onClick={() => { pa.current?.unlock(); dsend({ t: 'dstart', id: song }) }}><DPx i="DUO" c="#05020F" />Start duet</button>
+      <button className="w-btn ghost" data-t="w-piano-stand" onClick={stand}>Stand up</button></div>} />)
+  const duetPlaying = duet && (duet.ph === 'play' || duet.ph === 'count') && duet.song ? DUET.get(duet.song) : undefined
+  const playing = pianoS.song ? PIECE.get(pianoS.song) : undefined, soloDuetAny = pianoS.song && pianoS.by ? DUET.get(pianoS.song) : undefined
   const pianist = pianoS.by === net.current?.me ? 'You' : net.current?.pubs.get(pianoS.by)?.name ?? 'Someone'
   // GD end-received-390: a gentle card for the one turned down (never says why); the grey broken heart over the person
   // who ended it is the server's, and only they see it
@@ -388,7 +437,12 @@ function World() {
         {(layout === 'desk' || emoOpen) && <div className={'w-emotes' + (layout === 'phone' ? ' folded' : '')} data-t="w-emotes" role="group" aria-label="Voice emotes">{EMOTES.map(e =>
           <button key={e} className="w-emo" data-t="w-emote" data-e={e} aria-label={EMOTE_LABEL[e]} onPointerDown={ev => ev.stopPropagation()}
             onClick={() => { pa.current?.unlock(); net.current?.send({ t: 'emote', e } as any); if (layout === 'phone') setEmoOpen(false) }}>{EMOTE_LABEL[e as Emote]}</button>)}</div>}
-        {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}</div>
+        {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
+        {!playing && soloDuetAny && <NowPlaying piece={{ title: soloDuetAny.title } as any} by={`${pianist} · both parts`} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
+        {duetPlaying && <NowPlaying piece={{ title: duetPlaying.title } as any} by="duet" muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
+        {duet && duetPlaying && duet.ph === 'play' && !duet.me && !seated && !sel && pa.current && near >= 0 && pa.current.gain > 0.001 && <DuetCard v={duet} who={who} A={pa.current} />}
+        {invOpen && duet?.me === 'bass' && <InviteSheet people={dlist} who={who} song={duet.song} pending={!!duet.inv} onInvite={id => { dsend({ t: 'dinv', id }); setInvOpen(false) }} onClose={() => setInvOpen(false)} />}
+        {dinv && pa.current && <InviteCard from={dinv.from} song={dinv.song} until={dinv.until} who={who} A={pa.current} send={dsend} />}</div>
       <aside className="w-side" data-t="w-side">
         {person}
         {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}

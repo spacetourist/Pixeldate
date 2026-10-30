@@ -199,20 +199,22 @@ export class PianoAudio {
 
 /** GD's piano picker (piano-picker-390): who's at the piano, the songs (title, composer or "Pixeldate original", length),
     Play <title> (butter) / Stop, and Stand up. */
-export function PianoPanel({ mine, playing, near, sel, setSel, onPlay, onStop, onStand, portrait }: { mine: boolean; playing: string | null; near: number
-  sel: string; setSel: (id: string) => void; onPlay: (id: string) => void; onStop: () => void; onStand: () => void; portrait: React.ReactNode }) {
-  const pick = PIECE.get(sel) ?? PIECES[0]
-  return <section className="w-panel w-pick" data-t="w-piano" aria-label="Piano">
+export function PianoPanel({ mine, playing, near, sel, setSel, onPlay, onStop, onStand, portrait, duetRows, duetFoot }: { mine: boolean; playing: string | null; near: number
+  sel: string; setSel: (id: string) => void; onPlay: (id: string) => void; onStop: () => void; onStand: () => void; portrait: React.ReactNode
+  /** 2c: the Duets section under the solo songs, and the foot when a duet is selected (Start duet) */
+  duetRows?: React.ReactNode; duetFoot?: React.ReactNode }) {
+  const isDuet = !PIECE.has(sel) && !!duetRows, pick = PIECE.get(sel) ?? PIECES[0]
+  return <section className={'w-panel w-pick' + (duetRows ? ' w-duet' : '')} data-t="w-piano" aria-label="Piano">
     <h2>Piano<button className="w-x" data-t="w-piano-x" aria-label="Stand up" onClick={onStand}>×</button></h2>
     <div className="w-player"><span className="w-av">{portrait}</span>
       <span className="w-pt"><b>You</b><span data-t="w-hear">At the piano · {near} here will hear it</span></span>
       <span className="w-live"><span className="w-pulsed" />{playing ? 'Playing' : 'Seated'}</span></div>
-    <ul className="w-songs" role="radiogroup" aria-label="Songs">{PIECES.map(p =>
-      <li key={p.id} role="radio" aria-checked={p.id === pick.id} tabIndex={0} className={p.id === pick.id ? 'sel' : undefined} data-t="w-song" data-id={p.id}
+    <div className={duetRows ? 'w-dlist' : undefined}>{duetRows && <p className="sec solo">Solo</p>}<ul className="w-songs songs" role="radiogroup" aria-label="Songs">{PIECES.map(p =>
+      <li key={p.id} role="radio" aria-checked={!isDuet && p.id === pick.id} tabIndex={0} className={!isDuet && p.id === pick.id ? 'sel' : undefined} data-t="w-song" data-id={p.id}
         onClick={() => setSel(p.id)} onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setSel(p.id) } }}>
         <span className="rad" /><span><span className="n">{p.title}</span>{isOriginal(p) && <span className="orig" data-t="w-orig">Original</span>}
-          <span className="c">{isOriginal(p) ? 'Pixeldate original' : p.composer}</span></span><span className="d">{mmss(p.durationSec)}</span></li>)}</ul>
-    {mine && <div className="w-pick-foot">
+          <span className="c">{isOriginal(p) ? 'Pixeldate original' : p.composer}</span></span><span className="d">{mmss(p.durationSec)}</span></li>)}</ul>{duetRows}</div>
+    {mine && isDuet && !playing ? duetFoot : mine && <div className="w-pick-foot">
       {playing ? <button className="w-btn" data-t="w-piano-stop" onClick={onStop}>Stop {shortTitle(PIECE.get(playing)!)}</button>
         : <button className="w-btn" data-t="w-piano-play" onClick={() => onPlay(pick.id)}>Play {shortTitle(pick)}</button>}
       <button className="w-btn ghost" data-t="w-piano-stand" onClick={onStand}>Stand up</button></div>}

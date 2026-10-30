@@ -117,6 +117,9 @@ export class Renderer {
   private couple = new Container(); private CH: Texture[] = []; private CS: Texture[][] = []; private CD: Texture[] = []
   /** couple-heart sprites drawn last frame per table, for tests: tb -> [heart frame, drift particles alive] */
   coupleOn: Record<number, [number, number]> = {}
+  /** the viewer's private markers last frame, for tests: id -> [has a heart/broken flag, drawn]. A marker over someone
+      seated at a table showing its couple heart is hidden (GD: it read as a pile of hearts) and comes back when it stops. */
+  markOn: Record<number, [boolean, boolean]> = {}
   /** GD's marker files in use, with their sizes in art px (tests check them against world/markers/README.md). */
   art: Record<string, [number, number]> = {}
   constructor(c: HTMLCanvasElement) {
@@ -238,6 +241,8 @@ export class Renderer {
     // people
     const seen = new Set<number>()
     const bodies: Box[] = [], far: { id: number; x: number; y: number }[] = [], calm = still()
+    const under = new Set<string>(); for (const tb of this.hearts) for (const [cx, cy] of TABLES[tb]?.seats ?? []) under.add(cx + ',' + cy)
+    this.markOn = {}
     for (const e of net.ents.values()) {
       seen.add(e.id); const x = this.ent(e.id), d = dirOf(e), sit = !!(e.f & F_SIT)
       let [fx, fy] = this.feet(net, e, now)
@@ -265,7 +270,8 @@ export class Renderer {
       x.me.visible = !!(e.f & F_ME); x.me.position.set(fx - 7, fy + 1)
       x.sel.visible = e.id === this.sel; x.sel.position.set(fx - 8, fy + 1)
       const heart = !!(e.f & F_HEART), broken = !heart && !!(e.f & F_BROKEN), sd = sit ? SIT_D : 0
-      x.mark.visible = heart || broken
+      const hush = sit && under.has(Math.floor(e.x) + ',' + Math.floor(e.y))
+      x.mark.visible = (heart || broken) && !hush; this.markOn[e.id] = [heart || broken, x.mark.visible]
       if (heart && calm) { x.mark.texture = this.T.heart; x.mark.position.set(sx + 7, sy - 9 + sd) }
       else if (heart) { x.mark.texture = Math.floor((now + e.id * 137) / HEART_BOB_MS) % 2 ? this.T.bob1 : this.T.bob0; x.mark.position.set(sx + 7, sy - 10 + sd) }
       else if (broken) { x.mark.texture = this.T['broken-heart']; x.mark.position.set(sx + 7, sy - 8 + sd) }

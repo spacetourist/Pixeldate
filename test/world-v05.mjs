@@ -224,6 +224,17 @@ const tb0 = (await cp(sam)).hearts
 const heartAt = async (p, want) => { await front(p); return !!(await until(async () => { const c = await cp(p); return want ? c.hearts.length === 1 && !!c.on[c.hearts[0]] : !c.hearts.length && !Object.keys(c.on).length }, 6000)) }
 ok(tb0.length === 1, `heart: the pair's table (${JSON.stringify(tb0)}) has a heart on Sam's screen`)
 for (const p of [mia, kit, ola]) ok(await heartAt(p, true), `heart: ${p.tag} sees the heart over the table (frames ${JSON.stringify((await cp(p)).on)})`)
+// GD fix: while the pair's couple heart shows, a viewer's private markers over those two are hidden; others' stay; back after
+const marks = async (p, hushed) => { await front(p); let last = null
+  const r = await until(async () => { const v = await p.evaluate(() => { const s = window.__world.state(), m = window.__world.couple().marks
+      return s.ents.filter(e => e.id !== s.me).map(e => ({ n: e.name, f: !!m[e.id]?.[0], on: !!m[e.id]?.[1] })) }); last = v
+    const pair = v.filter(e => e.n === 'Sam' || e.n === 'Mia'), rest = v.filter(e => e.n !== 'Sam' && e.n !== 'Mia')
+    return pair.every(e => e.on === (e.f && !hushed)) && rest.every(e => e.on === e.f) ? { pair: pair.filter(e => e.f).length, rest: rest.filter(e => e.f).length } : null }, 6000)
+  return r ?? { bad: last } }
+const markCheck = async (hushed, why) => { const ms = [await marks(kit, hushed), await marks(ola, hushed)]
+  ok(ms.every(m => !m.bad), `markers: ${why} (${JSON.stringify(ms)})`); return ms }
+{ const ms = await markCheck(true, "the pair's private markers are hidden under the couple heart; everyone else's stay")
+  ok(ms.reduce((a, m) => a + (m.pair ?? 0), 0) > 0, `markers: a bystander does have a private marker over the pair to hide (${JSON.stringify(ms)})`) }
 // a bystander sees only the heart: no names, no text near the table
 { const t = await kit.evaluate(() => document.querySelector('.w-over')?.textContent ?? ''); ok(!/On call|Only you two|Show our heart/.test(t) && !(await kit.$('[data-t=w-oncall]')), 'heart: bystanders see no call text ("' + t.slice(0, 60) + '")') }
 await walkTo(kit, 4, 12, 15000)
@@ -232,9 +243,11 @@ for (const [p, n] of [[sam, 'couple-call'], [mia, 'couple-call'], [kit, 'couple-
 // either switch off hides it for everyone; on again shows it
 await press(mia, '[data-t=w-show-sw]')
 ok(await heartAt(kit, false) && await heartAt(sam, false), 'heart: Mia switches it off → gone for the room and for Sam')
+await markCheck(false, 'switch off → the pair\'s private markers are back')
 ok((await mia.$eval('[data-t=w-show-sw]', e => e.classList.contains('off') && e.getAttribute('aria-checked') === 'false')) && (await sam.$eval('[data-t=w-show-sw]', e => e.getAttribute('aria-checked'))) === 'true', 'heart switch: Mia\'s is off, Sam\'s stays his own')
 await shot(mia, 'couple-call-off'); await mia.screenshot({ path: '/workspace/pixeldate/shots/world-piano-duet-v1/couple-call-off-1440.png' })
 await press(mia, '[data-t=w-show-sw]'); ok(await heartAt(ola, true), 'heart: switched back on → shown again')
+await markCheck(true, 'switched back on → hidden again')
 // mute / camera
 await press(sam, '[data-t=w-oc-mute]'); ok((await cp(sam)).call.muted && (await sam.$eval('[data-t=w-oc-mute]', e => e.getAttribute('aria-pressed'))) === 'true', 'call: Mute')
 await press(sam, '[data-t=w-oc-mute]'); await press(sam, '[data-t=w-oc-cam]'); ok((await cp(sam)).call.camOff, 'call: Camera off'); await press(sam, '[data-t=w-oc-cam]')
@@ -242,12 +255,15 @@ await press(sam, '[data-t=w-oc-mute]'); await press(sam, '[data-t=w-oc-cam]'); o
 await press(sam, '[data-t=w-oc-end]')
 ok(await until(async () => !(await sam.$('[data-t=w-oncall]')) && !(await mia.$('[data-t=w-oncall]')), 6000), 'call: Sam ends it → the call closes on both')
 ok(await heartAt(kit, false) && await heartAt(mia, false), 'heart: gone when the call ends')
+await markCheck(false, 'call ended → the markers are back')
 ok(!!(await sam.$('[data-t=w-card]')) && !!(await mia.$('[data-t=w-card]')), 'call ended: both still seated, the card is back')
 // a new call; standing up ends it and the heart
 await sleep(500); await press(mia, '[data-t=w-call]'); await until(async () => (await callSt(sam)) === 'in'); await press(sam, '[data-t=w-call-yes]')
 ok(await onCall(sam) && await onCall(mia) && await heartAt(kit, true), 'call again: heart back on (the switch defaults on each call)')
+await markCheck(true, 'call again → hidden again')
 await front(mia); await mia.keyboard.press('Escape')
 ok(await heartAt(kit, false) && await until(async () => !(await sam.$('[data-t=w-oncall]')), 6000), 'heart: Mia stands up → call and heart end at once')
+await markCheck(false, 'Mia stands up → the markers are back')
 // the app's own video call is unchanged (a saved hand-off still opens it); the chat's level set there carries into the café
 for (const p of [sam, mia]) await p.evaluate(m => sessionStorage.setItem('pd.handoff', JSON.stringify({ ...m, at: Date.now() })), { code: ('v05h' + Date.now().toString(36) + 'zzzzzzzz').slice(0, 12), host: p === sam, lv: 3 })
 for (const p of [sam, mia]) await p.goto(APP + '?loopback', { waitUntil: 'domcontentloaded' })

@@ -282,7 +282,7 @@ function World() {
       state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, art: r.art, layout: layoutOf(), bytes: n.bytes,
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
-      couple: () => ({ hearts: [...r.hearts], on: r.coupleOn, call: callRef.current ? { up: callRef.current.up, host: callRef.current.host, lv: callRef.current.lv, muted: callRef.current.muted, camOff: callRef.current.camOff } : null }),
+      couple: () => ({ hearts: [...r.hearts], on: r.coupleOn, marks: r.markOn, call: callRef.current ? { up: callRef.current.up, host: callRef.current.host, lv: callRef.current.lv, muted: callRef.current.muted, camOff: callRef.current.camOff } : null }),
       emoteFx: () => [...emoteFx.current.entries()].map(([id, f]) => ({ id, e: f.e })),
       emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,

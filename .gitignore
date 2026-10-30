@@ -5,3 +5,4 @@ shots
 # pixel-avatar runtime binaries: fetched + sha256-checked by tools/fetch-avatar-assets.mjs (prebuild)
 public/avatar/wasm/
 public/avatar/models/
+world/test/.out/

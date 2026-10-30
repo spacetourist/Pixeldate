@@ -77,6 +77,7 @@ await test('bubble filter end to end: a blocked bubble reaches nobody, the sende
   const A = await J({ name: 'Ok' }); await sleep(200); const before = B.events.length
   A.send({ t: 'say', text: 'hello café' }); assert.equal((await A.wait(() => A.last('said'))).ok, true)
   const got = await B.wait(() => B.events.slice(before).find(e => e.t === 'say')); assert.equal(got.text, 'hello café'); assert.equal(got.id, A.me)
+  await sleep(150); assert.ok(!A.events.some(e => e.t === 'say'), 'the sender gets said, never its own say')
   await done()
 })
 await test('rate limit: 3 bubbles per 15 s, the 4th is refused as slow', async () => {

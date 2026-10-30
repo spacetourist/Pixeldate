@@ -97,7 +97,7 @@ export default function Signup({ onDone, resume }: { onDone: (p: Profile, photo:
   const file = (f?: File) => { if (f) { const r = new FileReader(); r.onload = () => setPic(String(r.result)); r.readAsDataURL(f) } }
   const openCam = async () => { try { setCam(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })) } catch { toast({ id: 'cam', role: 'error', icon: 'cam', t: 'notice-cam', title: 'Camera unavailable', body: 'Another app may be using it, or access is blocked. Try Gallery instead.' }) } }
   const minor = bm > 0 && age < 18
-  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: R?.uid || uid(), ...(pav ? { pav } : {}) }, photo) }
+  const finish = () => { const a = Math.min(age, AGE_TOP), [lo, hi] = snapRange(min, max); if (a < 18 || !iam || !seek) return; store.setItem('pd-bday', JSON.stringify({ by, bm })); setMin(lo); setMax(hi); onDone({ name: name.trim(), age: a, by, bm, min: lo, max: hi, iam, seek, uid: R?.uid || uid(), adult: true, ...(pav ? { pav } : {}) }, photo) }
 
   const ladder = step === 2 && !!photo
   const next = (label: string, enabled: boolean, onClick: () => void, t = 'next') =>

@@ -44,5 +44,6 @@ function Root() {
 const render = () => createRoot(document.getElementById('root')!).render(<Root />)
 // pixel-avatar: ?avatar=debug (detection debug view) and ?avatar=flow (v0.1 screens, not wired into signup yet) enter
 // through the same lazy chunk (avatar/debug routes flow onwards), so the app's initial JS stays as it was
-if (/[?&]avatar=(debug|flow)/.test(location.search)) void import('./avatar/debug').then(m => m.mount(document.getElementById('root')!))
+// Pixeldate World (?world=cafe) goes through the same tiny lazy router (src/routes.ts), so it adds nothing to the initial JS
+if (/[?&](avatar=(debug|flow)|world=)/.test(location.search)) void import('./routes').then(m => m.mount(document.getElementById('root')!))
 else if (boot) boot.then(render, render); else render()

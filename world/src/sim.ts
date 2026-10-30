@@ -216,7 +216,7 @@ export class Room {
     p.says.push(t); p.recent.push({ at: t, text: v.text }); if (p.recent.length > 8) p.recent.shift()
     p.sock.send(JSON.stringify({ t: 'said', ok: true, text: v.text }))
     const msg = JSON.stringify({ t: 'say', id: p.id, text: v.text })
-    for (const o of this.players.values()) if (!this.hidden(p, o)) {
+    for (const o of this.players.values()) if (o !== p && !this.hidden(p, o)) { // the sender already has 'said'
       o.sock.send(msg)
       if (o !== p) { o.heard.push({ at: t, text: v.text }); if (o.heard.length > 8) o.heard.shift() }
     }

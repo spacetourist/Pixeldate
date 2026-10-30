@@ -31,7 +31,8 @@ export type Gender = 'man' | 'woman'
 export type Seek = 'men' | 'women' | 'everyone'
 /** Local profile. by/bm (birth year/month) and the exact age NEVER leave this device. */
 export interface Profile { name: string; age: number; by: number; bm: number; min: number; max: number; iam: Gender; seek: Seek; uid: string
-  /** Pixel You: the character's options JSON (~240 B of kit names, never an image); absent if skipped */ pav?: string }
+  /** Pixel You: the character's options JSON (~240 B of kit names, never an image); absent if skipped */ pav?: string
+  /** The signup's "I'm 18 or over" confirmation was ticked (Pixeldate World refuses a join without it) */ adult?: true }
 /** What a peer receives: the age bracket only (no year, month or exact age). */
 export interface PeerProfile { name: string; br: [number, number]; min: number; max: number; iam: Gender; seek: Seek; uid: string; pav?: string }
 export const BRACKETS: [number, number][] = [[18, 24], [25, 29], [30, 34], [35, 39], [40, 49], [50, 59], [60, 999]]

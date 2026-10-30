@@ -62,11 +62,6 @@ const far = new Bot(profile({ name: 'Far', iam: 'woman' }), { room: 'cafe-1' });
 
 await emo(ann, 'giggle')
 const a1 = await until(async () => (await em(ann, 'played')).at(-1)); ok(a1 && /^emotes\/giggle_f[12]$/.test(a1.path) && a1.gain === 1 && a1.pan === 0, 'Ann (woman) hears her own giggle from the female set at full gain, centred: ' + a1?.path)
-// placeholder effect over the one who emoted, on every screen
-{ const me = (await st(ann)).me, fx = p => p.$$eval('[data-t=w-emofx]', l => l.map(e => ({ id: +e.dataset.id, t: e.textContent, v: e.style.visibility }))) 
-  const fa = await until(async () => { const f = await fx(ann); return f.length && f }, 1000) || [], fb = await until(async () => { const f = await ben.evaluate(() => window.__world.emoteFx()); return f.length && f }, 1000) || []
-  ok(fa.length === 1 && fa[0].id === me && fa[0].t === 'hehe' && fb.length === 1 && fb[0].id === me && fb[0].e === 'giggle', `emote effect: a "${fa[0]?.t}" tag over Ann, on her screen and Ben's`)
-  await sleep(1600); ok(!(await ann.$('[data-t=w-emofx]')), 'emote effect: gone after ~1.2 s') }
 const b1 = await until(async () => (await em(ben, 'played')).at(-1)); const A = await meEnt(ann), B = await meEnt(ben)
 const want = gainAt(Math.hypot(A.x - B.x, A.y - B.y)), wp = panAt(A.x - B.x)
 ok(b1 && b1.path === a1.path && Math.abs(b1.gain - want) < 0.08 && Math.abs(b1.pan - wp) < 0.15, `Ben hears the same take with the piano falloff (gain ${b1?.gain?.toFixed(2)} ≈ ${want.toFixed(2)}, pan ${b1?.pan?.toFixed(2)} ≈ ${wp.toFixed(2)})`)
@@ -76,9 +71,14 @@ ok(ann.reqs.some(u => /\/audio\/emotes\/giggle_f[12]\.ogg$/.test(u)), 'fetched a
 await emo(ann, 'sigh')
 ok(await until(() => ann.$eval('[data-t=w-note]', e => /One at a time/.test(e.textContent)).catch(() => false), 2000), 'cooldown: a second emote inside 1.5 s is refused (flash)')
 await sleep(400); ok((await em(ben, 'played')).length === 1, 'cooldown: and Ben never hears it')
+// placeholder effect over the one who emoted, on every screen
+{ await sleep(EMOTE_COOLDOWN_MS + 100); await emo(ann, 'giggle'); const me = (await st(ann)).me, fx = p => p.$$eval('[data-t=w-emofx]', l => l.map(e => ({ id: +e.dataset.id, t: e.textContent, v: e.style.visibility }))) 
+  const fa = await until(async () => { const f = await fx(ann); return f.length && f }, 1000) || [], fb = await until(async () => { const f = await ben.evaluate(() => window.__world.emoteFx()); return f.length && f }, 1000) || []
+  ok(fa.length === 1 && fa[0].id === me && fa[0].t === 'hehe' && fb.length === 1 && fb[0].id === me && fb[0].e === 'giggle', `emote effect: a "${fa[0]?.t}" tag over Ann, on her screen and Ben's`)
+  await sleep(1600); ok(!(await ann.$('[data-t=w-emofx]')), 'emote effect: gone after ~1.2 s') }
 await shot(ann, 'emote'); await shot(ben, 'emote')
 // rotation over the UI
-const seen = [a1.path]
+const seen = (await em(ann, 'played')).map(x => x.path)
 for (let i = 0; i < 3; i++) { await sleep(EMOTE_COOLDOWN_MS + 100); await emo(ann, 'giggle'); await until(async () => (await em(ann, 'played')).length === seen.length + 1, 3000); seen.push((await em(ann, 'played')).at(-1).path) }
 ok(seen.every((t, i) => !i || t !== seen[i - 1]), 'rotation: never the same take twice in a row: ' + seen.join(' '))
 // Ben (man) → male set

@@ -82,6 +82,10 @@ const stackReport = bs => { const g = 2, e = 0.02, near = [], bad = []
   for (const a of bs) for (const b of bs) if (a !== b && a.l < b.l + b.w + g - e && b.l < a.l + a.w + g - e && a.t < b.t) { const gap = b.t - (a.t + a.H); near.push(gap); if (gap < g - e) bad.push(`${a.text}/${b.text} gap ${gap.toFixed(2)}`) }
   const tails = bs.filter(b => b.tipX == null || Math.abs(b.col - b.tipX) > e || b.t + b.H > b.tipY + e || (!b.lift && Math.abs(b.t + b.H - b.tipY) > e)).map(b => b.text)
   return { near, bad, tails, lifted: bs.filter(b => b.lift > 0).length, tight: near.filter(x => Math.abs(x - g) < e).length } }
+// farthest any pixel in a screenshot clip strays from colour c (max channel difference)
+const maxOff = async (p, clip, c) => { const b = await p.screenshot({ clip, encoding: 'base64' })
+  return p.evaluate(async (b, c) => { const i = new Image(); i.src = 'data:image/png;base64,' + b; await i.decode(); const g = new OffscreenCanvas(i.width, i.height).getContext('2d'); g.drawImage(i, 0, 0)
+    const d = g.getImageData(0, 0, i.width, i.height).data; let m = 0; for (let k = 0; k < d.length; k += 4) m = Math.max(m, Math.abs(d[k] - c[0]), Math.abs(d[k + 1] - c[1]), Math.abs(d[k + 2] - c[2])); return m }, b, c) }
 const press = (p, sel) => p.touch ? p.tap(sel) : p.click(sel)
 const said = new Map() // per player: say timestamps, to stay inside 3 per 15 s
 async function sayUI(p, text, viaEnter) {
@@ -241,6 +245,27 @@ async function flow(p, o) {
     ok(c.items.some(([n, t, m]) => n === 'Mia' && t === 'love the lamps in here' && !m) && c.items.some(([n, t, m]) => n === 'You' && t === myLine && m), `${L}: log has names + text, my own line marked "You"`)
     ok(!c.items.some(([, t]) => /07700|sam_k/.test(t || '')), `${L}: filtered text never reaches the log`)
     { const S = stackReport(await bubbleGeo(p)); ok(!S.bad.length && !S.tails.length && S.lifted >= 1, `${L}: the burst stacks too: no overlaps, tails on their speakers (${S.lifted} nudged${S.bad.length ? '; ' + S.bad.join(', ') : ''}${S.tails.length ? '; bad tails ' + S.tails.join(', ') : ''})`) }
+    // GD v04 polish: the top 12px of the log fades into the panel (a mask on the scroller, so no overlay), and a half-scrolled line no longer clips hard
+    { const f = await p.evaluate(() => { const ol = document.querySelector('[data-t=w-log] ol'), cs = getComputedStyle(ol), r = ol.getBoundingClientRect(), st = ol.scrollTop
+        ol.scrollTop = 0; const first = ol.firstElementChild.getBoundingClientRect().top - r.top; ol.scrollTop = st
+        const hit = [4, 10].map(dy => ol.contains(document.elementFromPoint(r.left + r.width / 2, r.top + dy)))
+        return { m: cs.maskImage || cs.webkitMaskImage, pe: cs.pointerEvents, first, hit, panel: getComputedStyle(ol.parentElement).backgroundColor } })
+      ok(/linear-gradient/.test(f.m) && /(transparent|rgba\(0, 0, 0, 0\)) 0(px)?/.test(f.m) && /12px/.test(f.m) && f.pe !== 'none', `${L}: chat log top 12px fades out (mask-image ${f.m})`)
+      ok(f.hit.every(Boolean) && f.first >= 11.5, `${L}: the fade doesn't cover the log: the top strip is still the log itself (clicks/scroll reach it), first line sits clear of it at rest (${f.first.toFixed(0)} px)`)
+      const box = await p.evaluate(() => { const ol = document.querySelector('[data-t=w-log] ol'), r = ol.getBoundingClientRect(), li = ol.children[Math.floor(ol.children.length / 2)]
+        ol.scrollTop += li.getBoundingClientRect().top - r.top + 6   // this line's top half is now scrolled past the top edge
+        return { x: r.left + 12, y: r.top, width: r.width - 24, height: 2, sec: ol.parentElement.getBoundingClientRect().toJSON() } })
+      await sleep(150); const panel = f.panel.match(/\d+/g).map(Number), clip = { x: box.x, y: box.y, width: box.width, height: box.height }
+      const faded = await maxOff(p, clip, panel)
+      await p.evaluate(() => { const s = document.querySelector('[data-t=w-log] ol').style; s.maskImage = s.webkitMaskImage = 'none' }); await sleep(100)
+      const hard = await maxOff(p, clip, panel)
+      await p.evaluate(() => { const s = document.querySelector('[data-t=w-log] ol').style; s.maskImage = s.webkitMaskImage = '' }); await sleep(100)
+      ok(hard > 60 && faded <= hard / 4, `${L}: a half-scrolled line no longer clips hard at the top: the top 2 px rows are within ${faded} of the panel colour (${hard} without the fade)`)
+      await p.screenshot({ path: `${OUT}19-log-fade-1440.png`, clip: { x: box.sec.x - 8, y: box.sec.y - 8, width: box.sec.width + 16, height: 150 } }); console.log('  📷', '19-log-fade-1440.png')
+      const before = await p.$eval('[data-t=w-log] ol', e => e.scrollTop); await p.mouse.move(box.x + 40, box.y + 5); await p.mouse.wheel({ deltaY: -120 }); await sleep(250)
+      const after = await p.$eval('[data-t=w-log] ol', e => e.scrollTop)
+      ok(after < before, `${L}: the wheel over the faded strip still scrolls the log (${before} → ${after})`)
+      await p.$eval('[data-t=w-log] ol', e => { e.scrollTop = e.scrollHeight }); await sleep(150) }
     await shot(p, '17-stacked-bubbles')
     await p.screenshot({ path: `${OUT}16-side-column-${p.sz}.png`, clip: { x: c.side.left, y: 0, width: c.side.width, height: 900 } }); console.log('  📷', `16-side-column-${p.sz}.png`)
   }

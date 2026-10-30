@@ -32,8 +32,11 @@
 /* desktop side column (GD v04): person panel / card pinned at the top, the chat log takes the rest and scrolls, then the bar, then a small help panel */
 .w-room.desk .w-side { border-left: 2px solid var(--edge, #05020F); padding: 14px; overflow: hidden; gap: 10px }
 .w-log { flex: 1 1 0; min-height: 96px; display: flex; flex-direction: column; background: var(--panel, #160F33); border: 2px solid var(--edge, #05020F); box-shadow: inset 0 0 0 1px var(--c-track, #2A2150) }
-.w-log-h { margin: 0; padding: 6px 10px 4px; font: var(--t-label); color: var(--text-muted, #A49CC2) }
-.w-log ol { list-style: none; margin: 0; padding: 0 10px 8px; overflow-y: auto; flex: 1 1 0; min-height: 0; display: grid; align-content: start; gap: 6px; font: var(--t-small); overflow-wrap: anywhere }
+.w-log-h { margin: 0; padding: 6px 10px 0; font: var(--t-label); color: var(--text-muted, #A49CC2) }
+.w-log ol { list-style: none; margin: 0; padding: 12px 10px 8px;
+  /* GD v04 polish: the top 12px fades into the panel so a half-scrolled line doesn't clip hard under "Chat". It's a mask on the
+     scroller itself (no overlay), so wheel, touch and clicks are untouched; the 12px top padding keeps the first line clear at rest */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px); mask-image: linear-gradient(to bottom, transparent 0, #000 12px); overflow-y: auto; flex: 1 1 0; min-height: 0; display: grid; align-content: start; gap: 6px; font: var(--t-small); overflow-wrap: anywhere }
 .w-log li b { color: var(--c-butter, #FFD84D); font-weight: 700 } .w-log li span { color: #FFF1C1 }
 .w-log li.mine { border-left: 2px solid var(--c-mint, #48E5C2); padding-left: 6px } .w-log li.mine b { color: var(--c-mint, #48E5C2) }
 .w-log .w-log-empty { color: var(--text-muted, #A49CC2) }

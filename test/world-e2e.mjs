@@ -67,9 +67,16 @@ const walkTo = async (p, tx, ty, ms = 15000) => {
     if (await there()) return true
     const c = await p.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON()), [x, y] = await p.evaluate((a, b) => window.__world.tileCss(a, b), tx, ty)
     const m = 28, on = x > c.left + m && x < c.right - m && y > c.top + m && y < c.bottom - m
+    // the emote tray sits over the bottom-left floor: a tile under it can't be tapped, so finish with the arrow keys
+    const covered = on && await p.evaluate((x, y) => !!document.elementFromPoint(x, y)?.closest('[data-t=w-emotes]'), x, y)
+    if (covered) { const e = await meEnt(p), kx = tx + 0.5 - e.x, ky = ty + 0.5 - e.y, key = Math.abs(kx) > Math.abs(ky) ? (kx > 0 ? 'ArrowRight' : 'ArrowLeft') : (ky > 0 ? 'ArrowDown' : 'ArrowUp')
+      await p.keyboard.down(key); await until(async () => { const e = await meEnt(p); return Math.abs((key.includes('Left') || key.includes('Right') ? e.x - tx : e.y - ty) - 0.5) < 0.3 }, 1500, 40); await p.keyboard.up(key); await sleep(100); continue }
     if (on) { await tapAt(p, x, y); return !!(await until(there, ms - (Date.now() - t0))) }
     const cx = (c.left + c.right) / 2, cy = (c.top + c.bottom) / 2, dx = x - cx, dy = y - cy, k = Math.min((c.width / 2 - m) / Math.abs(dx || 1e-9), (c.height / 2 - m) / Math.abs(dy || 1e-9))
-    await tapAt(p, cx + dx * k, cy + dy * k)
+    const ex = cx + dx * k, ey = cy + dy * k
+    if (await p.evaluate((x, y) => !!document.elementFromPoint(x, y)?.closest('[data-t=w-emotes]'), ex, ey)) { const e = await meEnt(p), kx = tx + 0.5 - e.x, ky = ty + 0.5 - e.y, key = Math.abs(kx) > Math.abs(ky) ? (kx > 0 ? 'ArrowRight' : 'ArrowLeft') : (ky > 0 ? 'ArrowDown' : 'ArrowUp')
+      await p.keyboard.down(key); await sleep(900); await p.keyboard.up(key); await sleep(100); continue }
+    await tapAt(p, ex, ey)
     let last = null; await until(async () => { const e = await meEnt(p); const still = last && Math.abs(e.x - last.x) < 0.01 && Math.abs(e.y - last.y) < 0.01; last = e; return still }, 4000, 250)
   }
   return there()
@@ -169,8 +176,8 @@ async function flow(p, o) {
   }
   if (o.layout === 'desk') { cast.mia.send({ t: 'go', x: 17, y: 11 }); await until(() => at(cast.mia, [17, 11]), 8000); await walkTo(p, o.stand[0], o.stand[1], 15000); await sleep(900) }
   if (o.layout === 'phone') {
-    // walls: bottom-left corner, the camera stops at the room edge and shows nothing outside it
-    await walkTo(p, ...o.wallAt); await sleep(1000)
+    // walls: near the bottom-left corner (4,18: clear of the emote tray over the bottom-left floor), the camera stops at the room edge and shows nothing outside it
+    await walkTo(p, ...o.wallAt, 40000); await sleep(1000)
     const w = await st(p)
     ok(w.cam[0] === 0 && Math.abs(w.cam[1] - (MH - w.vh)) < 0.01, `${L}: camera clamped at the walls (cam ${w.cam.map(v => v.toFixed(1))}, view ${w.vw.toFixed(0)}x${w.vh.toFixed(0)} of ${MW}x${MH})`)
     await shot(p, '14-wall')
@@ -317,7 +324,7 @@ async function flow(p, o) {
 const phone = await player('phone', PHONE, 'Sam', 10); phone.touch = true
 const desk = await player('desk', DESK, 'Alex', 11)
 const T0 = Date.now()
-const phoneId = await flow(phone, { layout: 'phone', dpr: 3, h: 844, stand: [15, 10], arrowAt: [1, 12], wallAt: [2, 22], reportee: 'Kit', table: [[2, 9], [5, 9]], partner: 'ava', blockee: 'Una' })
+const phoneId = await flow(phone, { layout: 'phone', dpr: 3, h: 844, stand: [15, 10], arrowAt: [1, 12], wallAt: [4, 18], reportee: 'Kit', table: [[2, 9], [5, 9]], partner: 'ava', blockee: 'Una' })
 // phone keyboard: headless Chrome has no soft keyboard, so shrink the viewport the way one would and check the bar stays put
 await press(phone, '[data-t=w-input]'); await phone.setViewport({ ...PHONE, height: 844 - 336 }); await sleep(600)
 { const b = await phone.$eval('[data-t=w-say]', e => e.getBoundingClientRect().toJSON()), c = await phone.$eval('[data-t=w-canvas]', e => e.getBoundingClientRect().toJSON())

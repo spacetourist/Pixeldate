@@ -15,6 +15,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 let bad = 0, n = 0
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
 const until = async (f, ms = 8000, step = 100) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await f().catch(() => null); if (v) return v; await sleep(step) } return null }
+// network-level retry only (a dropped TLS handshake on a flaky runner); any HTTP response, good or bad, is returned as is
+const fetch = async (u, o) => { for (let i = 0; ; i++) { try { return await globalThis.fetch(u, o) } catch (e) { if (i >= 4) throw e; await sleep(500 * (i + 1)) } } }
 // ── one site: the worker is the only Pixeldate site (bare host and /Pixeldate open the app, query kept; every asset
 // ships; the café WebSocket refuses other sites' pages)
 { const WSO = (process.env.WS || ORIGIN.replace(/^http/, 'ws')).replace(/^ws/, 'http')

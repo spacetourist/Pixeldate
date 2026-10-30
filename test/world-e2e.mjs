@@ -5,7 +5,8 @@
 //   phone camera: 2 CSS px per art px, eased follow, clamped at the walls (no empty bands), coral arrows to off-screen hearts
 //   GD v02 review: secondary Say while empty, night question card, merged arrows that keep off people
 //   GD v03 finals: seated pose on the chair tiles, heart-bob / broken-heart, 4 upright edge arrows + ×n badges, 9-slice bubble
-//   shots of every state at both sizes → shots/world-cafe-v03/     Run: node test/world-e2e.mjs   (FPS=1 adds the 40-player FPS run)
+//   GD v04: dark Block, overlapping bubbles stack 2 art px apart with tails on their speakers, mint rim on mine, desktop side column
+//   shots of every state at both sizes → shots/world-cafe-v04/     Run: node test/world-e2e.mjs   (FPS=1 adds the 40-player FPS run)
 import puppeteer from 'puppeteer-core'
 process.env.WORLD_PORT = '18793'; process.env.WORLD_URL = 'ws://127.0.0.1:18793'
 const dev = await import('../world/dev/server.ts')
@@ -15,7 +16,7 @@ const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
 const { F_HEART, F_BROKEN, F_SIT } = await import('../world/shared/proto.ts')
 const APP = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const Q = '?world=cafe&ws=ws://127.0.0.1:18793'
-const OUT = process.env.OUT || '/workspace/pixeldate/shots/world-cafe-v03/'
+const OUT = process.env.OUT || '/workspace/pixeldate/shots/world-cafe-v04/'
 const { mkdirSync: mk } = await import('node:fs'); mk(OUT, { recursive: true })
 let bad = 0, n = 0
 // GD's bubble art, as the built CSS may carry it (a hashed file or, under Vite's inline limit, a data: URI)
@@ -73,6 +74,14 @@ const walkTo = async (p, tx, ty, ms = 15000) => {
   }
   return there()
 }
+// every bubble on screen: box (tail included), tail column and tip vs its speaker's head (r.tip), all in art px
+const bubbleGeo = p => p.evaluate(() => { const W = window.__world, u = W.r.k / W.r.dpr, o = document.querySelector('.w-over').getBoundingClientRect()
+  return [...document.querySelectorAll('[data-t=bubble]')].filter(e => e.style.visibility !== 'hidden').map(e => { const r = e.getBoundingClientRect(), tip = W.r.tip(+e.dataset.id), tx = parseFloat(e.style.getPropertyValue('--tx'))
+    return { id: +e.dataset.id, text: e.textContent, mine: e.classList.contains('mine'), l: (r.left - o.left) / u, t: (r.top - o.top) / u, w: r.width / u, H: r.height / u + 4, col: (r.left - o.left + tx) / u, tipX: tip && tip[0] / u, tipY: tip && tip[1] / u, lift: +e.dataset.lift } }) })
+const stackReport = bs => { const g = 2, e = 0.02, near = [], bad = []
+  for (const a of bs) for (const b of bs) if (a !== b && a.l < b.l + b.w + g - e && b.l < a.l + a.w + g - e && a.t < b.t) { const gap = b.t - (a.t + a.H); near.push(gap); if (gap < g - e) bad.push(`${a.text}/${b.text} gap ${gap.toFixed(2)}`) }
+  const tails = bs.filter(b => b.tipX == null || Math.abs(b.col - b.tipX) > e || b.t + b.H > b.tipY + e || (!b.lift && Math.abs(b.t + b.H - b.tipY) > e)).map(b => b.text)
+  return { near, bad, tails, lifted: bs.filter(b => b.lift > 0).length, tight: near.filter(x => Math.abs(x - g) < e).length } }
 const press = (p, sel) => p.touch ? p.tap(sel) : p.click(sel)
 const said = new Map() // per player: say timestamps, to stay inside 3 per 15 s
 async function sayUI(p, text, viaEnter) {
@@ -172,15 +181,27 @@ async function flow(p, o) {
   await sleep(200)
   { const b = await p.evaluate(() => { const W = window.__world, e = [...document.querySelectorAll('[data-t=bubble]')].find(e => e.textContent === 'love the lamps in here'), cs = getComputedStyle(e), r = e.getBoundingClientRect(), o = e.parentElement.getBoundingClientRect()
       const t = getComputedStyle(e, '::after'), u = W.r.k / W.r.dpr, tip = W.r.tip(+e.dataset.id)
-      return { src: cs.borderImageSource, sl: cs.borderImageSlice, col: cs.color, w: r.width / u, h: r.height / u, tail: t.backgroundImage, tw: parseFloat(t.width) / u, tipY: tip && (tip[1] - (r.bottom - o.top)) / u, tipX: tip && (tip[0] - (r.left - o.left)) / u, kids: e.children.length } })
+      return { src: cs.borderImageSource, sl: cs.borderImageSlice, col: cs.color, w: r.width / u, h: r.height / u, tail: t.backgroundImage, tw: parseFloat(t.width) / u, tipY: tip && (tip[1] - (r.bottom - o.top)) / u, tipX: tip && (tip[0] - (r.left - o.left)) / u, lift: +e.dataset.lift || 0, kids: e.children.length } })
     ok(artIs(b.src, 'speech-bubble-9slice') && /^4 fill$/.test(b.sl) && b.col === 'rgb(255, 241, 193)', `${L}: bubble is GD's 9-slice (slice ${b.sl}), cream text (${b.col})`)
     ok(Math.abs(b.w - Math.round(b.w)) < 0.02 && Math.abs(b.h - Math.round(b.h)) < 0.02 && b.w >= 12 && b.h >= 12, `${L}: bubble box snapped to whole art px (${b.w.toFixed(2)}x${b.h.toFixed(2)})`)
-    ok(artIs(b.tail, 'speech-bubble-tail') && Math.abs(b.tw - 9) < 0.02 && Math.abs(b.tipY - 4) < 0.02 && b.tipX >= 4 - 0.02, `${L}: tail tip 2 art px above her head (tail ${b.tw.toFixed(1)} wide, tip ${b.tipY?.toFixed(2)} below the box, column ${b.tipX?.toFixed(1)})`)
+    ok(artIs(b.tail, 'speech-bubble-tail') && Math.abs(b.tw - 9) < 0.02 && Math.abs(b.tipY - 4 - b.lift) < 0.02 && b.tipX >= 4 - 0.02, `${L}: tail tip 2 art px above her head, plus ${b.lift} if stacked (tail ${b.tw.toFixed(1)} wide, tip ${b.tipY?.toFixed(2)} below the box, column ${b.tipX?.toFixed(1)})`)
     ok(b.kids === 0, `${L}: bubble text is plain text (no markup)`) }
   const myLine = o.layout === 'phone' ? 'anyone into climbing?' : 'coffee or tea?'
   await sayUI(p, myLine, o.layout === 'desk')
   ok(await until(() => p.$$eval('[data-t=bubble].mine', es => es.some(e => e.textContent === 'coffee or tea?' || e.textContent === 'anyone into climbing?'))), `${L}: my bubble shows (${o.layout === 'desk' ? 'Enter → type → Enter' : 'tap input, type, Say'})`)
   ok(await until(() => cast.mia.events.some(e => e.t === 'say' && e.id === idOf(cast.mia, p.prof.name) && e.text === myLine)), `${L}: Mia heard me`)
+  await sleep(250)
+  { const bs = await bubbleGeo(p), S = stackReport(bs)
+    ok(bs.length >= 3 && !S.bad.length, `${L}: no two bubbles closer than 2 art px (${bs.length} bubbles${S.bad.length ? '; ' + S.bad.join(', ') : ''})`)
+    ok(S.lifted >= 1 && S.tight >= 1, `${L}: overlapping bubbles stack upward, exactly 2 art px apart (${S.lifted} nudged, gaps ${S.near.map(x => x.toFixed(1)).join(' ')})`)
+    ok(!S.tails.length, `${L}: every tail sits on its own speaker's head column and points down at them (${S.tails.join(', ') || 'all ' + bs.length})`) }
+  { const m = await p.$$eval('[data-t=bubble]', es => es.map(e => ({ mine: e.classList.contains('mine'), b: getComputedStyle(e).borderImageSource, t: getComputedStyle(e, '::after').backgroundImage })))
+    const mine = m.find(x => x.mine), other = m.find(x => !x.mine)
+    ok(mine && artIs(mine.b, 'speech-bubble-9slice-mine') && artIs(mine.t, 'speech-bubble-tail-mine') && other && artIs(other.b, 'speech-bubble-9slice') && !artIs(other.b, 'speech-bubble-9slice-mine'), `${L}: my bubble has the 1 px mint rim (GD's 9-slice + tail with the rim in #48E5C2), others keep #4A3886`)
+    if (mine) { const rim = await p.evaluate(() => { const e = document.querySelector('[data-t=bubble].mine'), r = e.getBoundingClientRect(), u = window.__world.r.k / window.__world.r.dpr; return [r.left, r.top, r.width, r.height, u] })
+      const [x, y, w, h, u] = rim, png = await p.screenshot({ clip: { x, y, width: w, height: h }, encoding: 'base64' }), px = await p.evaluate(async (b, u) => { const i = new Image(); i.src = 'data:image/png;base64,' + b; await i.decode(); const c = new OffscreenCanvas(i.width, i.height), g = c.getContext('2d'); g.drawImage(i, 0, 0); const d = g.getImageData(Math.round(6 * u * devicePixelRatio), Math.round(1.5 * u * devicePixelRatio), 1, 1).data; return [...d].slice(0, 3) }, png, u)
+      ok(px.join() === '72,229,194', `${L}: the rim pixel on screen is mint (${px})`)
+      await p.screenshot({ path: `${OUT}18-own-bubble-${p.sz}.png`, clip: { x: Math.max(0, x - 30), y: Math.max(0, y - 30), width: w + 60, height: h + 80 } }); console.log('  📷', `18-own-bubble-${p.sz}.png`) } }
   await shot(p, '04-bubble')
   if (o.layout === 'desk') { await p.keyboard.press('Escape'); ok(await p.evaluate(() => document.activeElement?.dataset?.t !== 'w-input'), `${L}: Esc leaves the chat input`) }
   // filtered: the sender sees it held; nobody else gets it
@@ -198,7 +219,31 @@ async function flow(p, o) {
   ok(await until(() => p.$('[data-t=w-person]')), `${L}: ${p.touch ? 'tap' : 'click'} a person opens their card`)
   const pn = await p.$eval('[data-t=w-person]', e => e.textContent); ok(pn.includes(o.reportee) && /\d\d–\d\d/.test(pn), `${L}: card shows name + bracket ("${pn.slice(0, 40)}")`)
   ok(!/\b(2[0-9]|3[0-9]) years|seek|women|men\b/i.test(pn), `${L}: card shows no age, prefs or wishes`)
+  { const bt = await p.$$eval('[data-t=w-person] .w-acts .w-btn', es => es.map(e => ({ t: e.dataset.t, bg: getComputedStyle(e).backgroundColor, c: getComputedStyle(e).color })))
+    const blk = bt.find(b => b.t === 'w-block'), hrt = bt.find(b => b.t === 'w-heart'), dark = ['rgb(40, 29, 82)', 'rgb(30, 22, 64)']
+    ok(blk && blk.bg === 'rgb(40, 29, 82)' && blk.c === 'rgb(255, 111, 89)', `${L}: Block is the dark #281D52 button with coral text (${blk?.bg}, ${blk?.c})`)
+    ok(hrt && hrt.bg === 'rgb(255, 111, 89)' && bt.filter(b => b !== hrt).every(b => dark.includes(b.bg)), `${L}: Heart is the only loud button (${bt.map(b => b.t.slice(2) + ' ' + b.bg).join(', ')})`) }
   await shot(p, '06-person')
+  if (o.layout === 'desk') {
+    // a burst of chat so the log has to scroll (2 lines from each person, inside 3 per 15 s)
+    const lines = ['the oat latte is great', 'anyone here before?', 'nice lamps', 'is the music on?', 'first time for me', 'hello all', 'which table is free?', 'I like the rug', 'love this place', 'cosy in here']
+    const who = ['mia', 'noor', 'jo', 'ava', 'lea', 'zed', 'kit', 'rae', 'sol', 'una']
+    for (const r of [0, 1]) { for (const [i, k] of who.entries()) { cast[k].send({ t: 'say', text: `${lines[(i + r * 3) % 10]}${r ? ' :)' : ''}` }); await sleep(60) } await sleep(400) }
+    await until(() => p.$$eval('[data-t=w-log] li', es => es.length >= 22), 6000); await sleep(400)
+    const c = await p.evaluate(() => { const q = s => document.querySelector(s), R = s => q(s)?.getBoundingClientRect().toJSON(), side = q('[data-t=w-side]'), ol = q('[data-t=w-log] ol')
+      return { side: R('[data-t=w-side]'), person: R('[data-t=w-person]'), log: R('[data-t=w-log]'), bar: R('[data-t=w-say]'), help: R('[data-t=w-help]'), hf: parseFloat(getComputedStyle(q('[data-t=w-help]')).fontSize),
+        sideOver: side.scrollHeight - side.clientHeight, oy: getComputedStyle(ol).overflowY, sh: ol.scrollHeight, ch: ol.clientHeight, st: ol.scrollTop,
+        items: [...ol.querySelectorAll('li')].map(li => [li.querySelector('b')?.textContent, li.querySelector('span')?.textContent, li.dataset.mine === '1']) } })
+    ok(c.person && Math.abs(c.person.top - c.side.top - 14) < 2.5, `${L}: person panel pinned at the top of the side column (${(c.person?.top - c.side.top).toFixed(0)} px down)`)
+    ok(c.person && c.log.top >= c.person.bottom && c.bar.top >= c.log.bottom && c.help.top >= c.bar.bottom && Math.abs(c.side.bottom - c.help.bottom - 14) < 2.5 && c.sideOver <= 0, `${L}: then the chat log, the bar, and the help panel at the bottom; nothing spills out of the column`)
+    ok(c.hf <= 12 && c.help.height < 60, `${L}: help is a small panel (${c.hf}px text, ${c.help.height.toFixed(0)} px tall)`)
+    ok(c.oy === 'auto' && c.sh > c.ch + 20 && c.st + c.ch >= c.sh - 2, `${L}: chat log scrolls and stays on the newest line (${c.items.length} lines, ${c.sh} of ${c.ch} px, at the bottom)`)
+    ok(c.items.some(([n, t, m]) => n === 'Mia' && t === 'love the lamps in here' && !m) && c.items.some(([n, t, m]) => n === 'You' && t === myLine && m), `${L}: log has names + text, my own line marked "You"`)
+    ok(!c.items.some(([, t]) => /07700|sam_k/.test(t || '')), `${L}: filtered text never reaches the log`)
+    { const S = stackReport(await bubbleGeo(p)); ok(!S.bad.length && !S.tails.length && S.lifted >= 1, `${L}: the burst stacks too: no overlaps, tails on their speakers (${S.lifted} nudged${S.bad.length ? '; ' + S.bad.join(', ') : ''}${S.tails.length ? '; bad tails ' + S.tails.join(', ') : ''})`) }
+    await shot(p, '17-stacked-bubbles')
+    await p.screenshot({ path: `${OUT}16-side-column-${p.sz}.png`, clip: { x: c.side.left, y: 0, width: c.side.width, height: 900 } }); console.log('  📷', `16-side-column-${p.sz}.png`)
+  }
   await press(p, '[data-t=w-report]'); await p.waitForSelector('[data-t=w-reasons]'); await shot(p, '07-report')
   const nRep = dev.reports.length; await press(p, '[data-t=w-why-rude]')
   ok(await until(() => dev.reports.length > nRep), `${L}: report stored`)

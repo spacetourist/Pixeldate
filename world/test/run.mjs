@@ -14,7 +14,7 @@ const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null
 async function test(name, fn) {
   if (ONLY && !ONLY.test(name)) return
   const t0 = Date.now()
-  try { await fn(); results.push(`ok   ${name} (${Date.now() - t0} ms)`) } catch (e) { failed++; results.push(`FAIL ${name}: ${e.message}`) }
+  try { await fn(); results.push(`ok   ${name} (${Date.now() - t0} ms)`) } catch (e) { failed++; results.push(`FAIL ${name}: ${e.message}\n  ${(e.stack ?? "").split("\n").find(l => l.includes("run.mjs")) ?? ""}`) }
   console.log(results.at(-1))
 }
 const join = async (o = {}, opt = {}) => { const b = new Bot(profile(o), opt); const r = await b.connect(); return [b, r] }
@@ -461,7 +461,7 @@ await test('duets: a declined invite tells the inviter; a passer-by sitting besi
   let a = await dv(A, v => v.ph === 'pick'); assert.equal(a.melody, C.me); assert.ok(!a.inv)
   await goTo(C, 37, 22); a = await dv(A, v => v.ph === 'wait' && !v.melody)
   A.send({ t: 'dsolo' }); const p = await C.wait(() => C.last('piano')?.by === A.me && C.last('piano')); assert.equal(p.song, 'faure-dolly-berceuse')
-  assert.ok(await C.wait(() => C.last('duet')?.on === false)); const s = A.self(); assert.ok(Math.floor(s.x) === PIANO_SEAT[0], 'moved to the middle seat')
+  assert.ok(await C.wait(() => C.last('duet')?.on === false)); assert.ok(await A.wait(() => Math.floor(A.self()?.x) === PIANO_SEAT[0], 2000), 'moved to the middle seat')
   await done()
 })
 await test('couple heart: only while the café call is connected on both sides and both switches are on; on/off per table to the room; never to someone either blocked', async () => {

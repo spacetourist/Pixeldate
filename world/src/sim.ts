@@ -494,7 +494,7 @@ export class Room {
       else if (d.ph === 'res' && d.res && now >= d.res.end) {
         const r = d.res
         if (r.offer && !r.done) { r.done = true; r.no = true; r.end = now + MAYBE_MS; ch = true }   // no answer = Not yet ("Maybe next time")
-        else this.duetCount(d)
+        else { this.duetCount(d); ch = true }
       } else if (d.ph === 'count' && now >= d.at) { d.ph = 'play'; ch = true }
     }
     if (d.inv && (now >= d.inv.exp || !this.byId.has(d.inv.to.id) || !this.byId.has(d.inv.from.id))) this.duetInviteEnd(now >= d.inv.exp ? 'late' : 'gone')

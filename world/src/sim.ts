@@ -2,6 +2,7 @@
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
 import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, type Table } from '../shared/map.ts'
 import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
+import { DUET, DUETS, PICK_MS, OFFER_MS, INVITE_MS, FLIP_MS, DUET_LEAD_MS, BASS_SEAT, MELODY_SEAT, MATCH_HOLD_MS, MAYBE_MS, LEVELUP_MS, MISS_HOLD_MS, type Part, type DuetPhase } from '../shared/duet.ts'
 import { EMOTE_COOLDOWN_MS, isEmote, nextTake, setOf } from '../shared/emote.ts'
 import { SOFAS, SEAT_ORDER, SOFA_FRONT_Y } from '../shared/sofa.ts'
 import { findPath, nearestWalkable, type P } from '../shared/path.ts'
@@ -21,7 +22,7 @@ export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Fi
 export interface Report { at: number; inst: string; by: string; who: string; why: string; ctx: { said: { at: number; text: string }[]; heard: { at: number; text: string }[]; where: [number, number][]; tick: number } }
 /** v05: what a pair keeps across the whole app (one Pair Durable Object per pair in production, shared by every room
     and instance): their level, how many cards into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
-export interface PairRec { lv: number; seg?: number; date: string[] }
+export interface PairRec { lv: number; seg?: number; date: string[]; duetUp?: string }
 /** Where pair records live. load() is async (a Durable Object call); save() is fire-and-forget. */
 export interface PairStore { load(key: string): Promise<PairRec | undefined>; save(key: string, r: PairRec): void }
 /** In-memory pair store: one per process is shared by every room (tests, the Node dev server). */
@@ -50,6 +51,8 @@ class Player {
   bucket = INPUT_PER_S; table: Table | null = null; seen = 0
   /** on a sofa: [sofa index, slot]; sitAt = the tick the player last sat down (who sat second at a table) */
   sofa: [number, number] | null = null; sofaWant: [number, number] | null = null; sitAt = 0
+  /** the duet picked in the piano picker (Start duet) */
+  duetWant: string | null = null
   sets: Record<Field, Set<string>>
   /** voice emotes: when the last one went out, and the last take per emote (never the same take twice in a row) */
   emoteAt = -Infinity; takes: Record<string, string> = {}
@@ -61,7 +64,7 @@ class Player {
   pub(): Pub { return { id: this.id, name: this.name, br: this.br, pav: this.pav } }
 }
 interface Pair { tb: number; key: string; a: Player; b: Player; level: number; seg: number; up: boolean; used: Set<string>; q: Question | null
-  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null
+  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null; duetUp?: string
   /** a call the two started in the café (after both tapped): who reports it connected, and each one's
       "Show our heart in the café" switch (on at the start of every call) */
   live: { up: Set<Player>; sw: Map<Player, boolean> } | null
@@ -70,6 +73,13 @@ interface Pair { tb: number; key: string; a: Player; b: Player; level: number; s
 /** The café piano: who is on the bench, and the song (server time of its first sample, so every client schedules its audio
     against the same clock and a late joiner seeks to now − at). Duets later: seats.bass / seats.melody + a count-in. */
 interface Piano { by: Player | null; song: string | null; at: number; role: Role; seats: { bass: Player | null; melody: Player | null } | null }
+interface DuetS {
+  bass: Player | null; melody: Player | null; ph: DuetPhase; song: string; at: number
+  picks: Map<Player, string>; rnd: Set<Player>; end: number; gone: Part[]
+  res: { match: boolean; coin: string; offer: boolean; yes: Set<Player>; no: boolean; done: boolean; up: number; t0: number; end: number } | null
+  inv: { from: Player; to: Player; exp: number; yes: boolean } | null
+  rec: PairRec | null; key: string
+}
 const pairKey = (a: Player, b: Player) => [a.uid, b.uid].sort().join('|')
 /** Only the two people at a table ever receive anything from these maps. */
 const other = (pr: Pair, p: Player) => pr.a === p ? pr.b : pr.a
@@ -129,14 +139,27 @@ export class Room {
       case 'emote': return this.emote(p, m.e)
       case 'callup': case 'calldown': return this.callLive(p, m.t)
       case 'cheart': return this.coupleSwitch(p, m.on)
+      case 'dstart': return this.duetStart(p, m.id)
+      case 'dsolo': return this.duetSolo(p)
+      case 'dpick': return this.duetPick(p, m.id)
+      case 'doffer': return this.duetOffer(p, m.yes === true)
+      case 'dcancel': return this.duetCancel(p)
+      case 'dagain': return this.duetAgain(p)
+      case 'dlist': return this.duetList(p)
+      case 'dinv': return this.duetInvite(p, m.id)
+      case 'dinvx': { const d = this.duet; if (d?.inv?.from === p) this.duetInviteEnd('cancel'); return }
+      case 'dinvans': return this.duetInviteAns(p, m.yes === true)
     }
   }
+  /** the duet bench (null: nobody on a duet seat) */
+  duet: DuetS | null = null
   close(s: Sock) {
     this.pending.delete(s); const p = this.players.get(s); if (!p) return
     this.players.delete(s); this.byId.delete(p.id)
     for (const o of this.players.values()) if (!this.hidden(o, p)) o.sock.send(JSON.stringify({ t: 'del', id: p.id }))
     this.unpair(p)
     if (this.piano.by === p) { this.piano = { by: null, song: null, at: 0, role: 'solo', seats: null }; this.pianoSend() }
+    if (this.duet) this.duetTick()
   }
 
   private async join(s: Sock, m: any) {
@@ -166,6 +189,7 @@ export class Room {
       if (o !== me) o.sock.send(JSON.stringify({ t: 'add', p: me.pub() }))
     }
     s.send(JSON.stringify(this.pianoView(me)))   // a late joiner hears the song from where it is now
+    if (this.duet) s.send(JSON.stringify(this.duetView(me)))
     for (const tb of this.hearts) { const pr = this.pairs.get(tb); if (pr && !this.hidden(me, pr.a) && !this.hidden(me, pr.b)) s.send(JSON.stringify({ t: 'couple', tb, on: true })) }
   }
   private spawn(): P {
@@ -186,7 +210,7 @@ export class Room {
   private go(p: Player, x: unknown, y: unknown) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) return
     this.sofaLeave(p); p.sofaWant = null
-    if (x === PIANO_SEAT[0] && y === PIANO_SEAT[1] && this.piano.by && this.piano.by !== p) { p.sock.send(JSON.stringify({ t: 'note', k: 'piano-busy' })); return }   // one pianist at a time
+    if (isPianoSeat(x as number, y as number) && this.pianoBusy(p, x as number)) { p.sock.send(JSON.stringify({ t: 'note', k: 'piano-busy' })); return }   // one pianist (or one duet) at a time
     const t = walkable(x as number, y as number) ? [x, y] as P : nearestWalkable(x as number, y as number); if (!t) return
     const path = findPath([Math.floor(p.x), Math.floor(p.y)], t); if (!path) return
     p.path = path; p.dir = null; p.stuck = 0
@@ -251,6 +275,7 @@ export class Room {
     }
     this.tables()
     this.pianoTick()
+    this.duetTick()
     this.snapshots()
   }
   private tables() {
@@ -300,6 +325,7 @@ export class Room {
       const lv = Math.min(LV_MAX, Math.max(1, Math.floor(rec.lv) || 1)), seg = Math.min(LV_SEG, Math.max(0, Math.floor(rec.seg ?? 0)))
       if (lv > pr.level || (lv === pr.level && seg > pr.seg)) { pr.level = lv; pr.seg = seg }
       for (const x of [pr.a, pr.b]) if (rec.date?.includes(x.uid)) pr.date.add(x)
+      pr.duetUp = rec.duetUp
     }
     pr.loaded = true
     if (!this.reconcile(pr) && pr.level !== lv0) this.redeal(pr)
@@ -337,7 +363,7 @@ export class Room {
   }
   private sendCard(pr: Pair) { for (const v of [pr.a, pr.b]) v.sock.send(JSON.stringify(this.view(pr, v))) }
   private persist(pr: Pair) {
-    this.ps.save(pr.key, { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid) })
+    this.ps.save(pr.key, { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid), ...(pr.duetUp ? { duetUp: pr.duetUp } : {}) })
   }
   pairOf(p: Player) { for (const pr of this.pairs.values()) if (pr.a === p || pr.b === p) return pr; return null }
   private answer(p: Player, text: unknown) {
@@ -407,7 +433,7 @@ export class Room {
     let on: Player | null = pn.by && this.byId.get(pn.by.id) === pn.by && atBench(pn.by) ? pn.by : null   // the pianist keeps the bench
     if (!on) for (const p of this.players.values()) if (p.sitting && Math.floor(p.x) === PIANO_SEAT[0] && Math.floor(p.y) === PIANO_SEAT[1]) { on = p; break }
     if (on !== pn.by) { pn.by = on; pn.song = null; pn.at = 0; this.pianoSend() }
-    else if (pn.song && this.now() >= pn.at + (PIECE.get(pn.song)?.durationSec ?? 0) * 1000) { pn.song = null; pn.at = 0; this.pianoSend('end') }
+    else if (pn.song && this.now() >= pn.at + (PIECE.get(pn.song)?.durationSec ?? DUET.get(pn.song)?.durationSec ?? 0) * 1000) { pn.song = null; pn.at = 0; this.pianoSend('end') }
   }
   /** What viewer v knows about the piano; someone who blocked the pianist (or was blocked) hears nothing from them. */
   pianoView(v: Player, why?: string) {
@@ -420,6 +446,180 @@ export class Room {
     this.piano.song = id; this.piano.at = this.now() + LEAD_MS; this.pianoSend()
   }
   private pianoStop(p: Player) { if (p === this.piano.by && this.piano.song) { this.piano.song = null; this.piano.at = 0; this.pianoSend('stop') } }
+
+  // ── duets (GD world/duet/README) ────────────────────────────────────────────────────────────────────────────────
+  /** A piano seat is busy: the solo seat while anyone is on a duet seat; a duet seat while a solo pianist plays, while
+      it is taken, once the two are under way, or when the one waiting there and you are hidden from each other. */
+  private pianoBusy(p: Player, x: number) {
+    const d = this.duet, pn = this.piano
+    if (x === PIANO_SEAT[0]) return !!(pn.by && pn.by !== p) || !!(d && d.bass !== p && d.melody !== p)
+    if (pn.by && pn.by !== p) return true
+    if (!d) return false
+    const part = x === BASS_SEAT[0] ? 'bass' : 'melody', other = part === 'bass' ? d.melody : d.bass
+    if (d[part] && d[part] !== p) return true
+    if (d.ph !== 'wait' && other !== p) return true
+    return !!(other && other !== p && this.hidden(p, other))
+  }
+  private seatedAt(at: readonly [number, number]) {
+    for (const p of this.players.values()) if (p.sitting && !p.sofa && Math.floor(p.x) === at[0] && Math.floor(p.y) === at[1]) return p
+    return null
+  }
+  private newDuet(song: string): DuetS {
+    return { bass: null, melody: null, ph: 'wait', song, at: 0, picks: new Map(), rnd: new Set(), end: 0, res: null, inv: null, rec: null, key: '', gone: [] }
+  }
+  /** Who sits where, phase timers, invite expiry. Runs every tick after pianoTick. */
+  private duetTick() {
+    const now = this.now()
+    let b = this.seatedAt(BASS_SEAT), m = this.seatedAt(MELODY_SEAT), d = this.duet, ch = false
+    if (!d) { if (!b && !m) return; d = this.duet = this.newDuet(DUET.has((b ?? m)!.duetWant ?? '') ? (b ?? m)!.duetWant! : DUETS[0].id); ch = true }
+    if (d.ph === 'play') {
+      // mid-song: a player who stands up leaves their stem to fade out; nobody new takes the seat until the end
+      for (const part of ['bass', 'melody'] as const) if (d[part] && (part === 'bass' ? b : m) !== d[part]) { d.gone.push(part); d[part] = null; ch = true }
+      if (!d.bass && !d.melody) { this.duet = null; this.duetSend(); return }
+      if (now >= d.at + DUET.get(d.song)!.durationSec * 1000) { d.gone = []; d.ph = d.bass && d.melody ? 'both' : 'wait'; d.res = null; ch = true }
+    } else {
+      if (d.bass !== b || d.melody !== m) {
+        const sat = (b && b !== d.bass) || (m && m !== d.melody), left = (d.bass && d.bass !== b) || (d.melody && d.melody !== m)
+        for (const p of [b, m]) if (p && p !== d.bass && p !== d.melody && p.duetWant && DUET.has(p.duetWant)) d.song = p.duetWant
+        d.bass = b; d.melody = m; ch = true
+        if (!b && !m) { this.duetInviteEnd('gone'); this.duet = null; this.duetSend(); return }
+        if (left) { d.ph = 'wait'; d.res = null; d.picks.clear(); d.rnd.clear() }
+        if (d.inv && (left && (d.inv.from !== b && d.inv.from !== m))) this.duetInviteEnd('gone')
+        if (b && m) {
+          if (d.inv) this.duetInviteEnd(d.inv.to === b || d.inv.to === m ? 'came' : 'taken')   // a passer-by sitting cancels the invite
+          if (sat) this.duetPickStart(d)
+        }
+      }
+      if (d.ph === 'pick' && now >= d.end) this.duetReveal(d)
+      else if (d.ph === 'res' && d.res && now >= d.res.end) {
+        const r = d.res
+        if (r.offer && !r.done) { r.done = true; r.no = true; r.end = now + MAYBE_MS; ch = true }   // no answer = Not yet ("Maybe next time")
+        else this.duetCount(d)
+      } else if (d.ph === 'count' && now >= d.at) { d.ph = 'play'; ch = true }
+    }
+    if (d.inv && (now >= d.inv.exp || !this.byId.has(d.inv.to.id) || !this.byId.has(d.inv.from.id))) this.duetInviteEnd(now >= d.inv.exp ? 'late' : 'gone')
+    if (ch) this.duetSend()
+  }
+  private duetPickStart(d: DuetS) {
+    d.ph = 'pick'; d.picks.clear(); d.rnd.clear(); d.res = null; d.end = this.now() + PICK_MS
+    const a = d.bass!, b = d.melody!, key = pairKey(a, b); d.key = key; d.rec = null
+    this.ps.load(key).then(r => { if (this.duet === d && d.key === key) d.rec = r ?? { lv: 1, seg: 0, date: [] } }, () => {})
+  }
+  /** Both picked (or the 30 s ran out: a missing pick is a random song, never a match). Same song: In tune! (+ the
+      level-up offer when the two are on a date together, below the top level, and haven't had one today); different:
+      the piano picks — a 50/50 server coin flip between the two cards. */
+  private duetReveal(d: DuetS) {
+    for (const p of [d.bass!, d.melody!]) if (!d.picks.has(p)) { d.picks.set(p, DUETS[Math.floor(Math.random() * DUETS.length)].id); d.rnd.add(p) }
+    const a = d.picks.get(d.bass!)!, b = d.picks.get(d.melody!)!, match = a === b && !d.rnd.size, now = this.now()
+    const rec = d.rec, today = new Date(now).toISOString().slice(0, 10)
+    const offer = match && !!rec && rec.date.includes(d.bass!.uid) && rec.date.includes(d.melody!.uid) && rec.lv < LV_MAX && rec.duetUp !== today
+    const coin = match ? a : Math.random() < 0.5 ? a : b
+    d.song = coin; d.ph = 'res'
+    d.res = { match, coin, offer, yes: new Set(), no: false, done: !offer, up: 0, t0: now, end: now + (match ? (offer ? OFFER_MS : MATCH_HOLD_MS) : FLIP_MS + MISS_HOLD_MS) }
+  }
+  private duetCount(d: DuetS) {
+    d.ph = 'count'; d.res = null; d.at = this.now() + DUET_LEAD_MS + DUET.get(d.song)!.countInSec * 1000
+  }
+  private duetOf(p: Player) { const d = this.duet; return d && (d.bass === p || d.melody === p) ? d : null }
+  private duetPick(p: Player, id: unknown) {
+    const d = this.duetOf(p); if (!d || d.ph !== 'pick' || typeof id !== 'string' || !DUET.has(id)) return
+    d.picks.set(p, id)   // changeable until both have picked
+    if (d.picks.size === 2) this.duetReveal(d)
+    this.duetSend()
+  }
+  private duetOffer(p: Player, yes: boolean) {
+    const d = this.duetOf(p), r = d?.res; if (!d || !r || !r.offer || r.done) return
+    if (!yes) { r.done = true; r.no = true; r.end = this.now() + MAYBE_MS }
+    else {
+      r.yes.add(p)
+      if (r.yes.size === 2 && d.rec) {
+        const rec = d.rec, today = new Date(this.now()).toISOString().slice(0, 10)
+        rec.lv = Math.min(LV_MAX, rec.lv + 1); rec.seg = 0; rec.duetUp = today; this.ps.save(d.key, rec)
+        r.done = true; r.up = rec.lv; r.end = this.now() + LEVELUP_MS
+        const a = d.bass!, b = d.melody!
+        Promise.all([peerTag(b.uid), peerTag(a.uid)]).then(([tb, ta]) => {
+          for (const [x, tag] of [[a, tb], [b, ta]] as const) if (this.byId.get(x.id) === x) x.sock.send(JSON.stringify({ t: 'dlv', peer: tag, lv: rec.lv }))
+        })
+      }
+    }
+    this.duetSend()
+  }
+  private duetCancel(p: Player) {
+    const d = this.duetOf(p); if (!d || !(d.ph === 'count' || d.ph === 'pick' || d.ph === 'res') || !d.bass || !d.melody) return
+    d.ph = 'both'; d.res = null; d.at = 0; this.duetSend()
+  }
+  private duetAgain(p: Player) { const d = this.duetOf(p); if (d && d.ph === 'both' && d.bass && d.melody) { this.duetPickStart(d); this.duetSend() } }
+  /** "Start duet" in the picker: from the solo seat you shift onto Bass; from the floor you walk there. */
+  private duetStart(p: Player, id: unknown) {
+    if (typeof id !== 'string' || !DUET.has(id)) return
+    p.duetWant = id
+    const d = this.duetOf(p)
+    if (d) { if (d.ph === 'wait') { d.song = id; this.duetSend() } return }
+    if (this.duet) return p.sock.send(JSON.stringify({ t: 'note', k: 'piano-busy' }))
+    if (this.piano.by === p) {
+      this.piano = { by: null, song: null, at: 0, role: 'solo', seats: null }
+      p.x = BASS_SEAT[0] + .5; p.y = BASS_SEAT[1] + .5; p.path = []; p.dir = null; p.sitting = true; p.sitAt = this.tickN
+      this.pianoSend(); this.duetTick()
+    } else this.go(p, BASS_SEAT[0], BASS_SEAT[1])
+  }
+  /** "Play solo instead": the one waiting moves to the middle and plays the whole duet (the _mix). */
+  private duetSolo(p: Player) {
+    const d = this.duetOf(p); if (!d || d.ph !== 'wait' || (d.bass && d.melody)) return
+    const song = d.song; this.duetInviteEnd('cancel'); this.duet = null; this.duetSend()
+    p.x = PIANO_SEAT[0] + .5; p.y = PIANO_SEAT[1] + .5; p.path = []; p.dir = null; p.sitting = true
+    this.piano = { by: p, song, at: this.now() + LEAD_MS, role: 'solo', seats: null }; this.pianoSend()
+  }
+  /** The invite sheet lists only people with a heart for you: sat with you first (most recent first), then the café. */
+  private canInvite(p: Player, o: Player) { return o !== p && o.sets.hearted.has(p.uid) && !this.hidden(p, o) && !this.duetOf(o) && this.piano.by !== o }
+  private duetList(p: Player) {
+    const met = [...p.sets.met], people = [...this.players.values()].filter(o => this.canInvite(p, o))
+      .map(o => ({ id: o.id, sat: met.lastIndexOf(o.uid) })).sort((a, b) => (b.sat - a.sat)).map(o => ({ id: o.id, sat: o.sat >= 0 }))
+    p.sock.send(JSON.stringify({ t: 'dlist', people }))
+  }
+  private duetInvite(p: Player, id: unknown) {
+    const d = this.duetOf(p), o = typeof id === 'number' ? this.byId.get(id) : undefined
+    if (!d || d.bass !== p || d.melody || d.ph !== 'wait' || d.inv || !o || !this.canInvite(p, o)) return
+    d.inv = { from: p, to: o, exp: this.now() + INVITE_MS, yes: false }
+    o.sock.send(JSON.stringify({ t: 'dinvite', from: p.id, song: d.song, ms: INVITE_MS }))
+    this.duetSend()
+  }
+  private duetInviteAns(p: Player, yes: boolean) {
+    const d = this.duet, inv = d?.inv; if (!d || !inv || inv.to !== p) return
+    if (!yes) return this.duetInviteEnd('no')
+    inv.yes = true; inv.exp = Math.max(inv.exp, this.now() + 20000)   // walking over
+    p.duetWant = null; this.go(p, MELODY_SEAT[0], MELODY_SEAT[1])
+    p.sock.send(JSON.stringify({ t: 'dinvite', from: 0, why: 'join' }))
+  }
+  /** why: cancel (the inviter) · no / late (→ the inviter: "Sam can't play right now") · taken (a passer-by sat) · came · gone */
+  private duetInviteEnd(why: string) {
+    const d = this.duet, inv = d?.inv; if (!d || !inv) return
+    d.inv = null
+    if (why !== 'came' && !inv.yes || why === 'taken') inv.to.sock.send(JSON.stringify({ t: 'dinvite', from: 0, why }))
+    if (why === 'no' || why === 'late') inv.from.sock.send(JSON.stringify({ t: 'note', k: 'duet-cant', id: inv.to.id }))
+    this.duetSend()
+  }
+  /** What v knows about the duet. Everyone sees who sits where and the song once it is fixed; the two seated see the
+      pick game (never the other's pick until both have picked), the reveal and their invite. Someone hidden from a
+      seated player sees no duet at all (and hears nothing). */
+  duetView(v: Player) {
+    const d = this.duet
+    if (!d || [d.bass, d.melody].some(x => x && this.hidden(v, x))) return { t: 'duet', on: false }
+    const me = d.bass === v ? 'bass' : d.melody === v ? 'melody' : null, o = me === 'bass' ? d.melody : me === 'melody' ? d.bass : null
+    const fixed = d.ph === 'count' || d.ph === 'play'
+    const out: any = { t: 'duet', on: true, bass: d.bass?.id ?? 0, melody: d.melody?.id ?? 0, ph: d.ph, now: this.now(),
+      song: fixed || me ? d.song : null, at: fixed ? d.at : 0, gone: d.gone, me }
+    if (me) {
+      if (d.ph === 'pick') out.pick = { end: d.end, mine: d.picks.get(v) ?? null, them: !!o && d.picks.has(o) }
+      if (d.ph === 'res' && d.res && o) {
+        const r = d.res
+        out.res = { match: r.match, coin: r.coin, mine: d.picks.get(v), theirs: d.picks.get(o), rnd: d.rnd.has(v), rndThem: d.rnd.has(o),
+          offer: r.offer, yes: r.yes.has(v), them: r.yes.has(o), no: r.no, up: r.up, lv: d.rec?.lv ?? 1, t0: r.t0, end: r.end }
+      }
+      if (d.inv && d.inv.from === v) out.inv = { to: d.inv.to.id, exp: d.inv.exp }
+    }
+    return out
+  }
+  private duetSend() { for (const v of this.players.values()) v.sock.send(JSON.stringify(this.duetView(v))) }
 
   /** Either of the two said Not for me to the other. */
   refused(a: Player, b: Player) { return a.sets.passed.has(b.uid) || b.sets.passed.has(a.uid) }

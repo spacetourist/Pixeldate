@@ -3,7 +3,8 @@
    src/world/art); the grid below is hand-written over it, tile by tile, from GD's scene layout (src/build.py landscape()).
    Legend: # wall / wall top · C bar counter (and the staff side behind it) · T table for two · c chair back
            s chair seat (sit here) · P plant · L standing lamp · S sofa / candle side table · K piano + bench
-           p the piano bench seat (one pianist; shared/piano.ts)
+           p the piano bench seats: the solo seat in the middle, the duet's Bass (left) and Melody (right) either side
+             (shared/piano.ts, shared/duet.ts); never walked across, only sat on
            D doormat (spawn) · . floor
    All blocked: # C T c P L S K. Rugs are art only (walkable). */
 export const TILE = 16
@@ -36,7 +37,7 @@ export const MAPS: Record<string, MapDef> = {
     '#..............................L..KKK..#',
     '#P................................KKK..#',
     '#P..cTTc..........................KKK..#',
-    '#...sTTs....cTTc....cTTc..........KpK..#',
+    '#...sTTs....cTTc....cTTc..........ppp..#',
     '#P.......P..sTTs....sTTs...P...........#',
     '#P.........................P...........#',
     '########################################',

@@ -5,6 +5,7 @@
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat } from '../../world/shared/map.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
+import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
 import { F_HEART, F_BROKEN, F_MOVING, F_SIT, F_ME } from '../../world/shared/proto.ts'
 import { composeDir, footX, WALK_FRAME_MS, WALK_W, WALK_H, SIT_D, SIT_CHAIR, PIANO_FRAME_MS, type Dir, type Frame } from './walk.ts'
 import { parseOptions } from '../avatar/kit/map.ts'
@@ -101,6 +102,12 @@ export class Renderer {
   /** the café piano as the server last said (index.tsx sets it): the song and its start, in this client's clock (ms,
       performance.now() time base), for the pianist's hands and the notes over the lid */
   piano: { by: number; song: string | null; at: number } = { by: 0, song: null, at: 0 }
+  /** the duet as the server last said (index.tsx): who's on Bass / Melody, the phase, the song and its downbeat (this
+      client's clock, ms), the parts whose player stood up mid-song */
+  duet: { on: boolean; bass: number; melody: number; ph: string; song: string | null; at: number; gone: Part[] } = { on: false, bass: 0, melody: 0, ph: '', song: null, at: 0, gone: [] }
+  /** what the duet layer drew last frame (tests): the duet bench, the seat-open frame, the count-in numeral + frame */
+  duetOn = { bench: false, seatOpen: -1, count: '' }
+  private bench = new Sprite(); private seatOpen = new Sprite(); private countIn = new Sprite(); private SO: Texture[] = []; private CI: Texture[][] = []
   /** notes drawn last frame (tests) */
   notesOn = 0
   private notes = new Container(); private G: Texture[] = []
@@ -144,6 +151,18 @@ export class Renderer {
     this.CH = COUPLE_MS.map((_, i) => new Texture({ source: chS, frame: new Rectangle(i * 15, 0, 15, 13) }))
     this.CS = [0, 16].map(y => [0, 1, 2, 3].map(i => new Texture({ source: csS, frame: new Rectangle(i * 7, y, 7, 16) })))
     this.CD = [[0, 5, 5], [6, 5, 5], [12, 7, 6]].map(([x, w, h]) => new Texture({ source: cdS, frame: new Rectangle(x, 6 - h, w, h) }))
+    // GD's duet bench (world/duet/README.md): over the solo bench while a duet (or a duet's mix) is on, sorted with the two
+    // players at the bench's bottom row; the seat-open marker (2 frames, 500 ms) while Melody is empty; the count-in numerals
+    const CIN = [1, 2, 3].flatMap(n => [0, 1, 2, 3, 4, 5].map(f => `duet/countin-${n}-f${f}.png`))
+    const [bp, so, ...ci] = await Promise.all(['duet/bench-patch.png', 'duet/duet-seat-open.png', ...CIN].map(load))
+    this.art['bench-patch'] = [bp.width, bp.height]; this.art['duet-seat-open'] = [so.width, so.height]; this.art['countin'] = [ci[0].width, ci[0].height]
+    this.bench.texture = tex(bp); this.bench.position.set(DUET_PX.bench[0], DUET_PX.bench[1]); this.bench.zIndex = (DUET_PX.bench[1] + 16) * 1024; this.bench.visible = false
+    const soS = tex(so).source; this.SO = [0, 24].map(x => new Texture({ source: soS, frame: new Rectangle(x, 0, 24, 32) }))
+    this.seatOpen.position.set(DUET_PX.seatOpen[0], DUET_PX.seatOpen[1]); this.seatOpen.zIndex = (DUET_PX.bench[1] + 16) * 1024 + 3; this.seatOpen.visible = false
+    this.CI = [0, 1, 2].map(n => ci.slice(n * 6, n * 6 + 6).map(tex))
+    this.countIn.position.set(DUET_PX.countIn[0] - 20, DUET_PX.countIn[1] - 20); this.countIn.visible = false
+    this.bench.label = 'duet-bench'; this.seatOpen.label = 'duet-seat-open'
+    this.people.addChild(this.bench, this.seatOpen); this.notes.addChild(this.countIn)
     const front = await load('tiles/sofa3-front.png'); T.sofaFront = tex(front); this.art['sofa3-front'] = [front.width, front.height]
     for (const sf of SOFAS) { const sp = new Sprite(T.sofaFront); sp.position.set(sf.x * TILE, sf.y * TILE); sp.zIndex = sofaZ(sf.y, 4); sp.label = 'sofa-front-' + sf.id; this.people.addChild(sp) }
     T.dot = tex(paint(['mm', 'mm'], { m: '#48E5C2' }))
@@ -223,11 +242,13 @@ export class Renderer {
       seen.add(e.id); const x = this.ent(e.id), d = dirOf(e), sit = !!(e.f & F_SIT)
       let [fx, fy] = this.feet(net, e, now)
       const atPiano = sit && isPianoSeat(Math.floor(e.x), Math.floor(e.y)), playing = atPiano && e.id === this.piano.by && !!this.piano.song && now >= this.piano.at
+      const part = atPiano ? partAt(Math.floor(e.x)) : null
       const onSofa = sit && at(Math.floor(e.x), Math.floor(e.y)) === 'S'
-      const fr: Frame = onSofa ? 'sofaBody' : atPiano ? (playing && !calm && Math.floor((now - this.piano.at) / PIANO_FRAME_MS) % 2 ? 'piano1' : 'piano0') : sit ? 'sit' : (e.f & F_MOVING) ? (Math.floor((now + e.id * 53) / WALK_FRAME_MS) % 4) as Frame : 'stand'
+      const fr: Frame = onSofa ? 'sofaBody' : part ? this.duetFrame(part, now, calm) : atPiano ? (playing && !calm && Math.floor((now - this.piano.at) / PIANO_FRAME_MS) % 2 ? 'piano1' : 'piano0') : sit ? 'sit' : (e.f & F_MOVING) ? (Math.floor((now + e.id * 53) / WALK_FRAME_MS) % 4) as Frame : 'stand'
       const pav = net.pubs.get(e.id)?.pav ?? (e.id === net.me ? net.p.pav : undefined), s = this.sprite(e.id, pav, onSofa ? 'down' : d, fr)
       let sx: number, sy: number, seatZ = 0
-      if (atPiano) { [sx, sy] = PIANO_PX.sprite as unknown as [number, number]; fx = sx + 12; fy = sy + 32 }
+      if (part) { [sx, sy] = DUET_PX[part] as unknown as [number, number]; fx = sx + 12; fy = sy + 32; seatZ = (DUET_PX.bench[1] + 16) * 1024 + (part === 'bass' ? 1 : 2) }
+      else if (atPiano) { [sx, sy] = PIANO_PX.sprite as unknown as [number, number]; fx = sx + 12; fy = sy + 32; if (this.duetBench()) seatZ = (DUET_PX.bench[1] + 16) * 1024 + 1 }
       else if (onSofa) { const st = seatOf(e.x, e.y)!; [sx, sy] = seatPx(st[0], st[1]); fx = sx + 12; fy = sy + 32; seatZ = sofaZ(SOFAS[st[0]].y, 1 + st[1])
         // the legs layer, same offset as the body, over the sofa front
         x.legs.texture = this.sprite(e.id, pav, 'down', 'sofaLegs').t; x.legs.position.set(sx, sy); x.legs.zIndex = sofaZ(SOFAS[st[0]].y, 5 + st[1]) }
@@ -255,6 +276,7 @@ export class Renderer {
       else if (heart && e.id !== net.me) far.push({ id: e.id, x: fx - this.camX, y: fy - 14 - this.camY })
     }
     for (const [id, x] of this.ents) if (!seen.has(id)) { x.root.destroy(); x.legs.destroy(); x.mark.destroy(); this.ents.delete(id) }
+    this.drawDuet(now, calm)
     this.drawNotes(now, calm)
     this.drawCouple(now, calm)
     this.arrows = this.placeArrows(far, bodies)
@@ -281,13 +303,44 @@ export class Renderer {
   /** GD's floating notes over the lid while a song plays: one note per noteEveryMs() (2 beats; a bar in slow 3/4; the
       Audio Engineer's Clair de lune / Nocturne overrides), counted from the song's start so every screen agrees; each
       lives 6 frames of 120 ms, rising 4 px a frame with GD's sway and fade. Reduced motion: one still note. */
+  /** the duet's notes play from the downbeat (none during the count-in); a duet's mix (Play solo instead) from its start */
+  private noteSrc(): { at: number; dur: number; every: number } | null {
+    const d = this.duet, du = d.on && d.ph === 'play' && d.song ? DUET.get(d.song) : undefined
+    if (du) return { at: d.at, dur: du.durationSec * 1000, every: du.beatSec * 2000 }
+    const p = this.piano, pc = p.song ? PIECE.get(p.song) : undefined, pd = p.song ? DUET.get(p.song) : undefined
+    if (pc) return { at: p.at, dur: pc.durationSec * 1000, every: noteEveryMs(pc) }
+    if (pd) return { at: p.at, dur: pd.durationSec * 1000, every: pd.beatSec * 2000 }
+    return null
+  }
+  private duetBench() { const d = this.duet; return (d.on && !!(d.bass || d.melody)) || (!!this.piano.song && DUET.has(this.piano.song)) }
+  /** GD's duet pose: FRAME_MS 220 from the downbeat, Bass on t % 2 and Melody on (t + 1) % 2 (counterpoint); frame 0 held
+      with no notes (waiting, the pick, the count-in, after the end; reduced motion) */
+  private duetFrame(part: Part, now: number, calm: boolean): Frame {
+    const d = this.duet, du = d.on && d.ph === 'play' && d.song ? DUET.get(d.song) : undefined
+    if (!du || calm || now < d.at || now > d.at + du.durationSec * 1000 || d.gone.includes(part)) return part === 'bass' ? 'bass0' : 'melody0'
+    const t = Math.floor((now - d.at) / PIANO_FRAME_MS)
+    return part === 'bass' ? (t % 2 ? 'bass1' : 'bass0') : ((t + 1) % 2 ? 'melody1' : 'melody0')
+  }
+  private drawDuet(now: number, calm: boolean) {
+    const d = this.duet, on = this.duetBench(); this.bench.visible = on
+    const open = d.on && d.ph === 'wait' && !!d.bass && !d.melody
+    this.seatOpen.visible = open; const sf = calm ? 0 : Math.floor(now / 500) % 2; if (open) this.seatOpen.texture = this.SO[sf]
+    // count-in: from downbeat − countInSec, one numeral a beat (3, 2, 1), 6 frames a beat, no "Go"
+    const du = d.on && (d.ph === 'count' || d.ph === 'play') && d.song ? DUET.get(d.song) : undefined
+    let cnt = ''
+    if (du && this.CI.length) { const t = now - (d.at - du.countInSec * 1000), beat = du.beatSec * 1000, k = Math.floor(t / beat)
+      if (t >= 0 && k < du.countInBeats && k < 3) { const n = 3 - k, f = calm ? 0 : Math.min(5, Math.floor((t - k * beat) / (beat / 6))); this.countIn.texture = this.CI[n - 1][f]; cnt = n + ':' + f } }
+    this.countIn.visible = !!cnt
+    this.duetOn = { bench: on, seatOpen: open ? sf : -1, count: cnt }
+  }
   private drawNotes(now: number, calm: boolean) {
-    const p = this.piano, pc = p.song ? PIECE.get(p.song) : undefined, spr = this.notes.children as Sprite[]
+    const ns = this.noteSrc(), spr = (this.notes.children as Sprite[]).filter(c => c !== this.countIn)
     for (const s of spr) s.visible = false; this.notesOn = 0
-    if (!pc || now < p.at || now > p.at + pc.durationSec * 1000) return
+    if (!ns || now < ns.at || now > ns.at + ns.dur) return
+    const p = ns
     const [bx, by] = PIANO_PX.notes, life = NOTE.frameMs * NOTE.life
     if (calm) { const s = spr[0]; s.texture = this.G[0]; s.alpha = 1; s.position.set(bx - 4, by - 9 - 8); s.visible = true; this.notesOn = 1; return }
-    const every = noteEveryMs(pc), t = now - p.at, i0 = Math.max(0, Math.floor((t - life) / every) + 1), i1 = Math.floor(t / every)
+    const every = ns.every, t = now - p.at, i0 = Math.max(0, Math.floor((t - life) / every) + 1), i1 = Math.floor(t / every)
     for (let i = i0, k = 0; i <= i1 && k < spr.length; i++, k++) {
       const age = t - i * every, f = Math.floor(age / NOTE.frameMs); if (f < 0 || f >= NOTE.life) continue
       const s = spr[k], g = i % 3; s.texture = this.G[g]; s.alpha = NOTE.alpha[f] / 255

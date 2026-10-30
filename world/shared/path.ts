@@ -1,8 +1,10 @@
 /* A* on the café grid, 8 directions without cutting wall corners. Shared by server and client. */
-import { H, W, walkable } from './map.ts'
+import { H, W, walkable, isPianoSeat } from './map.ts'
 export type P = [number, number]
 export function findPath(from: P, to: P, blocked?: (x: number, y: number) => boolean): P[] | null {
-  const ok = (x: number, y: number) => walkable(x, y) && !(blocked && blocked(x, y) && !(x === to[0] && y === to[1]))
+  // the piano bench seats are sat on, never walked across: only the goal (or where you already are) may be one
+  const end = (x: number, y: number) => (x === to[0] && y === to[1]) || (x === from[0] && y === from[1])
+  const ok = (x: number, y: number) => walkable(x, y) && !(blocked && blocked(x, y) && !(x === to[0] && y === to[1])) && (!isPianoSeat(x, y) || end(x, y))
   if (!walkable(to[0], to[1])) return null
   const idx = (x: number, y: number) => y * W + x, N = W * H
   const g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N)

@@ -44,6 +44,23 @@ export type ServerMsg =
   | { t: 'emote'; id: number; e: string; take: string } | { t: 'emote'; ok: false; why: 'slow'; wait: number }
   /** the café call ended (either side hung up or stood up) / the couple heart over table tb is on or off for everyone */
   | { t: 'callend' } | { t: 'couple'; tb: number; on: boolean }
+  /** the duet bench (shared/duet.ts, sim.ts duetView): seats (player ids, 0 = open), phase, the fixed song and its
+      count-in start (at: the downbeat, server ms); gone = stems whose player stood up mid-song (fade them). me: your
+      part when you're seated; pick / res / inv: only to the two seated (never the other's pick before both picked). */
+  | DuetView
+  /** the invite sheet's list (only people with a heart for you; sat = sat at a table with you) */
+  | { t: 'dlist'; people: { id: number; sat: boolean }[] }
+  /** an invite to you (from 0: it's over; why: join / no / late / taken / cancel / gone) */
+  | { t: 'dinvite'; from: number; song?: string; ms?: number; why?: string }
+  /** a duet level-up: your new level with the peer (the app's pairlv tag) */
+  | { t: 'dlv'; peer: string; lv: number }
+export type DuetView = { t: 'duet'; on: false } | {
+  t: 'duet'; on: true; bass: number; melody: number; ph: 'wait' | 'pick' | 'res' | 'count' | 'play' | 'both'; now: number
+  song: string | null; at: number; gone: ('bass' | 'melody')[]; me: 'bass' | 'melody' | null
+  pick?: { end: number; mine: string | null; them: boolean }
+  res?: { match: boolean; coin: string; mine: string; theirs: string; rnd: boolean; rndThem: boolean; offer: boolean; yes: boolean; them: boolean; no: boolean; up: number; lv: number; t0: number; end: number }
+  inv?: { to: number; exp: number }
+}
 export type ClientMsg =
   | { t: 'join'; invite: string; p: { name: string; br: [number, number]; min: number; max: number; iam: string; seek: string; uid: string; pav?: string; adult?: boolean } }
   | { t: 'go'; x: number; y: number } | { t: 'dir'; dx: number; dy: number }
@@ -59,6 +76,10 @@ export type ClientMsg =
   | { t: 'emote'; e: string }
   /** the café call: my video is connected / it ended; my "Show our heart in the café" switch */
   | { t: 'callup' | 'calldown' } | { t: 'cheart'; on: boolean }
+  /** duets: Start duet (walk to / shift onto Bass) · Play solo instead · my secret pick · the level-up offer · Cancel
+      (count-in / pick) · Play another · the invite sheet list · invite / cancel it · answer one */
+  | { t: 'dstart'; id: string } | { t: 'dsolo' } | { t: 'dpick'; id: string } | { t: 'doffer'; yes: boolean } | { t: 'dcancel' } | { t: 'dagain' }
+  | { t: 'dlist' } | { t: 'dinv'; id: number } | { t: 'dinvx' } | { t: 'dinvans'; yes: boolean }
 /** What one of the two at a table sees (sent only to them): level, the card, the answers (theirs only once both are in),
     the date opt-ins, and a pending call request ('out' = I asked, 'in' = they asked). */
 export interface Table { tb: number; lv: number; seg: number; up: boolean; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null

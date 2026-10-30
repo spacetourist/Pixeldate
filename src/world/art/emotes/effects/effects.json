@@ -1,0 +1,108 @@
+{
+ "frame_w": 24,
+ "frame_h": 24,
+ "anchor": {
+  "frame_topleft": [
+   0,
+   -24
+  ],
+  "with_heart_marker": [
+   0,
+   -35
+  ],
+  "seated_add_y": 3
+ },
+ "emotes": {
+  "giggle": {
+   "frames": 12,
+   "frame_ms": [
+    115,
+    115,
+    115,
+    115,
+    115,
+    115,
+    115,
+    115,
+    115,
+    115,
+    115,
+    115
+   ],
+   "duration_ms": 1380,
+   "sheet": "giggle.png"
+  },
+  "sigh": {
+   "frames": 12,
+   "frame_ms": [
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120
+   ],
+   "duration_ms": 1440,
+   "sheet": "sigh.png"
+  },
+  "groan": {
+   "frames": 10,
+   "frame_ms": [
+    140,
+    140,
+    140,
+    140,
+    140,
+    140,
+    140,
+    140,
+    140,
+    140
+   ],
+   "duration_ms": 1400,
+   "sheet": "groan.png"
+  },
+  "aww": {
+   "frames": 12,
+   "frame_ms": [
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125,
+    125
+   ],
+   "duration_ms": 1500,
+   "sheet": "aww.png"
+  },
+  "gasp": {
+   "frames": 10,
+   "frame_ms": [
+    60,
+    80,
+    80,
+    100,
+    160,
+    160,
+    160,
+    160,
+    130,
+    110
+   ],
+   "duration_ms": 1200,
+   "sheet": "gasp.png"
+  }
+ }
+}

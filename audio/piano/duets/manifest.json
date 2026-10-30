@@ -1,0 +1,520 @@
+{
+ "set": "pd_duets_v01",
+ "generated": "2026-10-30",
+ "format": "mono, 48 kHz; Ogg Opus ~96 kb/s VBR (primary) and AAC-LC .m4a 144 kb/s (fallback)",
+ "loudness": "mix -16 LUFS integrated, <= -1 dBTP; stems are at the mix gain (not normalised individually)",
+ "tick": {
+  "ogg": {
+   "file": "dist/tick.ogg",
+   "mime": "audio/ogg; codecs=opus",
+   "bytes": 3323
+  },
+  "m4a": {
+   "file": "dist/tick.m4a",
+   "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+   "bytes": 4413
+  },
+  "durationSec": 0.2,
+  "onsetSec": 0.0,
+  "peakDb": -6.0,
+  "source": "VSCO-2-CE Percussion/Claves1_Hit_v2_rr1_Sum.wav (CC0 recording of wooden claves)"
+ },
+ "playback": [
+  "Count-in: the server sets the start time countInSec ahead of the downbeat. Play countIn (or the tick file 3 times, at downbeat - 3*beatSec, - 2*beatSec, - 1*beatSec) starting at T = downbeat - countInSec.",
+  "Stem files hold downbeatOffsetSec (0.100 s) before beat 1, so schedule all stems at downbeat - downbeatOffsetSec (= T + countInSec - 0.1).",
+  "Start bass and melody (or mix) with source.start(sameAudioContextTime) on the same AudioContext clock; never start them from separate timers.",
+  "When a seat is empty or a player leaves, keep its stem running and fade its gain to 0 over about 1.5 s (linearRampToValueAtTime) instead of stopping it, so the two stay locked.",
+  "'Play solo instead' plays the mix file (both parts).",
+  "Use durationSec from the manifest for the end of the piece. m4a files can decode with extra silent padding at the end (up to ~0.02 s) in some decoders; Chrome trims it. Ogg decodes to the exact length."
+ ],
+ "duets": [
+  {
+   "id": "brahms-hungarian-dance-5",
+   "title": "Hungarian Dance No. 5 (abridged, four hands)",
+   "composer": "Johannes Brahms (1833-1897)",
+   "licence": "Public domain (composition and 1898 edition)",
+   "source": "Brahms, Hungarian Dances for piano four hands, Book 1, rev. Wm. Scharfenberg (G. Schirmer, New York, 1898); Internet Archive \"johannesbrahmshu00unse\", Public Domain Mark 1.0",
+   "sourceUrl": "https://archive.org/details/johannesbrahmshu00unse",
+   "arrangement": "Abridged from the original four-hand version: A (bars 1-32), B (12 bars of the vivace section), A2 (bars 17-32), with a final cadence. Secondo = left seat, primo = right seat.",
+   "durationSec": 73.646812,
+   "samples": 3535047,
+   "sampleRate": 48000,
+   "channels": 1,
+   "bpm": 108,
+   "timeSig": "2/4",
+   "beatUnit": "quarter",
+   "beatSec": 0.5555555555555556,
+   "countInBeats": 3,
+   "countInSec": 1.6666666666666667,
+   "downbeatOffsetSec": 0.1,
+   "countIn": {
+    "ogg": {
+     "file": "dist/countin_brahms-hungarian-dance-5.ogg",
+     "mime": "audio/ogg; codecs=opus",
+     "bytes": 10353
+    },
+    "m4a": {
+     "file": "dist/countin_brahms-hungarian-dance-5.m4a",
+     "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+     "bytes": 13171
+    },
+    "samples": 80000,
+    "tickOffsetsSec": [
+     0.0,
+     0.5555555555555556,
+     1.1111111111111112
+    ]
+   },
+   "seats": {
+    "bass": "left seat (secondo)",
+    "melody": "right seat (primo)"
+   },
+   "files": {
+    "bass": {
+     "ogg": "dist/brahms-hungarian-dance-5_bass.ogg",
+     "m4a": "dist/brahms-hungarian-dance-5_bass.m4a"
+    },
+    "melody": {
+     "ogg": "dist/brahms-hungarian-dance-5_melody.ogg",
+     "m4a": "dist/brahms-hungarian-dance-5_melody.m4a"
+    },
+    "mix": {
+     "ogg": "dist/brahms-hungarian-dance-5_mix.ogg",
+     "m4a": "dist/brahms-hungarian-dance-5_mix.m4a"
+    }
+   },
+   "stems": {
+    "bass": {
+     "ogg": {
+      "file": "dist/brahms-hungarian-dance-5_bass.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 906055
+     },
+     "m4a": {
+      "file": "dist/brahms-hungarian-dance-5_bass.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1351812
+     },
+     "lufs": -18.63,
+     "truePeakDb": -1.49,
+     "encodedTruePeakDb": {
+      "ogg": -1.5,
+      "m4a": -1.5
+     }
+    },
+    "melody": {
+     "ogg": {
+      "file": "dist/brahms-hungarian-dance-5_melody.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 1022063
+     },
+     "m4a": {
+      "file": "dist/brahms-hungarian-dance-5_melody.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1340698
+     },
+     "lufs": -19.11,
+     "truePeakDb": -1.31,
+     "encodedTruePeakDb": {
+      "ogg": -1.4,
+      "m4a": -1.3
+     }
+    },
+    "mix": {
+     "ogg": {
+      "file": "dist/brahms-hungarian-dance-5_mix.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 944998
+     },
+     "m4a": {
+      "file": "dist/brahms-hungarian-dance-5_mix.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1350283
+     },
+     "lufs": -16.0,
+     "truePeakDb": -1.99,
+     "encodedTruePeakDb": {
+      "ogg": -1.7,
+      "m4a": -2.0
+     }
+    }
+   },
+   "stemGainDb": {
+    "median": 13.43,
+    "min": 6.3,
+    "max": 13.45
+   },
+   "stemGainNote": "bass and melody are rendered with the same mastering gain curve as the mix (computed on the sum), so bass + melody = mix exactly in the masters",
+   "notes": {
+    "bass": 528,
+    "melody": 364
+   }
+  },
+  {
+   "id": "faure-dolly-berceuse",
+   "title": "Dolly, Op. 56 No. 1: Berceuse (abridged, four hands)",
+   "composer": "Gabriel Fauré (1845-1924)",
+   "licence": "Public domain (composer d. 1924; edition J. Hamelle, Paris, 1894)",
+   "source": "Fauré, Dolly, six pieces for piano four hands, Op. 56 (J. Hamelle, Paris, [1894]); BnF bpt6k1159272r via Wikimedia Commons, tagged \"Public domain\"; Berceuse = pages 08-13 of 58",
+   "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dolly_-_six_pi%C3%A8ces_pour_piano_%C3%A0_4_mains_-_op._56_-_par_Gabriel_Faur%C3%A9_-_bpt6k1159272r_(08_of_58).jpg",
+   "arrangement": "Abridged from the original four-hand version: bars 1-22, then a 7-bar coda built from the closing material. Secondo = left seat, primo = right seat.",
+   "durationSec": 62.232687,
+   "samples": 2987169,
+   "sampleRate": 48000,
+   "channels": 1,
+   "bpm": 60,
+   "timeSig": "2/4",
+   "beatUnit": "quarter",
+   "beatSec": 1.0,
+   "countInBeats": 3,
+   "countInSec": 3.0,
+   "downbeatOffsetSec": 0.1,
+   "countIn": {
+    "ogg": {
+     "file": "dist/countin_faure-dolly-berceuse.ogg",
+     "mime": "audio/ogg; codecs=opus",
+     "bytes": 10582
+    },
+    "m4a": {
+     "file": "dist/countin_faure-dolly-berceuse.m4a",
+     "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+     "bytes": 13338
+    },
+    "samples": 144000,
+    "tickOffsetsSec": [
+     0.0,
+     1.0,
+     2.0
+    ]
+   },
+   "seats": {
+    "bass": "left seat (secondo)",
+    "melody": "right seat (primo)"
+   },
+   "files": {
+    "bass": {
+     "ogg": "dist/faure-dolly-berceuse_bass.ogg",
+     "m4a": "dist/faure-dolly-berceuse_bass.m4a"
+    },
+    "melody": {
+     "ogg": "dist/faure-dolly-berceuse_melody.ogg",
+     "m4a": "dist/faure-dolly-berceuse_melody.m4a"
+    },
+    "mix": {
+     "ogg": "dist/faure-dolly-berceuse_mix.ogg",
+     "m4a": "dist/faure-dolly-berceuse_mix.m4a"
+    }
+   },
+   "stems": {
+    "bass": {
+     "ogg": {
+      "file": "dist/faure-dolly-berceuse_bass.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 753046
+     },
+     "m4a": {
+      "file": "dist/faure-dolly-berceuse_bass.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1144873
+     },
+     "lufs": -18.08,
+     "truePeakDb": -1.86,
+     "encodedTruePeakDb": {
+      "ogg": -1.8,
+      "m4a": -1.9
+     }
+    },
+    "melody": {
+     "ogg": {
+      "file": "dist/faure-dolly-berceuse_melody.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 822647
+     },
+     "m4a": {
+      "file": "dist/faure-dolly-berceuse_melody.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1138648
+     },
+     "lufs": -19.03,
+     "truePeakDb": -1.51,
+     "encodedTruePeakDb": {
+      "ogg": -1.5,
+      "m4a": -1.6
+     }
+    },
+    "mix": {
+     "ogg": {
+      "file": "dist/faure-dolly-berceuse_mix.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 777250
+     },
+     "m4a": {
+      "file": "dist/faure-dolly-berceuse_mix.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1144870
+     },
+     "lufs": -16.0,
+     "truePeakDb": -1.99,
+     "encodedTruePeakDb": {
+      "ogg": -1.8,
+      "m4a": -2.0
+     }
+    }
+   },
+   "stemGainDb": {
+    "median": 21.57,
+    "min": 16.81,
+    "max": 21.63
+   },
+   "stemGainNote": "bass and melody are rendered with the same mastering gain curve as the mix (computed on the sum), so bass + melody = mix exactly in the masters",
+   "notes": {
+    "bass": 264,
+    "melody": 152
+   }
+  },
+  {
+   "id": "after-you",
+   "title": "After You (No, After You)",
+   "composer": "Original (Pixeldate, 2026)",
+   "licence": "Original work, made for Pixeldate (2026); no third-party material",
+   "source": "Original composition",
+   "sourceUrl": null,
+   "arrangement": "Call and response: the right seat calls, the left seat answers, then they trade two-bar phrases and finish together with an \"after you\" tag.",
+   "durationSec": 84.979125,
+   "samples": 4078998,
+   "sampleRate": 48000,
+   "channels": 1,
+   "bpm": 100,
+   "timeSig": "4/4",
+   "beatUnit": "quarter",
+   "beatSec": 0.6,
+   "countInBeats": 3,
+   "countInSec": 1.7999999999999998,
+   "downbeatOffsetSec": 0.1,
+   "countIn": {
+    "ogg": {
+     "file": "dist/countin_after-you.ogg",
+     "mime": "audio/ogg; codecs=opus",
+     "bytes": 10283
+    },
+    "m4a": {
+     "file": "dist/countin_after-you.m4a",
+     "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+     "bytes": 13498
+    },
+    "samples": 86400,
+    "tickOffsetsSec": [
+     0.0,
+     0.6,
+     1.2
+    ]
+   },
+   "seats": {
+    "bass": "left seat (secondo)",
+    "melody": "right seat (primo)"
+   },
+   "files": {
+    "bass": {
+     "ogg": "dist/after-you_bass.ogg",
+     "m4a": "dist/after-you_bass.m4a"
+    },
+    "melody": {
+     "ogg": "dist/after-you_melody.ogg",
+     "m4a": "dist/after-you_melody.m4a"
+    },
+    "mix": {
+     "ogg": "dist/after-you_mix.ogg",
+     "m4a": "dist/after-you_mix.m4a"
+    }
+   },
+   "stems": {
+    "bass": {
+     "ogg": {
+      "file": "dist/after-you_bass.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 1102433
+     },
+     "m4a": {
+      "file": "dist/after-you_bass.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1564139
+     },
+     "lufs": -17.66,
+     "truePeakDb": -1.36,
+     "encodedTruePeakDb": {
+      "ogg": -1.4,
+      "m4a": -1.4
+     }
+    },
+    "melody": {
+     "ogg": {
+      "file": "dist/after-you_melody.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 1141210
+     },
+     "m4a": {
+      "file": "dist/after-you_melody.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1551706
+     },
+     "lufs": -19.77,
+     "truePeakDb": -2.06,
+     "encodedTruePeakDb": {
+      "ogg": -2.0,
+      "m4a": -2.1
+     }
+    },
+    "mix": {
+     "ogg": {
+      "file": "dist/after-you_mix.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 1106637
+     },
+     "m4a": {
+      "file": "dist/after-you_mix.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1563944
+     },
+     "lufs": -16.01,
+     "truePeakDb": -1.99,
+     "encodedTruePeakDb": {
+      "ogg": -1.7,
+      "m4a": -1.9
+     }
+    }
+   },
+   "stemGainDb": {
+    "median": 20.03,
+    "min": 14.4,
+    "max": 20.1
+   },
+   "stemGainNote": "bass and melody are rendered with the same mastering gain curve as the mix (computed on the sum), so bass + melody = mix exactly in the masters",
+   "notes": {
+    "bass": 210,
+    "melody": 201
+   }
+  },
+  {
+   "id": "chopsticks",
+   "title": "Chopsticks",
+   "composer": "Euphemia Allen (1861-1949), arr. Pixeldate 2026",
+   "licence": "Public domain tune (Euphemia Allen, \"The Celebrated Chop Waltz\", published 1877); new arrangement made for Pixeldate (2026)",
+   "source": "Traditional/well-known tune of \"The Celebrated Chop Waltz\" by Euphemia Allen (pseud. Arthur de Lulli), deposited at the British Museum on 3 Feb 1877 as \"The Celebrated Chop Waltz ... arranged as duet & solo for the pianoforte by Arthur de Lulli\" (pseudonym), published by Mozart Allan, Glasgow and Howard & Co., London. Arranged from the tune itself; no modern arrangement was consulted or copied",
+   "sourceUrl": "https://www.themorgan.org/music-manuscripts-and-printed-music/156782",
+   "arrangement": "Right seat plays the two-finger harmonic-interval tune (F/G, E/G, D/B, C/C ...), left seat plays oom-pah-pah. A (16 bars), B (8 bars of walking sixths, new material in the same style), A again with the tune an octave higher, octave basses and fuller chords, then a pause and a grace-note C6 final chord.",
+   "durationSec": 55.783062,
+   "samples": 2677587,
+   "sampleRate": 48000,
+   "channels": 1,
+   "bpm": 140,
+   "timeSig": "3/4",
+   "beatUnit": "quarter",
+   "beatSec": 0.42857142857142855,
+   "countInBeats": 3,
+   "countInSec": 1.2857142857142856,
+   "downbeatOffsetSec": 0.1,
+   "countIn": {
+    "ogg": {
+     "file": "dist/countin_chopsticks.ogg",
+     "mime": "audio/ogg; codecs=opus",
+     "bytes": 9754
+    },
+    "m4a": {
+     "file": "dist/countin_chopsticks.m4a",
+     "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+     "bytes": 13060
+    },
+    "samples": 61714,
+    "tickOffsetsSec": [
+     0.0,
+     0.42857142857142855,
+     0.8571428571428571
+    ]
+   },
+   "seats": {
+    "bass": "left seat (secondo)",
+    "melody": "right seat (primo)"
+   },
+   "files": {
+    "bass": {
+     "ogg": "dist/chopsticks_bass.ogg",
+     "m4a": "dist/chopsticks_bass.m4a"
+    },
+    "melody": {
+     "ogg": "dist/chopsticks_melody.ogg",
+     "m4a": "dist/chopsticks_melody.m4a"
+    },
+    "mix": {
+     "ogg": "dist/chopsticks_mix.ogg",
+     "m4a": "dist/chopsticks_mix.m4a"
+    }
+   },
+   "stems": {
+    "bass": {
+     "ogg": {
+      "file": "dist/chopsticks_bass.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 705027
+     },
+     "m4a": {
+      "file": "dist/chopsticks_bass.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1027023
+     },
+     "lufs": -19.98,
+     "truePeakDb": -2.56,
+     "encodedTruePeakDb": {
+      "ogg": -2.6,
+      "m4a": -2.6
+     }
+    },
+    "melody": {
+     "ogg": {
+      "file": "dist/chopsticks_melody.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 779017
+     },
+     "m4a": {
+      "file": "dist/chopsticks_melody.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1027487
+     },
+     "lufs": -18.21,
+     "truePeakDb": -1.69,
+     "encodedTruePeakDb": {
+      "ogg": -1.7,
+      "m4a": -1.7
+     }
+    },
+    "mix": {
+     "ogg": {
+      "file": "dist/chopsticks_mix.ogg",
+      "mime": "audio/ogg; codecs=opus",
+      "bytes": 722018
+     },
+     "m4a": {
+      "file": "dist/chopsticks_mix.m4a",
+      "mime": "audio/mp4; codecs=\"mp4a.40.2\"",
+      "bytes": 1036592
+     },
+     "lufs": -16.0,
+     "truePeakDb": -1.99,
+     "encodedTruePeakDb": {
+      "ogg": -1.7,
+      "m4a": -1.9
+     }
+    }
+   },
+   "stemGainDb": {
+    "median": 16.62,
+    "min": 11.15,
+    "max": 16.74
+   },
+   "stemGainNote": "bass and melody are rendered with the same mastering gain curve as the mix (computed on the sum), so bass + melody = mix exactly in the masters",
+   "notes": {
+    "bass": 250,
+    "melody": 221
+   }
+  }
+ ]
+}

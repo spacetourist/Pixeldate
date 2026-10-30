@@ -109,7 +109,7 @@ function You({ me, photo, level, inMatch, onSave }: { me: Profile; photo: HTMLIm
   const s = seasonOf(me.bm)
   const [av, setAv] = useState(false)
   return <>
-    {av && <Suspense fallback={null}><AvatarFlow step="Your character" initial={me.pav} onExit={() => setAv(false)} onSave={async j => { await onSave({ ...me, pav: j }); setAv(false) }} /></Suspense>}
+    {av && <Suspense fallback={null}><AvatarFlow step="Your character" initial={me.pav} iam={me.iam} onExit={() => setAv(false)} onSave={async j => { await onSave({ ...me, pav: j }); setAv(false) }} /></Suspense>}
     <Title icon="user" eb="You" h={me.name} t="you-h" />
     <div className="cols2">
       <div className="card fx seecard"><div className="eyebrow"><Icon n="eye" c="var(--cta)" />How matches see you right now</div>

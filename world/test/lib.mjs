@@ -18,7 +18,7 @@ export class Bot {
     return new Promise(res => {
       const ws = this.ws = new WebSocket(`${BASE}/parties/area/${this.room}`); ws.binaryType = 'arraybuffer'
       ws.onopen = () => ws.send(JSON.stringify({ t: 'join', invite: this.invite, p: this.p }))
-      ws.onclose = e => { this.closed = e.code; res({ t: 'closed', code: e.code }) }
+      ws.onclose = e => { this.closed = e.code; clearInterval(this.ka); res({ t: 'closed', code: e.code }) }
       ws.onmessage = e => {
         if (typeof e.data !== 'string') {
           const b = new Uint8Array(e.data); this.bin.push(b); if (this.bin.length > 50) this.bin.shift(); this.binBytes = (this.binBytes || 0) + b.byteLength
@@ -27,7 +27,7 @@ export class Bot {
         }
         this.text.push(e.data); this.textBytes = (this.textBytes || 0) + e.data.length
         const m = JSON.parse(e.data); this.events.push(m)
-        if (m.t === 'hi') { this.me = m.me; this.inst = m.inst; res(m) }
+        if (m.t === 'hi') { this.me = m.me; this.inst = m.inst; clearInterval(this.ka); this.ka = setInterval(() => { if (!this.dead) this.send({ t: 'ka' }) }, m.ka || 5000); res(m) }
         else if (m.t === 'no') res(m)
         else if (m.t === 'full') { if (this.follow) { this.room = m.next; ws.onclose = null; this.connect().then(res) } else res(m) }
         else if (m.t === 'add') this.pubs.set(m.p.id, m.p)
@@ -35,9 +35,11 @@ export class Bot {
       }
     })
   }
-  send(o) { if (this.ws.readyState === 1) this.ws.send(JSON.stringify(o)) }
+  send(o) { if (!this.dead && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)) }
+  /** a hard disconnect: the socket stays open but nothing is ever sent again (lost signal, a killed tab with no close frame) */
+  zombie() { this.dead = true; clearInterval(this.ka) }
   last(t) { for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i].t === t) return this.events[i] }
   async wait(pred, ms = 4000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = pred(); if (v) return v; await sleep(30) } return null }
   self() { return this.ents.get(this.me) }
-  close() { try { this.ws.close() } catch {} }
+  close() { clearInterval(this.ka); try { this.ws.close() } catch {} }
 }

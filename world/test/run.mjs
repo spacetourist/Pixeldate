@@ -2,7 +2,7 @@
 // Against wrangler dev instead:  WORLD_URL=ws://127.0.0.1:8787 node world/test/run.mjs  (reports are read from the DEV-only /dev/reports)
 import assert from 'node:assert/strict'
 let dev = null
-if (!process.env.WORLD_URL) { process.env.WORLD_PORT = '18791'; process.env.WORLD_URL = 'ws://127.0.0.1:18791'; dev = await import('../dev/server.ts'); await new Promise(r => setTimeout(r, 300)) }
+if (!process.env.WORLD_URL) { process.env.WORLD_STALE_MS ??= '3000'; process.env.WORLD_PORT = '18791'; process.env.WORLD_URL = 'ws://127.0.0.1:18791'; dev = await import('../dev/server.ts'); await new Promise(r => setTimeout(r, 300)) }
 else await import('../src/profanity.ts') // the filter unit test runs in this process; wrangler has its own copy
 const { Bot, profile, sleep } = await import('./lib.mjs')
 const HTTP = process.env.WORLD_URL.replace(/^ws/, 'http')
@@ -149,17 +149,121 @@ await test('movement is server-authoritative: speed cap, walls, personal space',
   await done()
 })
 
-await test('table for two: both get the same card from the deck; next; card clears when one leaves', async () => {
+const { deflateSync, crc32 } = await import('node:zlib')
+/** a w x h PNG data URL (solid colour), the shape the app's pixelatePhoto sends */
+const png = (w, h) => {
+  const chunk = (type, d) => { const b = Buffer.alloc(12 + d.length); b.writeUInt32BE(d.length, 0); b.write(type, 4, 'ascii'); d.copy(b, 8); b.writeUInt32BE(crc32 ? crc32(b.subarray(4, 8 + d.length)) >>> 0 : 0, 8 + d.length); return b }
+  const ih = Buffer.alloc(13); ih.writeUInt32BE(w, 0); ih.writeUInt32BE(h, 4); ih[8] = 8; ih[9] = 2
+  const raw = Buffer.alloc(h * (1 + w * 3)); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set([200, 80, 90], y * (1 + w * 3) + 1 + x * 3)
+  return 'data:image/png;base64,' + Buffer.concat([Buffer.from([0x89, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ih), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]).toString('base64')
+}
+/** two people sat at table i; resolves with their first card views */
+const seat = async (A, B, i = 3) => {
+  const tb = TABLES[i]; await Promise.all([goTo(A, ...tb.seats[0], 12000), goTo(B, ...tb.seats[1], 12000)])
+  await A.wait(() => A.last('card')?.q); await B.wait(() => B.last('card')?.q); return tb
+}
+const cards = b => b.events.filter(e => e.t === 'card').length
+
+await test('v05 "here" count: 1 player sees 1, 2 see 2 (yourself counted once), a hard disconnect drops back within the keepalive timeout', async () => {
+  const A = await J({ name: 'Uno' }); await sleep(200)
+  assert.equal(A.pubs.size, 1, 'alone: ' + A.pubs.size); assert.ok(A.pubs.has(A.me), 'self is in the list once')
+  assert.ok(A.last('hi').ka > 0 && A.last('hi').ka < 3000, 'keepalive interval ' + A.last('hi').ka)
+  const B = await J({ name: 'Dos' }); await sleep(200)
+  assert.equal(A.pubs.size, 2); assert.equal(B.pubs.size, 2)
+  const t0 = Date.now(); B.zombie()            // no close frame, no keepalive: like a phone that lost signal
+  const gone = await A.wait(() => A.events.some(e => e.t === 'del' && e.id === B.me), 6000)
+  assert.ok(gone, 'ghost never pruned'); assert.equal(A.pubs.size, 1); console.log(`  (hard disconnect pruned after ${Date.now() - t0} ms)`)
+  await B.wait(() => B.closed, 2000); assert.equal(B.closed, 4004, 'stale socket closed with 4004')
+  await sleep(1500); assert.equal(A.pubs.size, 1); assert.ok(A.closed === null, 'a live socket with keepalive was pruned')
+  await done()
+})
+
+await test('table for two: both get the same card from the deck; Next only after both answered; card clears when one leaves', async () => {
   const { cardById } = await import('../../src/deck.ts')
   const A = await J({ name: 'Tia' }), B = await J({ name: 'Tom' }); await sleep(200)
-  const tb = TABLES[3]; await Promise.all([goTo(A, ...tb.seats[0], 12000), goTo(B, ...tb.seats[1], 12000)])
-  const ca = await A.wait(() => A.last('card')), cb = await B.wait(() => B.last('card'))
-  assert.ok(ca && cb, 'no card'); assert.ok(ca.q && ca.q.text.length > 5); assert.deepEqual(ca.q, cb.q); assert.equal(ca.with, B.me); assert.equal(cb.with, A.me)
-  assert.equal(cardById(ca.q.id)?.text, ca.q.text, 'card is not from src/deck.ts')
+  const tb = await seat(A, B); const ca = A.last('card'), cb = B.last('card')
+  assert.ok(ca.q && ca.q.text.length > 5); assert.deepEqual(ca.q, cb.q); assert.equal(ca.with, B.me); assert.equal(cb.with, A.me); assert.equal(ca.tb, tb.id)
+  assert.equal(cardById(ca.q.id)?.text, ca.q.text, 'card is not from src/deck.ts'); assert.equal(ca.lv, 1); assert.equal(cardById(ca.q.id).level, 1)
   assert.ok((A.self().f & 8) && (A.ents.get(B.me).f & 8), 'not shown sitting')
-  const n = A.events.filter(e => e.t === 'card').length; B.send({ t: 'next' })
-  await A.wait(() => A.events.filter(e => e.t === 'card').length > n); const c2 = A.last('card'); await sleep(100); assert.deepEqual(B.last('card').q, c2.q); assert.notEqual(c2.q.id, ca.q.id)
+  const n = cards(A); B.send({ t: 'next' }); await sleep(400); assert.equal(cards(A), n, 'Next before the reveal was accepted')
+  A.send({ t: 'ans', text: 'Toast' }); B.send({ t: 'ans', text: 'Cereal' }); await A.wait(() => A.last('card').rev)
+  B.send({ t: 'next' }); await A.wait(() => A.last('card').q?.id !== ca.q.id); const c2 = A.last('card'); await sleep(100)
+  assert.deepEqual(B.last('card').q, c2.q); assert.notEqual(c2.q.id, ca.q.id); assert.equal(c2.rev, null); assert.equal(c2.mine, null)
   B.close(); await A.wait(() => A.last('card').q === null); assert.equal(A.last('card').q, null)
+  await done()
+})
+
+await test('v05 answers: own field each, hidden until both are in, filtered, then revealed together and the pair goes up a level', async () => {
+  const { cardById } = await import('../../src/deck.ts')
+  const A = await J({ name: 'Ana' }), B = await J({ name: 'Ben' }), C = await J({ name: 'Cat' }); await sleep(200)
+  await seat(A, B, 2)
+  A.send({ t: 'ans', text: 'text me on 07700 900123' }); const no = await A.wait(() => A.last('ansno'))
+  assert.equal(no.why, 'contact'); assert.equal(A.last('card').mine, null)
+  A.send({ t: 'ans', text: 'Pancakes with lemon' }); await A.wait(() => A.last('card').mine)
+  await B.wait(() => B.last('card').them); const bv = B.last('card')
+  assert.equal(bv.them, true, 'B not told A answered'); assert.equal(bv.rev, null); assert.ok(!textOf(B).includes('Pancakes'), 'A\'s answer reached B before B answered')
+  assert.ok(!textOf(C).includes('Pancakes'), 'answer reached a bystander'); assert.ok(!C.events.some(e => e.t === 'card'), 'bystander got a card')
+  A.send({ t: 'ans', text: 'changed my mind' }); await sleep(200); assert.equal(A.last('card').mine, 'Pancakes with lemon', 'an answer can be replaced')
+  B.send({ t: 'ans', text: 'Just coffee' }); await A.wait(() => A.last('card').rev); await B.wait(() => B.last('card').rev)
+  const a = A.last('card'), b = B.last('card')
+  assert.deepEqual(a.rev, { mine: 'Pancakes with lemon', theirs: 'Just coffee' }); assert.deepEqual(b.rev, { mine: 'Just coffee', theirs: 'Pancakes with lemon' })
+  assert.equal(a.lv, 2); assert.equal(b.lv, 2); assert.equal(a.n, 1)
+  assert.ok(!textOf(C).includes('Just coffee') && !textOf(C).includes('Pancakes'))
+  A.send({ t: 'next' }); await A.wait(() => A.last('card').rev === null); assert.equal(cardById(A.last('card').q.id).level, 2, 'next card not from the level-2 pool')
+  // the level is kept for the pair: stand up, sit again, still level 2
+  await goTo(A, 3, 11); await A.wait(() => A.last('card').q === null); await seat(A, B, 2); assert.equal(A.last('card').lv, 2, 'pair level lost')
+  await done()
+})
+
+await test('v05 private table chat: the partner gets the words, everyone else a "…" over the table, never the text', async () => {
+  const A = await J({ name: 'Pia' }), B = await J({ name: 'Pat' }), C = await J({ name: 'Cy' }); await sleep(200)
+  const tb = await seat(A, B, 1)
+  A.send({ t: 'say', text: 'just between us' })
+  const heard = await B.wait(() => B.events.find(e => e.t === 'say' && e.text === 'just between us'))
+  assert.ok(heard && heard.priv === 1 && heard.id === A.me); const said = await A.wait(() => A.last('said')); assert.ok(said.ok && said.priv === 1)
+  const mm = await C.wait(() => C.last('murmur')); assert.equal(mm.tb, tb.id); await sleep(200)
+  assert.ok(!textOf(C).includes('between us'), 'bystander got the private text')
+  A.send({ t: 'say', text: 'insta is pia99' }); const held = await A.wait(() => A.events.find(e => e.t === 'said' && !e.ok)); assert.equal(held.why, 'contact')
+  await sleep(200); assert.ok(!textOf(B).includes('pia99'), 'filter skipped at the table')
+  // a bystander's report never carries the pair's private words; the partner's does
+  C.send({ t: 'report', id: A.me, why: 'rude' }); await C.wait(() => C.last('ack')); await sleep(300); let rs = await getReports()
+  assert.ok(!JSON.stringify(rs.at(-1).ctx).includes('between us'), 'private words in a bystander\'s report')
+  B.send({ t: 'report', id: A.me, why: 'rude' }); await B.wait(() => B.events.filter(e => e.t === 'ack').length); await sleep(300); rs = await getReports()
+  assert.ok(JSON.stringify(rs.at(-1).ctx).includes('between us'), 'partner\'s report lost the context')
+  // standing up: public again
+  await goTo(A, 3, 11); await A.wait(() => A.last('card').q === null); A.send({ t: 'say', text: 'hello room' })
+  await C.wait(() => C.events.find(e => e.t === 'say' && e.text === 'hello room')); assert.ok(!C.events.find(e => e.text === 'hello room').priv)
+  await done()
+})
+
+await test('v05 date + Start call: only a dating pair can ask; decline, cancel; both taps -> one shared code, nobody else told', async () => {
+  const A = await J({ name: 'Dee' }), B = await J({ name: 'Dan' }), C = await J({ name: 'Cyd' }); await sleep(200)
+  await seat(A, B, 4)
+  A.send({ t: 'call' }); await sleep(250); assert.equal(B.last('card').call, null, 'call before a date')
+  A.send({ t: 'date', yes: true }); await B.wait(() => B.last('card').date.them); assert.deepEqual(B.last('card').date, { me: false, them: true })
+  B.send({ t: 'date', yes: false }); await A.wait(() => A.last('note')?.k === 'date-no'); assert.deepEqual(A.last('card').date, { me: false, them: false })
+  A.send({ t: 'date', yes: true }); B.send({ t: 'date', yes: true }); await A.wait(() => A.last('card').date.them && A.last('card').date.me)
+  assert.equal(A.last('card').video, 1)
+  A.send({ t: 'call' }); await B.wait(() => B.last('card').call === 'in'); assert.equal((await A.wait(() => A.last('card').call)), 'out')
+  B.send({ t: 'callno' }); await A.wait(() => A.last('note')?.k === 'call-declined'); assert.equal(A.last('card').call, null)
+  A.send({ t: 'call' }); await B.wait(() => B.last('card').call === 'in'); A.send({ t: 'callno' }); await B.wait(() => B.last('note')?.k === 'call-cancelled')
+  A.send({ t: 'callyes' }); await sleep(200); assert.ok(!A.last('call'), 'the asker accepted their own call')
+  B.send({ t: 'call' }); await A.wait(() => A.last('card').call === 'in'); A.send({ t: 'callyes' })
+  const ca = await A.wait(() => A.last('call')), cb = await B.wait(() => B.last('call'))
+  assert.ok(ca && cb && ca.code === cb.code && /^[a-z0-9]{12}$/.test(ca.code)); assert.equal(cb.host, true); assert.equal(ca.host, false)
+  assert.ok(!textOf(C).includes(ca.code) && !C.events.some(e => e.t === 'call' || e.t === 'note'))
+  await done()
+})
+
+await test('v05 photo strip: own photo pixelated to the pair level, checked, relayed to the partner only', async () => {
+  const A = await J({ name: 'Fi' }), B = await J({ name: 'Fo' }), C = await J({ name: 'Fum' }); await sleep(200)
+  await seat(A, B, 5)
+  A.send({ t: 'photo', lv: 1, data: png(64, 64) }); A.send({ t: 'photo', lv: 2, data: png(16, 16) }); A.send({ t: 'photo', lv: 1, data: 'data:image/png;base64,AAAA' })
+  await sleep(300); assert.ok(!B.events.some(e => e.t === 'photo'), 'a too-sharp / wrong-level / broken photo was relayed')
+  const ok = png(8, 8); A.send({ t: 'photo', lv: 1, data: ok })
+  const ph = await B.wait(() => B.last('photo')); assert.ok(ph && ph.data === ok && ph.id === A.me && ph.lv === 1)
+  await sleep(200); assert.ok(!C.events.some(e => e.t === 'photo') && !textOf(C).includes(ok.slice(30, 60)), 'photo reached a bystander')
+  C.send({ t: 'photo', lv: 1, data: ok }); await sleep(200); assert.equal(A.events.filter(e => e.t === 'photo').length, 0, 'someone not at the table sent a photo')
   await done()
 })
 

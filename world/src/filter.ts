@@ -17,11 +17,11 @@ const digitsIn = (s: string) => {
   let best = 0; for (const run of w.match(/[0-9][0-9\s\-().+/]*[0-9]/g) || []) best = Math.max(best, run.replace(/\D/g, '').length)
   return best
 }
-export function check(raw: unknown): Verdict {
+export function check(raw: unknown, max = MAX_SAY): Verdict {
   if (typeof raw !== 'string') return { ok: false, why: 'empty' }
   const text = raw.normalize('NFKC').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/g, '').replace(/\s+/g, ' ').trim()
   if (!text) return { ok: false, why: 'empty' }
-  if ([...text].length > MAX_SAY) return { ok: false, why: 'long' }
+  if ([...text].length > max) return { ok: false, why: 'long' }
   if (EMAIL.test(text) || URL.test(text) || HANDLE.test(text) || APPS.test(text) || digitsIn(text) >= 7) return { ok: false, why: 'contact' }
   if (profane(text)) return { ok: false, why: 'language' }
   return { ok: true, text }

@@ -8,7 +8,10 @@ import { createRoot } from 'react-dom/client'
 import type { Mode, Progress, Result } from '../index'
 import { composeRGBA, drawAvatar, loadAtlas, type Atlas, type KitOptions } from '../kit/compose'
 import { ACCS, BASE, BEARDS, BOTTOMS, BUILDS, CLOTH, HAIRC, HAIRS, SAMPLES, SHOES, SKIN, TOPS } from '../kit/kit.gen'
-import { NEUTRAL, mapDescriptor, parseOptions, preview, save, type Mapped, type Row } from '../kit/map'
+import { mapDescriptor, parseOptions, preview as preview0, save, type Mapped, type Row } from '../kit/map'
+import { startFace, startFill, startLook } from '../kit/defaults'
+/** Preview before the two taps: the gender's starting build and hairstyle (defaults.ts); detected garments are kept */
+const preview = (o: Mapped['options'], iam?: string | null) => preview0(startFill(o, iam))
 import silhouette from '../kit/silhouette.png'
 import './flow.css'
 
@@ -100,8 +103,8 @@ function Rows({ o, check, onRow }: { o: KitOptions; check: Mapped['check']; onRo
     <button key={k} className="av-row" onClick={() => onRow(k)} data-t={'av-row-' + k}><i style={{ background: sw ?? 'repeating-linear-gradient(45deg,#2A2150 0 4px,#161033 4px 8px)' }} /><span>{label}</span>{text}{check[k] && <em className="av-check">CHECK</em>}</button>)}</div>
 }
 
-function Got({ atlas, res, photo, m, setM, onTweak, onDone, onBack }: { atlas: Atlas | null; res: Extract<Result, { ok: true }>; photo: string; m: Mapped; setM: (m: Mapped) => void; onTweak: (t?: Tab) => void; onDone: () => void; onBack: () => void }) {
-  const b = useMemo(() => boxes(res), [res]), o = preview(m.options)
+function Got({ atlas, res, photo, m, setM, onTweak, onDone, onBack, iam }: { iam?: string | null; atlas: Atlas | null; res: Extract<Result, { ok: true }>; photo: string; m: Mapped; setM: (m: Mapped) => void; onTweak: (t?: Tab) => void; onDone: () => void; onBack: () => void }) {
+  const b = useMemo(() => boxes(res), [res]), o = preview(m.options, iam)
   const set = (k: 'build' | 'hair', v: string) => setM({ ...m, options: { ...m.options, [k]: v } })
   return <>
     <Top onBack={onBack} />
@@ -170,14 +173,15 @@ export type FlowProps = {
   /** options JSON already on the profile (edit): offers "Tweak my current character" */ initial?: string | null
   /** embedded: called with the options JSON from the done screen's Continue (nothing is written to localStorage) */ onSave?: (json: string) => void
   /** signup: "Skip for now" */ onSkip?: () => void
+  /** the "I am" pick: where the hand-build and the preview start (defaults.ts); never overrides a saved or picked look */ iam?: string | null
   /** Back from the first screen */ onExit?: () => void
 }
-export function Flow({ step, initial, onSave, onSkip, onExit }: FlowProps = {}) {
+export function Flow({ step, initial, iam, onSave, onSkip, onExit }: FlowProps = {}) {
   const current = useMemo(() => parseOptions(initial), [initial])
   const [screen, setScreen] = useState<Screen>('upload'), [atlas, setAtlas] = useState<Atlas | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null), [busy, setBusy] = useState(''), [error, setError] = useState<{ message: string; detail?: string } | null>(null)
   const [res, setRes] = useState<Extract<Result, { ok: true }> | null>(null), [photo, setPhoto] = useState(''), [m, setM] = useState<Mapped | null>(null)
-  const [o, setO] = useState<KitOptions>(NEUTRAL), [tab, setTab] = useState<Tab>('Body'), [saved, setSaved] = useState(''), [from, setFrom] = useState<Screen>('upload')
+  const [o, setO] = useState<KitOptions>(() => startLook(iam)), [tab, setTab] = useState<Tab>('Body'), [saved, setSaved] = useState(''), [from, setFrom] = useState<Screen>('upload')
   // Atlas is itself a function, so wrap it: React would otherwise call it as a state updater.
   useEffect(() => { void loadAtlas().then(a => setAtlas(() => a)) }, [])
   useEffect(() => { (window as any).__pdFlowProgress = setProgress }, [])
@@ -191,19 +195,19 @@ export function Flow({ step, initial, onSave, onSkip, onExit }: FlowProps = {}) 
       const r = await d.analysePhoto(f, MODE)
       if (!r.ok) { setError({ message: r.error.message, detail: r.error.detail }); return }
       if (photo) URL.revokeObjectURL(photo)
-      const mapped = mapDescriptor(r.descriptor)
+      const mapped = mapDescriptor(r.descriptor); mapped.options.face = startFace(iam)
       setPhoto(URL.createObjectURL(f)); setRes(r); setM(mapped); setScreen('got')
     } catch (e) { setError({ message: "Couldn't get the pixel kit ready", detail: (DBG ? String((e as Error)?.message ?? e) + ' · ' : '') + 'Try again, or build it by hand.' }) }
     finally { setBusy('') }
   }
-  const hand = () => { setM(null); setRes(null); setO(NEUTRAL); setTab('Body'); setFrom('upload'); setScreen('tweak') }
-  const tweak = (t: Tab = 'Body') => { setO(preview(m!.options)); setTab(t); setFrom('got'); setScreen('tweak') }
+  const hand = () => { setM(null); setRes(null); setO(startLook(iam)); setTab('Body'); setFrom('upload'); setScreen('tweak') }
+  const tweak = (t: Tab = 'Body') => { setO(preview(m!.options, iam)); setTab(t); setFrom('got'); setScreen('tweak') }
   const fromCurrent = () => { setM(null); setRes(null); setO(current!); setTab('Body'); setFrom('upload'); setScreen('tweak') }
   // embedded: the JSON goes to the profile (onSave), not to pd.avatar
   const finish = (x: KitOptions) => { setSaved(onSave ? JSON.stringify({ ...x, v: 1 }) : save(x)); setO(x); setScreen('done') }
   return <Ctx.Provider value={{ step, onExit }}><div className="avf" data-t="av-flow"><div className="av-ph">
     {screen === 'upload' && <Upload onPhoto={onPhoto} onHand={hand} onCurrent={current ? fromCurrent : undefined} onSkip={onSkip} progress={progress} busy={busy} error={error} />}
-    {screen === 'got' && res && m && <Got atlas={atlas} res={res} photo={photo} m={m} setM={setM} onTweak={tweak} onDone={() => finish(preview(m.options))} onBack={() => setScreen('upload')} />}
+    {screen === 'got' && res && m && <Got iam={iam} atlas={atlas} res={res} photo={photo} m={m} setM={setM} onTweak={tweak} onDone={() => finish(preview(m.options, iam))} onBack={() => setScreen('upload')} />}
     {screen === 'tweak' && <Tweak atlas={atlas} o={o} setO={setO} m={m} tab={tab} setTab={setTab} onDone={() => finish(o)} onBack={() => setScreen(from)} />}
     {screen === 'done' && <><Top onBack={() => setScreen('tweak')} /><h1 className="av-t">That's <b>you</b></h1>
       <p className="av-p">Saved as a tiny character file. Your photo is never kept.</p>
@@ -214,5 +218,5 @@ export function Flow({ step, initial, onSave, onSkip, onExit }: FlowProps = {}) 
 }
 // test hook (flag route only): lets the harness check the TS compose against GD's kit.py renders pixel-for-pixel
 ;(window as any).__pdKit = { loadAtlas, composeRGBA, SAMPLES, BASE }
-export function mount(el: HTMLElement) { createRoot(el).render(<Flow />) }
+export function mount(el: HTMLElement) { createRoot(el).render(<Flow iam={new URLSearchParams(location.search).get('iam')} />) }
 export default Flow

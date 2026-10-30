@@ -2,10 +2,11 @@
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
 import { TABLES, SPAWNS, walkable, isSeat, type Table } from '../shared/map.ts'
 import { findPath, nearestWalkable, type P } from '../shared/path.ts'
-import { CAP, ENT_BYTES, FIX, F_BROKEN, F_HEART, F_ME, F_MOVING, F_SIT, HEAD_BYTES, SAY_MAX, SAY_WINDOW_MS, SNAP, SPEED, type Pub } from '../shared/proto.ts'
+import { CAP, ENT_BYTES, FIX, F_BROKEN, F_HEART, F_ME, F_MOVING, F_SIT, HEAD_BYTES, LV_MAX, MAX_ANS, PHOTO_MAX, SAY_MAX, SAY_WINDOW_MS, SNAP, SPEED, STALE_MS, VIDEO_LEVEL, type Pub, type Table as TableView } from '../shared/proto.ts'
 import { compatible, okBracket, type Prefs } from '../shared/compat.ts'
 import { check, cleanName } from './filter.ts'
 import { localDeck, type Question } from '../../src/deck.ts'
+import { LEVELS, FULL_PHOTO_PX } from '../../src/config.ts'
 
 export interface Sock { send(d: string | ArrayBuffer): void; close(code?: number, reason?: string): void }
 export type Field = 'met' | 'hearted' | 'passed' | 'refusedBy' | 'blocked' | 'blockedBy'
@@ -14,15 +15,20 @@ export const emptyRec = (): Rec => ({ met: [], hearted: [], passed: [], refusedB
 /** Per-user memory (UserDO in production, a Map in tests). add() is fire-and-forget from the Room's point of view. */
 export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Field, other: string): void; report(r: Report): void }
 export interface Report { at: number; inst: string; by: string; who: string; why: string; ctx: { said: { at: number; text: string }[]; heard: { at: number; text: string }[]; where: [number, number][]; tick: number } }
-export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => number; next?: string }
+/** v05: what a pair keeps for the session (Area DO storage in production): their level and who said yes to a date. */
+export interface PairRec { lv: number; date: string[] }
+export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => number; next?: string
+  /** a socket that sends nothing (not even the keepalive) for this long is dropped (default STALE_MS) */ staleMs?: number
+  /** pair records loaded at start, and the hook that persists one when it changes (both optional: tests keep them in memory) */
+  pairs?: Map<string, PairRec>; savePair?: (key: string, r: PairRec) => void }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
 const R_SPACE = 0.75, BOX = 0.28, INPUT_PER_S = 20
 
 class Player {
   id: number; uid: string; name: string; br: [number, number]; min: number; max: number; iam: Prefs['iam']; seek: Prefs['seek']; pav: string | undefined; sock: Sock
   x: number; y: number; path: P[] = []; dir: [number, number] | null = null; moving = false; sitting = false; stuck = 0
-  says: number[] = []; recent: { at: number; text: string }[] = []; heard: { at: number; text: string }[] = []
-  bucket = INPUT_PER_S; table: Table | null = null
+  says: number[] = []; recent: { at: number; text: string; to?: string }[] = []; heard: { at: number; text: string }[] = []
+  bucket = INPUT_PER_S; table: Table | null = null; seen = 0
   sets: Record<Field, Set<string>>
   constructor(id: number, uid: string, name: string, p: Prefs & { pav?: string }, sock: Sock, rec: Rec, spawn: P) {
     this.id = id; this.uid = uid; this.name = name; this.br = p.br; this.min = p.min; this.max = p.max; this.iam = p.iam; this.seek = p.seek; this.pav = p.pav; this.sock = sock
@@ -31,23 +37,44 @@ class Player {
   }
   pub(): Pub { return { id: this.id, name: this.name, br: this.br, pav: this.pav } }
 }
-interface Pair { a: Player; b: Player; level: number; used: Set<string>; q: Question | null }
+interface Pair { tb: number; key: string; a: Player; b: Player; level: number; used: Set<string>; q: Question | null
+  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null }
+const pairKey = (a: Player, b: Player) => [a.uid, b.uid].sort().join('|')
+/** Only the two people at a table ever receive anything from these maps. */
+const other = (pr: Pair, p: Player) => pr.a === p ? pr.b : pr.a
+const b64 = (s: string) => { try { return Uint8Array.from(atob(s), c => c.charCodeAt(0)) } catch { return null } }
+/** Width x height of a PNG (IHDR) or a baseline/progressive JPEG (first SOF marker); null if it's neither. */
+export function imageDims(u8: Uint8Array): { kind: 'png' | 'jpeg'; w: number; h: number } | null {
+  if (u8.length > 24 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
+    const d = new DataView(u8.buffer, u8.byteOffset); return { kind: 'png', w: d.getUint32(16), h: d.getUint32(20) } }
+  if (u8[0] !== 0xff || u8[1] !== 0xd8) return null
+  for (let i = 2; i + 9 < u8.length;) {
+    if (u8[i] !== 0xff) return null
+    const mk = u8[i + 1], len = (u8[i + 2] << 8) | u8[i + 3]
+    if (mk >= 0xc0 && mk <= 0xcf && mk !== 0xc4 && mk !== 0xc8 && mk !== 0xcc) return { kind: 'jpeg', h: (u8[i + 5] << 8) | u8[i + 6], w: (u8[i + 7] << 8) | u8[i + 8] }
+    i += 2 + len
+  }
+  return null
+}
 
 export class Room {
   players = new Map<Sock, Player>(); byId = new Map<number, Player>(); pending = new Set<Sock>()
-  joining = 0; tickN = 0; nextId = 1; pairs = new Map<number, Pair>()
-  name: string; store: Store; opts: RoomOpts; cap: number; now: () => number
-  constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now }
+  joining = 0; tickN = 0; nextId = 1; pairs = new Map<number, Pair>(); mem: Map<string, PairRec>
+  name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
+  constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.mem = opts.pairs ?? new Map() }
   get size() { return this.players.size }
   nextName() { const m = /^(.*?)-?(\d+)$/.exec(this.name); return this.opts.next ?? (m ? `${m[1]}-${+m[2] + 1}` : `${this.name}-2`) }
 
   connect(s: Sock) { this.pending.add(s) }
   async message(s: Sock, raw: string | ArrayBuffer) {
-    if (typeof raw !== 'string' || raw.length > 1200) return
+    // a photo for the table partner is the one message allowed to be big (a pixelated PNG, or the level-5 512 px JPEG)
+    if (typeof raw !== 'string' || raw.length > (raw.startsWith('{"t":"photo"') ? PHOTO_MAX + 64 : 1200)) return
     let m: any; try { m = JSON.parse(raw) } catch { return }
     if (!m || typeof m !== 'object') return
     if (this.pending.has(s)) { if (m.t === 'join') await this.join(s, m); return }
     const p = this.players.get(s); if (!p) return
+    p.seen = this.now()
+    if (m.t === 'ka') return
     if (p.bucket < 1) return; p.bucket--
     switch (m.t) {
       case 'go': return this.go(p, m.x, m.y)
@@ -55,6 +82,10 @@ export class Room {
       case 'say': return this.say(p, m.text)
       case 'heart': case 'pass': case 'block': case 'report': return this.act(p, m.t, m.id, m.why)
       case 'next': return this.nextCard(p)
+      case 'ans': return this.answer(p, m.text)
+      case 'date': return this.dateAsk(p, m.yes !== false)
+      case 'call': case 'callyes': case 'callno': return this.callMsg(p, m.t)
+      case 'photo': return this.photo(p, m.lv, m.data)
     }
   }
   close(s: Sock) {
@@ -82,8 +113,9 @@ export class Room {
     this.pending.delete(s)
     const me = new Player(this.nextId++, p.uid, cleanName(p.name), p, s, rec, this.spawn())
     if (this.nextId > 65000) this.nextId = 1
-    this.players.set(s, me); this.byId.set(me.id, me)
-    s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size }))
+    me.seen = this.now(); this.players.set(s, me); this.byId.set(me.id, me)
+    // 'add' below goes to you for EVERYONE in the room, yourself included: the client's count is its list's size
+    s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)) }))
     for (const o of this.players.values()) {
       if (this.hidden(me, o)) continue
       s.send(JSON.stringify({ t: 'add', p: o.pub() }))
@@ -152,8 +184,14 @@ export class Room {
     return true
   }
 
+  /** Sockets that went silent (a phone that lost signal, a tab killed without a close frame) stop counting quickly. */
+  prune() {
+    const t = this.now()
+    for (const [s, p] of [...this.players]) if (t - p.seen > this.stale) { try { s.close(4004, 'stale') } catch {} this.close(s) }
+  }
   tick() {
     this.tickN = (this.tickN + 1) & 0xffff
+    if (this.tickN % 5 === 0) this.prune()
     for (const p of this.players.values()) {
       p.bucket = Math.min(INPUT_PER_S, p.bucket + INPUT_PER_S / 10)
       p.moving = this.move(p)
@@ -171,25 +209,90 @@ export class Room {
       const ok = !!(a && b && !this.hidden(a, b))
       if (cur && (!ok || cur.a !== a || cur.b !== b)) this.endPair(t.id)
       if (ok && a && b && !this.pairs.has(t.id)) {
-        const pr: Pair = { a, b, level: 1, used: new Set(), q: null }; this.pairs.set(t.id, pr); a.table = b.table = t
+        const key = pairKey(a, b), rec = this.mem.get(key)
+        const pr: Pair = { tb: t.id, key, a, b, level: Math.min(LV_MAX, Math.max(1, rec?.lv ?? 1)), used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
+          date: new Set([a, b].filter(x => rec?.date.includes(x.uid))), call: null }
+        this.pairs.set(t.id, pr); a.table = b.table = t
         for (const [x, y] of [[a, b], [b, a]]) if (!x.sets.met.has(y.uid)) { x.sets.met.add(y.uid); this.store.add(x.uid, 'met', y.uid) }
         this.deal(pr)
       }
     }
   }
+  /** The next card comes from the pair's level pool; when that's used up, the levels below it, then the level again. */
   private deal(pr: Pair) {
     let q: Question | null = null
-    for (let i = 0; i < 4 && !q; i++) { q = localDeck.next(pr.level, pr.used); if (!q) { pr.level = pr.level % 3 + 1; if (pr.level === 1) pr.used.clear() } }
+    for (let l = pr.level; l >= 1 && !q; l--) q = localDeck.next(l, pr.used)
+    if (!q) { pr.used.clear(); q = localDeck.next(pr.level, pr.used) }
     pr.q = q; if (q) pr.used.add(q.id)
-    const card = q && { id: q.id, text: q.text }
-    pr.a.sock.send(JSON.stringify({ t: 'card', q: card, with: pr.b.id })); pr.b.sock.send(JSON.stringify({ t: 'card', q: card, with: pr.a.id }))
+    pr.ans.clear(); pr.rev = false
+    this.sendCard(pr)
+  }
+  /** Each of the two gets their own view: their answer, whether the other has answered, and the other's answer only
+      after both are in. Nobody else is ever sent any of it. */
+  view(pr: Pair, v: Player): TableView & { t: 'card'; q: { id: string; text: string } | null; with: number } {
+    const o = other(pr, v), mine = pr.ans.get(v) ?? null
+    return { t: 'card', q: pr.q && { id: pr.q.id, text: pr.q.text }, with: o.id, tb: pr.tb, lv: pr.level, n: pr.n, mine, them: pr.ans.has(o),
+      rev: pr.rev ? { mine: mine ?? '', theirs: pr.ans.get(o) ?? '' } : null, date: { me: pr.date.has(v), them: pr.date.has(o) },
+      call: pr.call ? (pr.call === v ? 'out' : 'in') : null, video: VIDEO_LEVEL }
+  }
+  private sendCard(pr: Pair) { for (const v of [pr.a, pr.b]) v.sock.send(JSON.stringify(this.view(pr, v))) }
+  private persist(pr: Pair) {
+    const r: PairRec = { lv: pr.level, date: [...pr.date].map(x => x.uid) }; this.mem.set(pr.key, r)
+    if (this.mem.size > 20000) this.mem.delete(this.mem.keys().next().value!)
+    this.opts.savePair?.(pr.key, r)
+  }
+  pairOf(p: Player) { for (const pr of this.pairs.values()) if (pr.a === p || pr.b === p) return pr; return null }
+  private answer(p: Player, text: unknown) {
+    const pr = this.pairOf(p); if (!pr || !pr.q || pr.rev || pr.ans.has(p)) return
+    const v = check(text, MAX_ANS), raw = typeof text === 'string' ? text.slice(0, 200) : ''
+    if (!v.ok) return p.sock.send(JSON.stringify({ t: 'ansno', why: v.why, text: raw }))
+    pr.ans.set(p, v.text); p.recent.push({ at: this.now(), text: v.text, to: other(pr, p).uid }); if (p.recent.length > 8) p.recent.shift()
+    if (pr.ans.size === 2) {
+      pr.rev = true; pr.n++; pr.level = Math.min(LV_MAX, pr.level + 1); this.persist(pr)
+      for (const x of [pr.a, pr.b]) { const o = other(pr, x); x.heard.push({ at: this.now(), text: pr.ans.get(o)! }); if (x.heard.length > 8) x.heard.shift() }
+    }
+    this.sendCard(pr)
+  }
+  private dateAsk(p: Player, yes: boolean) {
+    const pr = this.pairOf(p); if (!pr) return
+    const o = other(pr, p)
+    if (yes) pr.date.add(p)
+    else { const asked = pr.date.has(o) && !pr.date.has(p); pr.date.clear(); pr.call = null; if (asked) o.sock.send(JSON.stringify({ t: 'note', k: 'date-no' })) }
+    this.persist(pr); this.sendCard(pr)
+  }
+  /** Start call: only a dating pair at the video level. Nobody goes on camera until BOTH tapped: the asker's tap, then the
+      other's accept. Only then are the two sent the one-time code their app's PeerJS video date uses. */
+  private callMsg(p: Player, what: 'call' | 'callyes' | 'callno') {
+    const pr = this.pairOf(p); if (!pr) return
+    const o = other(pr, p)
+    if (what === 'call') { if (pr.call || pr.date.size < 2 || pr.level < VIDEO_LEVEL) return; pr.call = p }
+    else if (what === 'callno') { if (!pr.call) return; o.sock.send(JSON.stringify({ t: 'note', k: pr.call === p ? 'call-cancelled' : 'call-declined' })); pr.call = null }
+    else {
+      if (!pr.call || pr.call === p || pr.date.size < 2) return
+      const host = pr.call, r = crypto.getRandomValues(new Uint8Array(12)), code = [...r].map(x => (x % 36).toString(36)).join('')
+      pr.call = null
+      for (const x of [pr.a, pr.b]) x.sock.send(JSON.stringify({ t: 'call', code, host: x === host, lv: pr.level }))
+    }
+    this.sendCard(pr)
+  }
+  /** The table photo strip: each side sends its OWN photo, already pixelated on the phone to the pair's current level
+      (exactly what the main app sends at that level). Checked (pair, level, image kind and size), relayed to the partner
+      only, never stored or logged. */
+  private photo(p: Player, lv: unknown, data: unknown) {
+    const pr = this.pairOf(p); if (!pr || lv !== pr.level || typeof data !== 'string' || data.length > PHOTO_MAX) return
+    const m = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(data); if (!m) return
+    const u8 = b64(m[2].slice(0, 4096)), d = u8 && imageDims(lv === LV_MAX ? b64(m[2]) ?? u8 : u8)
+    const want = LEVELS[pr.level - 1].blocks || FULL_PHOTO_PX
+    if (!d || d.w !== want || d.h !== want || (lv === LV_MAX ? d.kind !== 'jpeg' : d.kind !== 'png') || m[1] !== d.kind) return
+    other(pr, p).sock.send(JSON.stringify({ t: 'photo', id: p.id, lv, data }))
   }
   private endPair(id: number) {
-    const pr = this.pairs.get(id); if (!pr) return; this.pairs.delete(id)
+    const pr = this.pairs.get(id); if (!pr) return; this.pairs.delete(id); pr.call = null
     for (const p of [pr.a, pr.b]) { p.table = null; if (this.players.get(p.sock) === p) p.sock.send(JSON.stringify({ t: 'card', q: null })) }
   }
   private unpair(p: Player) { for (const [id, pr] of this.pairs) if (pr.a === p || pr.b === p) this.endPair(id) }
-  private nextCard(p: Player) { for (const pr of this.pairs.values()) if (pr.a === p || pr.b === p) return this.deal(pr) }
+  /** Next card: once this one is revealed (both answered). */
+  private nextCard(p: Player) { const pr = this.pairOf(p); if (pr && pr.rev) this.deal(pr) }
 
   private snapshots() {
     const all = [...this.players.values()], max = HEAD_BYTES + all.length * ENT_BYTES
@@ -213,7 +316,18 @@ export class Room {
     if (p.says.length >= SAY_MAX) return p.sock.send(JSON.stringify({ t: 'said', ok: false, why: 'slow', text: raw, wait: p.says[0] + SAY_WINDOW_MS - t }))
     const v = check(text)
     if (!v.ok) { if (v.why !== 'empty') p.says.push(t); return p.sock.send(JSON.stringify({ t: 'said', ok: false, why: v.why, text: raw })) }
-    p.says.push(t); p.recent.push({ at: t, text: v.text }); if (p.recent.length > 8) p.recent.shift()
+    const pr = this.pairOf(p)
+    // what you said at a table is tagged with who heard it: it only goes into a report that person makes
+    p.says.push(t); p.recent.push({ at: t, text: v.text, ...(pr ? { to: other(pr, p).uid } : {}) }); if (p.recent.length > 8) p.recent.shift()
+    if (pr) {
+      // at a table, speech is for the two of them: the text goes to the partner only; everyone else gets a "…" over the table
+      const o = other(pr, p)
+      p.sock.send(JSON.stringify({ t: 'said', ok: true, text: v.text, priv: 1 }))
+      o.sock.send(JSON.stringify({ t: 'say', id: p.id, text: v.text, priv: 1 })); o.heard.push({ at: t, text: v.text }); if (o.heard.length > 8) o.heard.shift()
+      const mm = JSON.stringify({ t: 'murmur', tb: pr.tb })
+      for (const x of this.players.values()) if (x !== p && x !== o && !this.hidden(p, x) && !this.hidden(o, x)) x.sock.send(mm)
+      return
+    }
     p.sock.send(JSON.stringify({ t: 'said', ok: true, text: v.text }))
     const msg = JSON.stringify({ t: 'say', id: p.id, text: v.text })
     for (const o of this.players.values()) if (o !== p && !this.hidden(p, o)) { // the sender already has 'said'
@@ -236,7 +350,7 @@ export class Room {
     } else {
       this.store.report({
         at: this.now(), inst: this.name, by: p.uid, who: o.uid, why: typeof why === 'string' && REASONS.has(why) ? why : 'other',
-        ctx: { said: o.recent.slice(-5), heard: p.heard.slice(-5), where: [[+p.x.toFixed(2), +p.y.toFixed(2)], [+o.x.toFixed(2), +o.y.toFixed(2)]], tick: this.tickN },
+        ctx: { said: o.recent.filter(x => !x.to || x.to === p.uid).slice(-5).map(({ at, text }) => ({ at, text })), heard: p.heard.slice(-5), where: [[+p.x.toFixed(2), +p.y.toFixed(2)], [+o.x.toFixed(2), +o.y.toFixed(2)]], tick: this.tickN },
       })
     }
     p.sock.send(JSON.stringify({ t: 'ack', what, id: o.id }))

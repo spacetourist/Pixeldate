@@ -142,7 +142,7 @@ export default function Signup({ onDone, resume }: { onDone: (p: Profile, photo:
   } else if (step === 3) {
     // SPEC: "Screens (step 3 of signup ...)". The flow is a full-screen phone layout of its own; Skip keeps signup moving.
     return <div className="app flow" data-step="3"><Suspense fallback={<div className="avf-wait" data-t="av-wait" />}>
-      <AvatarFlow step={`Step 3 of ${N}`} initial={pav} onExit={() => go(2)} onSkip={() => { setPav(null); go(4) }} onSave={j => { setPav(j); go(4) }} /></Suspense></div>
+      <AvatarFlow step={`Step 3 of ${N}`} initial={pav} iam={iam} onExit={() => go(2)} onSkip={() => { setPav(null); go(4) }} onSave={j => { setPav(j); go(4) }} /></Suspense></div>
   } else if (step === 4) {
     body = <>
       <div><Eyebrow n="spring" c="var(--c-mint)">When did your story start?</Eyebrow>{H('Your birthday')}<p className="lede">Matches only ever see your age bracket.</p></div>

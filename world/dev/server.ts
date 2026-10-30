@@ -20,15 +20,17 @@ const store: Store = {
 const INVITES = new Set(['dev-invite-1', 'dev-invite-2', 'dev-invite-3'])
 const capArg = process.argv.find(a => a.startsWith('--cap='))
 const CAP = capArg ? +capArg.slice(6) : undefined
+/** WORLD_STALE_MS: tests use a short keepalive timeout so a hard disconnect is seen in seconds */
+const STALE = process.env.WORLD_STALE_MS ? +process.env.WORLD_STALE_MS : undefined
 const rooms = new Map<string, { room: Room; timer: ReturnType<typeof setInterval> | null }>()
 const tickMs: number[] = []
 function area(name: string) {
   let a = rooms.get(name)
-  if (!a) { a = { room: new Room(name, store, { invites: INVITES, cap: CAP }), timer: null }; rooms.set(name, a) }
+  if (!a) { a = { room: new Room(name, store, { invites: INVITES, cap: CAP, staleMs: STALE }), timer: null }; rooms.set(name, a) }
   return a
 }
 const port = +(process.argv.find(a => /^\d+$/.test(a)) ?? process.env.WORLD_PORT ?? 8787)
-const wss = new WebSocketServer({ host: '127.0.0.1', port, maxPayload: 4096 })
+const wss = new WebSocketServer({ host: '127.0.0.1', port, maxPayload: 262144 })
 wss.on('connection', (ws, req) => {
   const path = new URL(req.url ?? '/', 'http://x').pathname, m = /^\/parties\/area\/(cafe-\d{1,3})$/.exec(path)
   if (!m) { ws.close(4004, 'no such room'); return }
@@ -43,7 +45,7 @@ function attach(ws: WebSocket, name: string) {
   const jt = setTimeout(() => { if (room.pending.has(s)) { s.send(JSON.stringify({ t: 'no', why: 'timeout' })); ws.close(4001, 'timeout'); room.close(s) } }, 5000)
   ws.on('message', async (data, binary) => {
     await room.message(s, binary ? new ArrayBuffer(0) : data.toString())
-    if (room.size && !a.timer) a.timer = setInterval(() => tick(room), TICK_MS)
+    if (room.size && !a.timer) a.timer = setInterval(() => { tick(room); if (!room.size && a.timer) { clearInterval(a.timer); a.timer = null } }, TICK_MS)
   })
   ws.on('close', () => {
     clearTimeout(jt); room.close(s)

@@ -24,3 +24,5 @@ new_sqlite_classes = ["Area", "User", "Mod"]
 # dev-only invite list. For production, move INVITES to an encrypted secret and remove DEV.
 INVITES = "dev-invite-1,dev-invite-2,dev-invite-3"
 DEV = "1"
+# dev only: drop a silent socket after 3 s so tests see a hard disconnect quickly (production default: 15 s)
+STALE_MS = "3000"

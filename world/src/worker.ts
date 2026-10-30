@@ -4,10 +4,10 @@
 import { Server, routePartykitRequest, type Connection } from 'partyserver'
 import { DurableObject } from 'cloudflare:workers'
 import './profanity.ts'
-import { Room, emptyRec, type Field, type Rec, type Report, type Sock, type Store } from './sim.ts'
+import { Room, emptyRec, type Field, type PairRec, type Rec, type Report, type Sock, type Store } from './sim.ts'
 import { TICK_MS } from '../shared/proto.ts'
 
-interface Env { Area: DurableObjectNamespace<Area>; User: DurableObjectNamespace<User>; Mod: DurableObjectNamespace<Mod>; INVITES?: string; DEV?: string }
+interface Env { Area: DurableObjectNamespace<Area>; User: DurableObjectNamespace<User>; Mod: DurableObjectNamespace<Mod>; INVITES?: string; DEV?: string; STALE_MS?: string }
 
 export class User extends DurableObject<Env> {
   async load(): Promise<Rec> { return { ...emptyRec(), ...(await this.ctx.storage.get<Rec>('rec')) } }
@@ -30,7 +30,13 @@ export class Mod extends DurableObject<Env> {
 export class Area extends Server<Env> {
   static options = { hibernate: false }
   room!: Room; timer: ReturnType<typeof setInterval> | null = null; joinTimers = new Map<Connection, ReturnType<typeof setTimeout>>()
-  onStart() { this.room = new Room(this.name, store(this.env), { invites: new Set((this.env.INVITES ?? "").split(',').map(s => s.trim()).filter(Boolean)) }) }
+  /** v05: each pair's level and date opt-ins live in this instance's storage (key pair:<uidA>|<uidB>, sorted), loaded once */
+  async onStart() {
+    const pairs = new Map<string, PairRec>()
+    for (const [k, v] of await this.ctx.storage.list<PairRec>({ prefix: 'pair:' })) pairs.set(k.slice(5), v)
+    this.room = new Room(this.name, store(this.env), { invites: new Set((this.env.INVITES ?? "").split(',').map(s => s.trim()).filter(Boolean)),
+      staleMs: this.env.STALE_MS ? +this.env.STALE_MS : undefined, pairs, savePair: (k, r) => { this.ctx.storage.put('pair:' + k, r).catch(() => {}) } })
+  }
   onConnect(c: Connection) {
     const s = c as unknown as Sock
     this.room.connect(s)
@@ -39,14 +45,16 @@ export class Area extends Server<Env> {
   }
   async onMessage(c: Connection, m: string | ArrayBuffer | ArrayBufferView) {
     await this.room.message(c as unknown as Sock, typeof m === 'string' ? m : new ArrayBuffer(0))
-    if (this.room.size && !this.timer) this.timer = setInterval(() => this.room.tick(), TICK_MS)
+    if (this.room.size && !this.timer) this.timer = setInterval(() => { this.room.tick(); this.idle() }, TICK_MS)
   }
   onClose(c: Connection) { this.gone(c) }
   onError(c: Connection) { this.gone(c) }
   gone(c: Connection) {
     clearTimeout(this.joinTimers.get(c)); this.joinTimers.delete(c); this.room.close(c as unknown as Sock)
-    if (!this.room.size && this.timer) { clearInterval(this.timer); this.timer = null }
+    this.idle()
   }
+  /** the tick (and its prune of silent sockets) stops as soon as the room is empty */
+  idle() { if (!this.room.size && this.timer) { clearInterval(this.timer); this.timer = null } }
 }
 
 export default {

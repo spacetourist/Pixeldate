@@ -7,6 +7,7 @@ import { BRACKETS, BUBBLE_MS, MAX_SAY, bracketLabel, type Pub, type ServerMsg } 
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
 import { walkable } from '../../world/shared/map.ts'
 import { WorldNet } from './net.ts'
+import { startLook } from '../avatar/kit/defaults.ts'
 import { Renderer, MW, MH, type Layout } from './render.ts'
 import './world.css'
 
@@ -29,7 +30,7 @@ type Bubble = { text: string; until: number; mine?: boolean; held?: string }
 /** The join profile: bracket only (never age or birthday), prefs for the server's both-ways check, character JSON (never an
     image). Kept here rather than importing net.ts's wire(), so the world chunk shares no module with the app's first load. */
 const joinP = (p: Profile) => ({ name: p.name, br: BRACKETS.find(([lo, hi]) => Math.min(p.age, 70) >= lo && Math.min(p.age, 70) <= hi) ?? BRACKETS[0], min: Math.max(18, p.min), max: Math.max(18, p.max),
-  iam: p.iam, seek: p.seek, uid: p.uid, adult: true, ...(typeof p.pav === 'string' && p.pav.length <= 512 && p.pav[0] === '{' ? { pav: p.pav } : {}) })
+  iam: p.iam, seek: p.seek, uid: p.uid, adult: true, pav: typeof p.pav === 'string' && p.pav.length <= 512 && p.pav[0] === '{' ? p.pav : JSON.stringify(startLook(p.iam)) })
 const layoutOf = (): Layout => innerWidth >= 900 && innerWidth > innerHeight ? 'desk' : 'phone'
 
 function World() {
@@ -59,7 +60,7 @@ function World() {
     n.onmsg = (m: ServerMsg | any) => {
       if (m.t === 'hi') { setInst(m.inst); setPhase('in') }
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
-      else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size + 1); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
+      else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
       else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS }); addLog(n.pubs.get(m.id)?.name ?? 'Someone', m.text, false) }
       else if (m.t === 'said') {
         if (m.ok) { bubbles.current.set(n.me, { text: m.text, until: performance.now() + BUBBLE_MS, mine: true }); addLog(prof?.name ?? 'You', m.text, true) }

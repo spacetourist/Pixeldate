@@ -489,7 +489,7 @@ await test('couple heart: only while the café call is connected on both sides a
   await goTo(A, tb.seats[0][0], tb.seats[0][1] + 2); assert.ok(await C.wait(() => hearts(C).at(-1)?.on === false), 'standing up hides it'); assert.ok(await B.wait(() => B.events.filter(e => e.t === 'callend').length >= 2))
   await done()
 })
-await test('voice emotes: set by "I am", takes rotate (never the same twice in a row), 1.5 s server cooldown, heard by the room', async () => {
+await test('voice emotes: set by "I am", takes rotate (never the same twice in a row), 3 s server cooldown (early sends dropped, not queued), heard by the room', async () => {
   const { EMOTE_COOLDOWN_MS, setOf, DEFAULT_SET } = await import('../shared/emote.ts')
   assert.equal(setOf(undefined), DEFAULT_SET); assert.equal(setOf('woman'), 'female'); assert.equal(setOf('man'), 'male')
   const w = await J({ name: 'Emw', iam: 'woman' }), m = await J({ name: 'Emm', iam: 'man' }), o = await J({ name: 'Emo' }); await sleep(200)
@@ -498,7 +498,11 @@ await test('voice emotes: set by "I am", takes rotate (never the same twice in a
   assert.ok(await o.wait(() => got(o, w.me).length === 1), 'the room hears her giggle'); assert.match(got(o, w.me)[0].take, /^giggle_f[12]$/)
   assert.ok(await w.wait(() => got(w, w.me).length === 1), 'she hears her own'); assert.equal(got(m, w.me).length, 1)
   w.send({ t: 'emote', e: 'giggle' }); const slow = await w.wait(() => w.events.find(e => e.t === 'emote' && e.ok === false), 1000)
-  assert.ok(slow && slow.wait > 0 && slow.wait <= EMOTE_COOLDOWN_MS, 'second one inside 1.5 s refused with a wait'); await sleep(300); assert.equal(got(o, w.me).length, 1, 'and never relayed')
+  assert.ok(slow && slow.wait > 0 && slow.wait <= EMOTE_COOLDOWN_MS, 'second one inside 3 s refused with a wait'); await sleep(300); assert.equal(got(o, w.me).length, 1, 'and never relayed')
+  assert.equal(EMOTE_COOLDOWN_MS, 3000, 'GD: a 3 s cooldown per person')
+  await sleep(2200 - 300); const nSlow = () => w.events.filter(e => e.t === 'emote' && e.ok === false).length, s0 = nSlow()
+  w.send({ t: 'emote', e: 'sigh' }); assert.ok(await w.wait(() => nSlow() === s0 + 1, 1000), 'still refused 2.2 s in')
+  await sleep(EMOTE_COOLDOWN_MS - 2200 + 200); assert.equal(got(o, w.me).length, 1, 'dropped, not queued: nothing plays once the window ends')
   const takes = [got(o, w.me)[0].take]
   for (let i = 0; i < 4; i++) { await sleep(EMOTE_COOLDOWN_MS + 80); w.send({ t: 'emote', e: 'giggle' }); assert.ok(await o.wait(() => got(o, w.me).length === takes.length + 1)); takes.push(got(o, w.me).at(-1).take) }
   for (let i = 1; i < takes.length; i++) assert.notEqual(takes[i], takes[i - 1], 'same take twice in a row: ' + takes.join(','))

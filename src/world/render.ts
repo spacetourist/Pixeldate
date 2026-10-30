@@ -7,6 +7,7 @@ import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
 import { F_HEART, F_BROKEN, F_MOVING, F_SIT, F_ME } from '../../world/shared/proto.ts'
+import EFX from './art/emotes/effects/effects.json'
 import { composeDir, footX, WALK_FRAME_MS, WALK_W, WALK_H, SIT_D, SIT_CHAIR, PIANO_FRAME_MS, type Dir, type Frame } from './walk.ts'
 import { parseOptions } from '../avatar/kit/map.ts'
 import { SAMPLES } from '../avatar/kit/kit.gen.ts'
@@ -120,6 +121,15 @@ export class Renderer {
   /** the viewer's private markers last frame, for tests: id -> [has a heart/broken flag, drawn]. A marker over someone
       seated at a table showing its couple heart is hidden (GD: it read as a pile of hearts) and comes back when it stops. */
   markOn: Record<number, [boolean, boolean]> = {}
+  /** GD's emote effects (world/emotes/README.md): one-shot 24x24 sheets over the emoter, unlit, above avatars and markers,
+      below the UI. Set by index.tsx: id -> the emote and when it started (performance.now()). The anchor is (sx, sy-24),
+      (sx, sy-35) while their heart / broken-heart marker shows, +SIT_D seated; a speech bubble wins the head slot, so
+      bubbleTop (map art y of that person's bubble top, from index.tsx) lifts the emote above it. Moves with the avatar. */
+  emotes = new Map<number, { e: string; at: number }>()
+  bubbleTop = new Map<number, number>()
+  /** what the emote layer drew last frame (tests): id -> [emote, frame, dx, dy] with dx, dy from the sprite cell top-left */
+  emoteOn: Record<number, [string, number, number, number]> = {}
+  private emos = new Container(); private EF: Record<string, Texture[]> = {}
   /** GD's marker files in use, with their sizes in art px (tests check them against world/markers/README.md). */
   art: Record<string, [number, number]> = {}
   constructor(c: HTMLCanvasElement) {
@@ -149,6 +159,10 @@ export class Renderer {
     // GD's sofa3: the back is in the map art; over it the sitters' bodies (L, M, R), the front layer (cushions, arms,
     // feet), then the sitters' legs (L, M, R), all sorted as one object at the sofa's bottom (y + 32)
     const [ch, cs, cd] = await Promise.all(['couple-heart', 'couple-steam', 'couple-drift'].map(f => load(`couple/${f}.png`)))
+    const EM = Object.keys(EFX.emotes) as (keyof typeof EFX.emotes)[], ems = await Promise.all(EM.map(id => load(`emotes/effects/${id}.png`)))
+    EM.forEach((id, i) => { const im = ems[i], src = tex(im).source; this.art['emote-' + id] = [im.width, im.height]
+      this.EF[id] = Array.from({ length: EFX.emotes[id].frames }, (_, f) => new Texture({ source: src, frame: new Rectangle(f * EFX.frame_w, 0, EFX.frame_w, EFX.frame_h) })) })
+    this.emos.sortableChildren = true
     for (const [f, im] of [['couple-heart', ch], ['couple-steam', cs], ['couple-drift', cd]] as const) this.art[f] = [im.width, im.height]
     const chS = tex(ch).source, csS = tex(cs).source, cdS = tex(cd).source
     this.CH = COUPLE_MS.map((_, i) => new Texture({ source: chS, frame: new Rectangle(i * 15, 0, 15, 13) }))
@@ -176,7 +190,7 @@ export class Renderer {
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }
     this.goal.texture = T.goal; this.goal.visible = false
     this.people.sortableChildren = true
-    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.notes, this.marks, this.couple)
+    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.notes, this.marks, this.couple, this.emos)
     this.stage.addChild(this.world, this.ui)
     this.px = px; this.apply()
   }
@@ -241,6 +255,7 @@ export class Renderer {
     // people
     const seen = new Set<number>()
     const bodies: Box[] = [], far: { id: number; x: number; y: number }[] = [], calm = still()
+    const emo: { id: number; sx: number; sy: number; fy: number; sd: number; mark: boolean }[] = []
     const under = new Set<string>(); for (const tb of this.hearts) for (const [cx, cy] of TABLES[tb]?.seats ?? []) under.add(cx + ',' + cy)
     this.markOn = {}
     for (const e of net.ents.values()) {
@@ -272,6 +287,7 @@ export class Renderer {
       const heart = !!(e.f & F_HEART), broken = !heart && !!(e.f & F_BROKEN), sd = sit ? SIT_D : 0
       const hush = sit && under.has(Math.floor(e.x) + ',' + Math.floor(e.y))
       x.mark.visible = (heart || broken) && !hush; this.markOn[e.id] = [heart || broken, x.mark.visible]
+      emo.push({ id: e.id, sx, sy, fy, sd, mark: x.mark.visible })
       if (heart && calm) { x.mark.texture = this.T.heart; x.mark.position.set(sx + 7, sy - 9 + sd) }
       else if (heart) { x.mark.texture = Math.floor((now + e.id * 137) / HEART_BOB_MS) % 2 ? this.T.bob1 : this.T.bob0; x.mark.position.set(sx + 7, sy - 10 + sd) }
       else if (broken) { x.mark.texture = this.T['broken-heart']; x.mark.position.set(sx + 7, sy - 8 + sd) }
@@ -285,8 +301,28 @@ export class Renderer {
     this.drawDuet(now, calm)
     this.drawNotes(now, calm)
     this.drawCouple(now, calm)
+    this.drawEmotes(emo, now)
     this.arrows = this.placeArrows(far, bodies)
     this.px.render(this.stage)
+  }
+  /** frame of a one-shot emote t ms in (GD's per-frame ms), or -1 once it's over */
+  static emoteFrame(id: string, t: number) { const m = (EFX.emotes as Record<string, { frame_ms: number[] }>)[id]; if (!m) return -1; t = Math.max(0, t)   // a message can land after this frame's rAF stamp
+    for (let f = 0; f < m.frame_ms.length; f++) { if (t < m.frame_ms[f]) return f; t -= m.frame_ms[f] } return -1 }
+  private drawEmotes(list: { id: number; sx: number; sy: number; fy: number; sd: number; mark: boolean }[], now: number) {
+    const c = this.emos; this.emoteOn = {}; let i = 0
+    for (const p of list) {
+      const em = this.emotes.get(p.id); if (!em) continue
+      const f = Renderer.emoteFrame(em.e, now - em.at), T = this.EF[em.e]
+      if (f < 0) { this.emotes.delete(p.id); continue } if (!T) continue
+      const A = EFX.anchor, [ax, ay] = p.mark ? A.with_heart_marker : A.frame_topleft
+      let dy = ay + p.sd; const bt = this.bubbleTop.get(p.id)
+      if (bt !== undefined) dy = Math.min(dy, Math.floor(bt) - p.sy - EFX.frame_h - 1)   // above the bubble's top edge
+      let s = c.children[i] as Sprite | undefined; if (!s) { s = new Sprite(); s.label = 'emote'; c.addChild(s) }
+      s.texture = T[f]; s.position.set(p.sx + ax, p.sy + dy); s.zIndex = p.fy * 1024 + (p.id & 1023); s.visible = true; i++
+      this.emoteOn[p.id] = [em.e, f, ax, dy]
+    }
+    for (const id of this.emotes.keys()) if (!list.some(p => p.id === id)) this.emotes.delete(id)
+    for (; i < c.children.length; i++) c.children[i].visible = false
   }
   /** GD's couple heart over a table (README): steam L then R, the drifting hearts oldest first, then the heart, from the
       table sprite's top-left (tile x*16, (seat row - 1)*16). Every screen runs the same clock (performance.now()), so the
@@ -399,6 +435,8 @@ export class Renderer {
     return [((x.sx + 11) * this.k - this.ox) / this.dpr, ((x.sy + (x.sit ? 1 : -2) + 1) * this.k - this.oy) / this.dpr] }
   /** CSS-pixel point on the canvas → map position in tiles. */
   toTile(cx: number, cy: number) { const d = this.dpr; return [(cx * d + this.ox) / this.k / TILE, (cy * d + this.oy) / this.k / TILE] }
+  /** CSS-pixel y on the canvas → map art px y. */
+  artY(cy: number) { return (cy * this.dpr + this.oy) / this.k }
   /** Map position in tiles → CSS pixels on the canvas. */
   toCss(tx: number, ty: number) { return [(tx * TILE * this.k - this.ox) / this.dpr, (ty * TILE * this.k - this.oy) / this.dpr] }
   /** The person under a tap, if any (their sprite box, topmost first; never yourself). */

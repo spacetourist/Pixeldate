@@ -5,7 +5,7 @@
 export const EMOTES = ['giggle', 'sigh', 'groan', 'aww', 'gasp'] as const
 export type Emote = typeof EMOTES[number]
 export type EmoteSet = 'female' | 'male'
-export const EMOTE_COOLDOWN_MS = 1500
+export const EMOTE_COOLDOWN_MS = 3000
 export const DEFAULT_SET: EmoteSet = 'female'
 export const setOf = (iam: unknown): EmoteSet => iam === 'man' ? 'male' : iam === 'woman' ? 'female' : DEFAULT_SET
 export const TAKES: Record<EmoteSet, Record<Emote, string[]>> = {

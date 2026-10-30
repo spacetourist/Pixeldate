@@ -165,18 +165,27 @@
 .w-mute { pointer-events: auto; width: 40px; height: 36px; display: grid; place-items: center; background: var(--raised, #1E1640); border: 2px solid var(--edge, #05020F); box-shadow: inset 0 0 0 1px #4A3886, 0 3px 0 var(--edge, #05020F); cursor: pointer; padding: 0 }
 .w-mute.off { background: #281D52 } .w-mute img { width: 33px; height: 27px; image-rendering: pixelated }
 
-/* voice emote tray: PLACEHOLDER (text pills) until GD's emote art lands; bottom-left over the café */
-.w-emotes { position: absolute; z-index: 5; left: 8px; bottom: 8px; display: flex; gap: 4px; flex-wrap: wrap; max-width: calc(100% - 16px) }
-.w-emo { font: 600 11px/1 var(--font, inherit); color: #F4ECFF; background: #281D52; border: 2px solid #05020F; box-shadow: inset 0 0 0 1px #4A3886, 0 2px 0 #05020F; padding: 6px 8px; min-height: 28px; cursor: pointer }
-.w-emo:active { transform: translateY(1px); box-shadow: inset 0 0 0 1px #4A3886 }
-/* PLACEHOLDER voice emote effect over the one who emoted (until GD's art): rises 6 art px and fades over 1.2 s */
-.w-emofx { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; font: 700 10px/1 var(--font, inherit); color: #05020F; background: #FFD84D; border: 2px solid #05020F; padding: 2px 4px 3px; translate: -50% -100%; animation: w-emofx 1.2s steps(6) forwards; white-space: nowrap }
-@keyframes w-emofx { 0% { opacity: 0; margin-top: 0 } 15% { opacity: 1 } 70% { opacity: 1 } 100% { opacity: 0; margin-top: calc(var(--u, 2px) * -6) } }
-@media (prefers-reduced-motion: reduce) { .w-emofx { animation: none } }
-/* phone: the tray folds behind one button (bottom-left), and closes after an emote */
-.w-emo-tg { position: absolute; z-index: 6; left: 8px; bottom: 8px; width: 36px; height: 36px; padding: 0; font-size: 16px; display: grid; place-items: center }
-.w-emo-tg.on { background: #4A3886 }
-.w-emotes.folded { left: 50px; right: 8px; max-width: none; bottom: 8px }
+/* GD's voice emote tray (world/emotes/src/emotes.css). Phone: ♪ (café sound) 36x36 at bottom-left, the tray to its right,
+   bottoms aligned (the strip's drop edge on the ♪'s); desktop: bottom-left of the map at (8, 820), over the help chips. */
+.w-note-btn, .w-et-one { position: absolute; z-index: 6; bottom: 10px; width: 36px; height: 36px; padding: 0; display: grid; place-items: center; cursor: pointer;
+  background: #281D52; border: 2px solid #05020F; box-shadow: 0 2px 0 #05020F, inset 0 0 0 1px #4A3886; color: #FFF6EC; font: 700 16px/1 var(--font, inherit) }
+.w-note-btn { left: 8px } .w-note-btn.off { color: #6E6496 } .w-et-one.phone { left: 50px } .w-et-one.desk { left: 8px }
+.w-et-one img { width: 16px; height: 16px; image-rendering: pixelated; display: block }
+.w-et-tray { position: absolute; z-index: 6; bottom: 8px; display: flex; align-items: center; gap: 5px; padding: 4px; background: #161033;
+  border: 2px solid #05020F; border-radius: 12px; box-shadow: 0 2px 0 #05020F; --p: 0 }
+.w-et-tray.phone { left: 50px; bottom: 10px } .w-et-tray.desk { bottom: 12px } .w-et-tray.desk { left: 8px }
+.w-et-tray .eb { position: relative; width: 52px; height: 56px; padding: 0; border-radius: 9px; background: #281D52; border: 2px solid #05020F; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; -webkit-tap-highlight-color: transparent }
+.w-et-tray .eb img { width: 32px; height: 32px; image-rendering: pixelated; display: block; pointer-events: none }
+.w-et-tray .eb span { font: 600 10.5px/1 var(--font-ui); color: #FFF6EC; letter-spacing: .01em; pointer-events: none }
+.w-et-tray .eb.on { border-color: #48E5C2 } .w-et-tray .eb.on.down { transform: translateY(1px) }
+.w-et-tray .eb.cd { cursor: default } .w-et-tray .eb.cd img, .w-et-tray .eb.cd span { opacity: .45 }
+.w-et-tray .eb.cd.on { border-color: rgba(72, 229, 194, .38) }
+.w-et-tray .eb.cd::after { content: ""; position: absolute; inset: -2px; border-radius: 9px; padding: 2px; pointer-events: none;
+  background: conic-gradient(#48E5C2 calc(var(--p) * 360deg), transparent 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude }
+.w-et-tray .fold { width: 32px; height: 56px; padding: 0; border-radius: 9px; background: #1E1640; border: 2px solid #05020F; display: flex; align-items: center; justify-content: center; cursor: pointer }
+.w-et-tray .fold svg { display: block }
 /* GD couple-call-390: the call in the café (src/couple.css) */
 .w-oncall { display: flex; flex-direction: column; gap: 8px; padding: 10px }
 .w-oc-hd { display: flex; align-items: center; gap: 8px; font: 700 12.5px/1.2 var(--font, inherit); color: #48E5C2 }

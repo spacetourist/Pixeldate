@@ -712,7 +712,7 @@ export class Room {
     }
   }
 
-  /** A voice emote: public, from the character; the set follows the profile's "I am"; ~1.5 s cooldown per player. */
+  /** A voice emote: public, from the character; the set follows the profile's "I am"; 3 s cooldown per player (early sends dropped). */
   private emote(p: Player, e: unknown) {
     if (!isEmote(e)) return
     const t = this.now(), wait = p.emoteAt + EMOTE_COOLDOWN_MS - t

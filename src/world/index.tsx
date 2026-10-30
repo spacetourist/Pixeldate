@@ -9,7 +9,8 @@ import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, 
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
 import { walkable, isSeat, isPianoSeat, at, TABLES } from '../../world/shared/map.ts'
 import { PIECE, PIANO_SEAT, hears, gainAt, panAt } from '../../world/shared/piano.ts'
-import { EMOTES, EMOTE_LABEL, EMOTE_CREDIT, type Emote } from '../../world/shared/emote.ts'
+import { EMOTE_CREDIT, EMOTE_COOLDOWN_MS } from '../../world/shared/emote.ts'
+import { EmoteTray, type EmoteCd } from './EmoteTray.tsx'
 import { SOFAS, sofaAt } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, BASS_SEAT, MELODY_SEAT, INVITE_MS } from '../../world/shared/duet.ts'
 import { DuetPanel, DuetRows, InviteSheet, InviteCard, SoloDuetPanel, DuetCard, Px as DPx, type DuetOn, type Who } from './duet.tsx'
@@ -66,7 +67,6 @@ const CALLEND: Record<CallEnd | 'server', string> = { hangup: 'Call ended.', rem
 const pendingHearts = new Set<number>()
 const DUET_OFF = { on: false, bass: 0, melody: 0, ph: '', song: null, at: 0, gone: [] }
 /** PLACEHOLDER glyphs for the emote effect over the emoter (GD's art to come) */
-const EMOTE_FX: Partial<Record<Emote, string>> = { giggle: 'hehe', sigh: 'haah', gasp: '!', aww: 'aww', groan: 'ugh' }
 const layoutOf = (): Layout => innerWidth >= 900 && innerWidth > innerHeight ? 'desk' : 'phone'
 
 function World() {
@@ -101,10 +101,8 @@ function World() {
   const [near, setNear] = useState(0), [muted, setMuted] = useState(localStorage.getItem('pd.pianoMute') === '1'), [song, setSong] = usePianoSel()
   /** "Not for me": the kind card the other person gets ("<name> has moved on") */
   const [gone, setGone] = useState('')
-  /** voice emotes: the last one per player (for the tray's pressed state + tests) */
-  const emoteFx = useRef(new Map<number, { e: string; until: number }>())
-  /** phone: the emote tray folds behind one button so it doesn't cover the floor */
-  const [emoOpen, setEmoOpen] = useState(false)
+  /** voice emotes: my tray's 3 s cooldown (from my send; resynced from the server's 'slow' reply) */
+  const [emoCd, setEmoCd] = useState<EmoteCd>(null), emoCdRef = useRef<EmoteCd>(null); emoCdRef.current = emoCd
   /** the café call (both tapped Start call): the live call, my heart switch (on each call), a re-render tick */
   const callRef = useRef<CafeCall | null>(null), [call, setCall] = useState<CafeCall | null>(null), [, setCallTick] = useState(0)
   const [heartOn, setHeartOn] = useState(true)
@@ -134,12 +132,12 @@ function World() {
         else setDinv(d => { if (d && m.why === 'cancel') flash(`${n.pubs.get(d.from)?.name ?? 'They'} cancelled the duet invite.`); if (d && m.why === 'taken') flash('Someone else sat down first.'); return null }) }
       else if (m.t === 'dlv') setPairLv(m.peer, m.lv)
       else if (m.t === 'emote') {
-        if (m.ok === false) flash('One at a time: wait a moment.')
+        if (m.ok === false) { const t = performance.now(), w = Math.max(0, (m as any).wait ?? EMOTE_COOLDOWN_MS); setEmoCd(c => ({ e: c?.e ?? '', at: c && c.until > t ? c.at : t, until: t + w })); flash('One at a time: wait a moment.') }
         else { const e = n.ents.get(m.id), me = n.ents.get(n.me), t = performance.now()
           // from the character: the piano's distance falloff and pan, relative to where I stand
           const d = e && me ? Math.hypot(n.lerpX(e, t) - n.lerpX(me, t), n.lerpY(e, t) - n.lerpY(me, t)) : 0, dx = e && me ? n.lerpX(e, t) - n.lerpX(me, t) : 0
           A.oneShot('emotes/' + m.take, m.id === n.me ? 1 : gainAt(d), m.id === n.me ? 0 : panAt(dx))
-          emoteFx.current.set(m.id, { e: m.e, until: t + 1200 }) } }
+          ren.current?.emotes.set(m.id, { e: m.e, at: t }) } }
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
       else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
       else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS })
@@ -195,7 +193,7 @@ function World() {
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
     size(); const ro = new ResizeObserver(size); ro.observe(stage.current!)
     let dwrap: HTMLDivElement | null = null, pill: HTMLButtonElement | null = null; const tags: HTMLDivElement[] = []
-    const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), fels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0, lastN = 0
+    const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0, lastN = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
       const A = pa.current!, ps = A.state; r.piano = { by: ps.by, song: ps.song, at: ps.song ? A.perfAt(ps.at) : 0 }
@@ -232,28 +230,18 @@ function World() {
       }
       // GD v04: bubbles that would overlap stack upward, 2 art px apart (tail included), lowest first; each keeps its
       // tail on its own speaker's column, so a nudged bubble still points down at who said it
+      r.bubbleTop.clear()
       lay.sort((a, b) => b.top + b.H - (a.top + a.H) || a.id - b.id)
       const put: typeof lay = [], g = STACK_GAP * u
       for (const b of lay) {
         const b0 = b.top
         for (let hit = true; hit;) { hit = false
           for (const p of put) if (b.left < p.left + p.w + g && p.left < b.left + b.w + g && b.top < p.top + p.H + g && p.top < b.top + b.H + g) { b.top = p.top - g - b.H; hit = true } }
-        put.push(b); b.el.dataset.lift = String(Math.round((b0 - b.top) / u))
+        put.push(b); r.bubbleTop.set(b.id, r.artY(b.top)); b.el.dataset.lift = String(Math.round((b0 - b.top) / u))
         b.el.style.setProperty('--tx', b.tx + 'px'); b.el.style.transform = `translate(${b.left}px, ${b.top}px)`
       }
       lay.length = 0
       for (const [id, el] of els) if (!bubbles.current.has(id)) { el.remove(); els.delete(id) }
-      // PLACEHOLDER emote effect over the one who emoted (until GD's art): a small pixel tag that rises and fades, 1.2 s
-      for (const [id, fx] of emoteFx.current) {
-        let el = fels.get(id); const tip = r.tip(id)
-        if (now > fx.until || !n.ents.get(id)) { emoteFx.current.delete(id); el?.remove(); fels.delete(id); continue }
-        if (!el) { el = document.createElement('div'); el.className = 'w-emofx'; el.dataset.t = 'w-emofx'; el.setAttribute('aria-hidden', 'true'); ov.append(el); fels.set(id, el) }
-        if (el.dataset.e !== fx.e || el.dataset.k !== String(fx.until)) { el.dataset.e = fx.e; el.dataset.k = String(fx.until); el.dataset.id = String(id); el.textContent = EMOTE_FX[fx.e as Emote] ?? '♪'
-          el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '' }
-        if (!tip) { el.style.visibility = 'hidden'; continue } el.style.visibility = ''
-        el.style.transform = `translate(${Math.round(tip[0])}px, ${Math.round(tip[1] - 2 * u)}px)`
-      }
-      for (const [id, el] of fels) if (!emoteFx.current.has(id)) { el.remove(); fels.delete(id) }
       // 2c: the mint "Sit beside me" pill over the open Melody seat (everyone, while a duet waits) and, while it plays,
       // the Bass / Melody tags under the bench (GD mock C); in art px from DUET_PX, snapped like the bubbles
       if (!dwrap) { dwrap = document.createElement('div'); dwrap.className = 'w-duet w-wrap-duet'; ov.append(dwrap)
@@ -283,7 +271,8 @@ function World() {
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
       couple: () => ({ hearts: [...r.hearts], on: r.coupleOn, marks: r.markOn, call: callRef.current ? { up: callRef.current.up, host: callRef.current.host, lv: callRef.current.lv, muted: callRef.current.muted, camOff: callRef.current.camOff } : null }),
-      emoteFx: () => [...emoteFx.current.entries()].map(([id, f]) => ({ id, e: f.e })),
+      emoteFx: () => Object.entries(r.emoteOn).map(([id, [e, f, dx, dy]]) => ({ id: +id, e, f, dx, dy })),
+      emoteCd: () => emoCdRef.current,
       emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
         requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },
@@ -431,12 +420,10 @@ function World() {
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
-        {/* voice emote tray: PLACEHOLDER text buttons until GD's art (flagged) */}
-        {layout === 'phone' && <button className={'w-emo w-emo-tg' + (emoOpen ? ' on' : '')} data-t="w-emote-toggle" aria-expanded={emoOpen} aria-label={emoOpen ? 'Close voice emotes' : 'Voice emotes'}
-          onPointerDown={ev => ev.stopPropagation()} onClick={() => setEmoOpen(o => !o)}>{emoOpen ? '×' : '♪'}</button>}
-        {(layout === 'desk' || emoOpen) && <div className={'w-emotes' + (layout === 'phone' ? ' folded' : '')} data-t="w-emotes" role="group" aria-label="Voice emotes">{EMOTES.map(e =>
-          <button key={e} className="w-emo" data-t="w-emote" data-e={e} aria-label={EMOTE_LABEL[e]} onPointerDown={ev => ev.stopPropagation()}
-            onClick={() => { pa.current?.unlock(); net.current?.send({ t: 'emote', e } as any); if (layout === 'phone') setEmoOpen(false) }}>{EMOTE_LABEL[e as Emote]}</button>)}</div>}
+        {/* GD's voice emote tray; phone: ♪ (café sound on/off, the piano mute everywhere) with the tray to its right */}
+        {layout === 'phone' && <button className={'w-note-btn' + (muted ? ' off' : '')} data-t="w-sound" aria-pressed={!muted} aria-label={muted ? 'Café sound off' : 'Café sound on'}
+          onPointerDown={ev => ev.stopPropagation()} onClick={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }}>♪</button>}
+        <EmoteTray layout={layout} cd={emoCd} stop={ev => ev.stopPropagation()} onSend={e => { const t = performance.now(); pa.current?.unlock(); net.current?.send({ t: 'emote', e } as any); setEmoCd({ e, at: t, until: t + EMOTE_COOLDOWN_MS }) }} />
         {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
         {!playing && soloDuetAny && <NowPlaying piece={{ title: soloDuetAny.title } as any} by={`${pianist} · both parts`} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
         {duetPlaying && <NowPlaying piece={{ title: duetPlaying.title } as any} by="duet" muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}

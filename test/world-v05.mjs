@@ -254,6 +254,7 @@ for (const p of [sam, mia]) await p.goto(APP + '?loopback', { waitUntil: 'domcon
 const inApp = p => until(() => p.evaluate(() => !!document.querySelector('[data-t=call-chip]')), 25000, 250)
 const [a2, b2] = await Promise.all([inApp(sam), inApp(mia)])
 ok(a2 && b2, 'app: a hand-off still lands both in the app\'s video call')
+if (!(a2 && b2)) for (const p of [sam, mia]) console.log('  app shows', p.tag, JSON.stringify(await p.evaluate(() => [location.href.replace(/invite=[^&]*/, 'invite=…'), document.body.innerText.slice(0, 300)])))
 const chip = p => p.evaluate(() => [...document.querySelectorAll('.chip')].map(e => e.textContent).find(t => /LV \d/.test(t)) ?? '')
 if (a2 && b2) {
   await sleep(1500); const [ca, cb] = [await chip(sam), await chip(mia)]

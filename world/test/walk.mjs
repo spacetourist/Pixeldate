@@ -49,6 +49,14 @@ for (let s = 0; s < 12; s++) for (const f of [0, 1]) {
   for (let y = 0; y < H; y++) want.set(pia.data.subarray(((f * H + y) * 288 + s * W) * 4, ((f * H + y) * 288 + s * W + W) * 4), y * W * 4)
   const k = diff(composeDir(SAMPLES[s], 'up', f ? 'piano1' : 'piano0'), want); n++; if (k) fail(`sample ${s} piano frame ${f}: ${k} px differ`)
 }
+// duet pose: GD's duet-sheet.png (kit_duet.py), rows = bass f0, bass f1, melody f0, melody f1; columns = the 12 samples
+const duo = readPng(readFileSync(new URL('duet-sheet.png', F)))
+if (duo.w !== 288 || duo.h !== 128) fail(`duet sheet is ${duo.w}x${duo.h}`)
+for (let s = 0; s < 12; s++) ['bass0', 'bass1', 'melody0', 'melody1'].forEach((fr, r) => {
+  const want = new Uint8ClampedArray(W * H * 4)
+  for (let y = 0; y < H; y++) want.set(duo.data.subarray(((r * H + y) * 288 + s * W) * 4, ((r * H + y) * 288 + s * W + W) * 4), y * W * 4)
+  const k = diff(composeDir(SAMPLES[s], 'up', fr), want); n++; if (k) fail(`sample ${s} duet ${fr}: ${k} px differ`)
+})
 if (PIANO_DX !== 4 || PIANO_DY !== -21 || PIANO_FRAME_MS !== 220) fail('piano placement / frame time')
 // sofa sit: GD's sofa-sit-body.png / sofa-sit-legs.png (kit_dir.compose_sofa), 14 columns per sofa-sit-layers.json
 const sofaJ = JSON.parse(readFileSync(new URL('sofa-sit-layers.json', F))), sofaDef = JSON.parse(readFileSync(new URL('sofa-defaults.json', F)))

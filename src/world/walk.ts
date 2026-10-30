@@ -4,7 +4,7 @@
 import { BASE, CLOTH, FIXED, HAIRC, SKIN } from '../avatar/kit/kit.gen.ts'
 
 export type Dir = 'down' | 'up' | 'left' | 'right'
-export type Frame = 0 | 1 | 2 | 3 | 'stand' | 'sit' | 'piano0' | 'piano1' | 'sofaBody' | 'sofaLegs'
+export type Frame = 0 | 1 | 2 | 3 | 'stand' | 'sit' | 'piano0' | 'piano1' | 'bass0' | 'bass1' | 'melody0' | 'melody1' | 'sofaBody' | 'sofaLegs'
 export const DIRS: Dir[] = ['down', 'up', 'left', 'right']
 export const WALK_FRAME_MS = 160
 const W = 24, H = 32, CX = 11
@@ -585,6 +585,37 @@ function composePianoG(o: O, frame: 0 | 1) {
   for (const [, x, y, c] of items) put(g, x, y, c)
   return g
 }
+/** GD's kit_duet.py compose_duet(o, part, frame): the piano pose for one of two on the duet bench. Bass (left) leans 1 px
+    left with the elbows angled left and 1 px lower; Melody (right) leans 1 px right. Frame 0: the outer arm presses,
+    frame 1: the inner arm (a pressing elbow drops 1 px; the outer one swings 1 px further out). */
+const HEAD_LAYERS = new Set(['hair_back', 'hair_front', 'beard', 'acc'])
+function composeDuetG(o: O, part: 'bass' | 'melody', frame: 0 | 1) {
+  const way = part === 'bass' ? -1 : 1, low = part === 'bass' ? 1 : 0, outer = part === 'bass' ? 'L' : 'R', inner = part === 'bass' ? 'R' : 'L'
+  const press = frame === 0 ? outer : inner, g = blank(), items: [number, number, number, string][] = []
+  for (const [name, Lr] of fbLayers(o, 'up')) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = Lr[y][x]; if (c === '.') continue
+    const seg = fbSegment(name, x, y, o)
+    if (seg.startsWith('leg')) { if (y < 24 + SIT_D) continue; items.push([0, x, y, c]) }
+    else if (seg.startsWith('arm')) {
+      if (y > 19) continue
+      const side = seg[seg.length - 1]; let ny = y + SIT_D, nx = x
+      if (y >= 17) {
+        nx += way; ny += low
+        if (side === press) { ny += 1; nx += side === outer ? way : 0 }
+        if (y === 17) { items.push([2, x, y + SIT_D, c]); if (ny - (y + SIT_D) > 1) items.push([2, nx, y + SIT_D + 1, c]) }
+      }
+      items.push([2, nx, ny, c])
+    } else {
+      const lean = HEAD_LAYERS.has(name) || (name === 'body' && y <= 12) ? way : 0
+      items.push([HEAD_LAYERS.has(name) ? 3 : 1, x + lean, y + SIT_D, c])
+    }
+  }
+  items.sort((a, b) => a[0] - b[0])
+  for (const [, x, y, c] of items) if (x >= 0 && x < W && y >= 0 && y < H) put(g, x, y, c)
+  return g
+}
+/** Duet placement (GD duet/README): sprite top-left from the duet bench's top-left; 220 ms a frame, counterpoint */
+export const DUET_SPRITE = { bass: [2, -21], melody: [24, -21], solo: [12, -21] } as const
 /** Piano pose placement on GD's solo bench (32x16 at bx,by): sprite top-left = (bx + 4, by - 21); 220 ms a frame. */
 export const PIANO_DX = 4, PIANO_DY = -21, PIANO_FRAME_MS = 220
 function outline(g: G) {
@@ -611,6 +642,7 @@ export function composeDir(cfg: O, d: Dir, frame: Frame = 'stand'): Uint8Clamped
   for (const [k, v] of Object.entries(cfg)) if (v !== undefined) o[k] = v   // Python's dict(BASE, **o)
   const fb = d === 'down' || d === 'up'
   let g = frame === 'sofaBody' ? sofaBodyG(o) : frame === 'sofaLegs' ? sofaLegsG(o) : frame === 'piano0' || frame === 'piano1' ? composePianoG(o, frame === 'piano0' ? 0 : 1)
+    : typeof frame === 'string' && /^(bass|melody)[01]$/.test(frame) ? composeDuetG(o, frame.slice(0, -1) as 'bass' | 'melody', +frame.slice(-1) as 0 | 1)
     : frame === 'sit' ? (fb ? composeFbSit(o, d) : composeSideSit(o)) : fb ? composeFb(o, d, frame) : composeSide(o, frame)
   g = outline(g); if (d === 'left' || d === 'right') g = fillHoles(g)
   const pal = palette(o), px = new Uint8ClampedArray(W * H * 4)

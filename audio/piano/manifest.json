@@ -1,0 +1,210 @@
+{
+  "version": "pd_piano_v01",
+  "sampleRate": 48000,
+  "channels": 1,
+  "targetLoudnessLUFS": -16,
+  "truePeakCeilingDbtp": -1.0,
+  "preferredFormat": "ogg",
+  "fallbackFormat": "m4a",
+  "basePath": "audio/piano/",
+  "pieces": [
+    {
+      "id": "gymnopedie-1",
+      "title": "Gymnopédie No. 1 (abridged)",
+      "composer": "Erik Satie",
+      "licence": "Composition public domain (Satie d. 1925); score transcribed from the 1895 BnF edition (public domain); abridgement and rendering made for Pixeldate with CC0 samples",
+      "durationSec": 78.167625,
+      "durationSamples": 3752046,
+      "bpm": 65,
+      "beatUnit": "quarter",
+      "timeSignature": "3/4",
+      "files": {
+        "ogg": "gymnopedie-1.ogg",
+        "m4a": "gymnopedie-1.m4a"
+      },
+      "mime": {
+        "ogg": "audio/ogg; codecs=opus",
+        "m4a": "audio/mp4; codecs=\"mp4a.40.2\""
+      },
+      "bytes": {
+        "ogg": 1009860,
+        "m4a": 1438181
+      },
+      "loudness": {
+        "integratedLUFS": -16.0,
+        "truePeakDbtp": {
+          "master": -1.7,
+          "ogg": -1.4,
+          "m4a": -1.7
+        }
+      },
+      "endsWith": "natural piano decay (pedal released, reverb tail to < -60 dBFS), 12 ms safety fade",
+      "loop": false
+    },
+    {
+      "id": "clair-de-lune",
+      "title": "Clair de lune (abridged)",
+      "composer": "Claude Debussy",
+      "licence": "Composition public domain (Debussy d. 1918); notes from the Mutopia Project public-domain edition; abridgement and rendering made for Pixeldate with CC0 samples",
+      "durationSec": 90.986104,
+      "durationSamples": 4367333,
+      "bpm": 48,
+      "beatUnit": "dotted quarter",
+      "timeSignature": "9/8",
+      "files": {
+        "ogg": "clair-de-lune.ogg",
+        "m4a": "clair-de-lune.m4a"
+      },
+      "mime": {
+        "ogg": "audio/ogg; codecs=opus",
+        "m4a": "audio/mp4; codecs=\"mp4a.40.2\""
+      },
+      "bytes": {
+        "ogg": 1194567,
+        "m4a": 1671609
+      },
+      "loudness": {
+        "integratedLUFS": -16.0,
+        "truePeakDbtp": {
+          "master": -1.7,
+          "ogg": -1.5,
+          "m4a": -1.7
+        }
+      },
+      "endsWith": "natural piano decay (pedal released, reverb tail to < -60 dBFS), 12 ms safety fade",
+      "loop": false
+    },
+    {
+      "id": "nocturne-op9-2",
+      "title": "Nocturne in E-flat, Op. 9 No. 2 (abridged)",
+      "composer": "Frédéric Chopin",
+      "licence": "Composition public domain (Chopin d. 1849); score transcribed from the 1913 d'Albert/Forberg edition, BnF (public domain); abridgement and rendering made for Pixeldate with CC0 samples",
+      "durationSec": 76.652417,
+      "durationSamples": 3679316,
+      "bpm": 94,
+      "beatUnit": "eighth",
+      "timeSignature": "12/8",
+      "files": {
+        "ogg": "nocturne-op9-2.ogg",
+        "m4a": "nocturne-op9-2.m4a"
+      },
+      "mime": {
+        "ogg": "audio/ogg; codecs=opus",
+        "m4a": "audio/mp4; codecs=\"mp4a.40.2\""
+      },
+      "bytes": {
+        "ogg": 986770,
+        "m4a": 1404140
+      },
+      "loudness": {
+        "integratedLUFS": -16.0,
+        "truePeakDbtp": {
+          "master": -1.7,
+          "ogg": -1.5,
+          "m4a": -1.7
+        }
+      },
+      "endsWith": "natural piano decay (pedal released, reverb tail to < -60 dBFS), 12 ms safety fade",
+      "loop": false
+    },
+    {
+      "id": "steam-on-the-window",
+      "title": "Steam on the Window",
+      "composer": "Original",
+      "licence": "Original composition written for Pixeldate (no third-party material); rendering made for Pixeldate with CC0 samples",
+      "durationSec": 75.416854,
+      "durationSamples": 3620009,
+      "bpm": 70,
+      "beatUnit": "quarter",
+      "timeSignature": "4/4",
+      "files": {
+        "ogg": "steam-on-the-window.ogg",
+        "m4a": "steam-on-the-window.m4a"
+      },
+      "mime": {
+        "ogg": "audio/ogg; codecs=opus",
+        "m4a": "audio/mp4; codecs=\"mp4a.40.2\""
+      },
+      "bytes": {
+        "ogg": 959858,
+        "m4a": 1386151
+      },
+      "loudness": {
+        "integratedLUFS": -16.0,
+        "truePeakDbtp": {
+          "master": -1.7,
+          "ogg": -1.4,
+          "m4a": -1.6
+        }
+      },
+      "endsWith": "natural piano decay (pedal released, reverb tail to < -60 dBFS), 12 ms safety fade",
+      "loop": false
+    },
+    {
+      "id": "sugar-cube-bossa",
+      "title": "Sugar Cube Bossa",
+      "composer": "Original",
+      "licence": "Original composition written for Pixeldate (no third-party material); rendering made for Pixeldate with CC0 samples",
+      "durationSec": 85.489958,
+      "durationSamples": 4103518,
+      "bpm": 112,
+      "beatUnit": "quarter",
+      "timeSignature": "4/4",
+      "files": {
+        "ogg": "sugar-cube-bossa.ogg",
+        "m4a": "sugar-cube-bossa.m4a"
+      },
+      "mime": {
+        "ogg": "audio/ogg; codecs=opus",
+        "m4a": "audio/mp4; codecs=\"mp4a.40.2\""
+      },
+      "bytes": {
+        "ogg": 1111459,
+        "m4a": 1574917
+      },
+      "loudness": {
+        "integratedLUFS": -16.0,
+        "truePeakDbtp": {
+          "master": -1.7,
+          "ogg": -1.3,
+          "m4a": -1.6
+        }
+      },
+      "endsWith": "natural piano decay (pedal released, reverb tail to < -60 dBFS), 12 ms safety fade",
+      "loop": false
+    },
+    {
+      "id": "moon-in-the-teacup",
+      "title": "Moon in the Teacup",
+      "composer": "Original",
+      "licence": "Original composition written for Pixeldate (no third-party material); rendering made for Pixeldate with CC0 samples",
+      "durationSec": 74.50325,
+      "durationSamples": 3576156,
+      "bpm": 108,
+      "beatUnit": "quarter",
+      "timeSignature": "3/4",
+      "files": {
+        "ogg": "moon-in-the-teacup.ogg",
+        "m4a": "moon-in-the-teacup.m4a"
+      },
+      "mime": {
+        "ogg": "audio/ogg; codecs=opus",
+        "m4a": "audio/mp4; codecs=\"mp4a.40.2\""
+      },
+      "bytes": {
+        "ogg": 963043,
+        "m4a": 1368799
+      },
+      "loudness": {
+        "integratedLUFS": -16.0,
+        "truePeakDbtp": {
+          "master": -1.7,
+          "ogg": -1.5,
+          "m4a": -1.7
+        }
+      },
+      "endsWith": "natural piano decay (pedal released, reverb tail to < -60 dBFS), 12 ms safety fade",
+      "loop": false
+    }
+  ]
+}

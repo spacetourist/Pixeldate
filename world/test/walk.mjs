@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { readPng } from './png.mjs'
-import { composeDir, DIRS, footX, SIT_CHAIR, SIT_D, WALK_FRAME_MS } from '../../src/world/walk.ts'
+import { composeDir, DIRS, footX, SIT_CHAIR, SIT_D, WALK_FRAME_MS, PIANO_DX, PIANO_DY, PIANO_FRAME_MS } from '../../src/world/walk.ts'
 import { SAMPLES } from '../../src/avatar/kit/kit.gen.ts'
 const F = new URL('./fixtures/walk/', import.meta.url), W = 24, H = 32
 const stand = JSON.parse(readFileSync(new URL('stand.json', F))).stand, manifest = JSON.parse(readFileSync(new URL('manifest.json', F)))
@@ -41,9 +41,30 @@ for (let s = 0; s < 12; s++) DIRS.forEach((d, r) => {
 })
 const sc = manifest.sit?.chair?.sprite_top_left_from_chair_tile; n++
 if (JSON.stringify(sc) !== JSON.stringify({ 'chair-left-seat': [...SIT_CHAIR.leftSeat], 'chair-right-seat': [...SIT_CHAIR.rightSeat] }) || manifest.sit.upper_body_drop !== SIT_D) fail('sit chair offsets / drop differ from manifest')
+// piano pose: GD's piano-sheet.png (kit_piano.py), rows = frame 0/1, columns = the 12 samples
+const pia = readPng(readFileSync(new URL('piano-sheet.png', F)))
+if (pia.w !== 288 || pia.h !== 64) fail(`piano sheet is ${pia.w}x${pia.h}`)
+for (let s = 0; s < 12; s++) for (const f of [0, 1]) {
+  const want = new Uint8ClampedArray(W * H * 4)
+  for (let y = 0; y < H; y++) want.set(pia.data.subarray(((f * H + y) * 288 + s * W) * 4, ((f * H + y) * 288 + s * W + W) * 4), y * W * 4)
+  const k = diff(composeDir(SAMPLES[s], 'up', f ? 'piano1' : 'piano0'), want); n++; if (k) fail(`sample ${s} piano frame ${f}: ${k} px differ`)
+}
+if (PIANO_DX !== 4 || PIANO_DY !== -21 || PIANO_FRAME_MS !== 220) fail('piano placement / frame time')
+// sofa sit: GD's sofa-sit-body.png / sofa-sit-legs.png (kit_dir.compose_sofa), 14 columns per sofa-sit-layers.json
+const sofaJ = JSON.parse(readFileSync(new URL('sofa-sit-layers.json', F))), sofaDef = JSON.parse(readFileSync(new URL('sofa-defaults.json', F)))
+const sofaCfg = c => c === 'default-woman' ? sofaDef.woman : c === 'default-man' ? sofaDef.man : SAMPLES[+c.slice(7)]
+for (const [layer, frame] of [['body', 'sofaBody'], ['legs', 'sofaLegs']]) {
+  const sh = readPng(readFileSync(new URL(sofaJ.layers[layer], F))), cw = sofaJ.cols.length * W
+  if (sh.w !== cw || sh.h !== H) fail(`sofa ${layer} sheet is ${sh.w}x${sh.h}`)
+  sofaJ.cols.forEach((c, i) => {
+    const want = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) want.set(sh.data.subarray((y * cw + i * W) * 4, (y * cw + i * W + W) * 4), y * W * 4)
+    const k = diff(composeDir(sofaCfg(c), 'down', frame), want); n++; if (k) fail(`${c} sofa ${layer}: ${k} px differ`)
+  })
+}
 // feet anchor: the mirrored right view's feet sit 1px off; anchoring each direction on its feet lines them up
 const a = DIRS.map(d => footX(composeDir(SAMPLES[0], d, 'stand'))); n++
 if (!(a[3] - a[2] >= 1)) fail('expected the mirrored right view to be offset: ' + a)
 if (WALK_FRAME_MS !== 160) fail('frame time')
-console.log(bad ? `walk: ${bad} FAIL of ${n}` : `walk: ${n} checks OK (12 samples x 4 dirs x 4 frames + stand + sit, pixel-exact vs kit_dir.py)`)
+console.log(bad ? `walk: ${bad} FAIL of ${n}` : `walk: ${n} checks OK (12 samples x 4 dirs x 4 frames + stand + sit + piano + sofa body/legs, pixel-exact vs kit_dir.py)`)
 process.exit(bad ? 1 : 0)

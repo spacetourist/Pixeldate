@@ -4,7 +4,7 @@
 import { BASE, CLOTH, FIXED, HAIRC, SKIN } from '../avatar/kit/kit.gen.ts'
 
 export type Dir = 'down' | 'up' | 'left' | 'right'
-export type Frame = 0 | 1 | 2 | 3 | 'stand' | 'sit'
+export type Frame = 0 | 1 | 2 | 3 | 'stand' | 'sit' | 'piano0' | 'piano1' | 'sofaBody' | 'sofaLegs'
 export const DIRS: Dir[] = ['down', 'up', 'left', 'right']
 export const WALK_FRAME_MS = 160
 const W = 24, H = 32, CX = 11
@@ -536,6 +536,57 @@ function composeFbSit(o: O, d: Dir) {
   } else for (const x of [l0, r1]) put(g, x, keep + SIT_D, '.')   // from behind the forearms are hidden
   return g
 }
+// ═══ SOFA SIT ('sofa', down only): kit_dir.py compose_sofa → (body, legs) ═══
+// body = the down 'sit' pose cut at SOFA_CUT (drawn between the sofa back and front); legs = lap, knees, shins, shoes and
+// hands (drawn over the sofa front). Same 24x32 cell and anchor as stand/sit.
+export const SOFA_CUT = 23
+function sofaBodyG(o: O) { const gs = composeFbSit(o, 'down'), g = blank(); for (let y = 0; y < SOFA_CUT; y++) g[y] = gs[y].slice(); return g }
+function sofaLegsG(o: O) {
+  const g = blank(), C = sitLegCodes(o), k = C.k, th = C.thigh, ths = C.thigh_s
+  const [shin, shs] = k === 'trousers' || k === 'jeans' ? ['B', 'b'] : ['J', 'j']
+  let top: number
+  if (k === 'skirt' || k === 'dress') {
+    rect(g, 6, 21, 16, 24, th); rect(g, 6, 24, 16, 24, ths); put(g, 16, 22, ths); put(g, 16, 23, ths); put(g, 11, 23, ths)
+    top = 25
+  } else {
+    rect(g, 6, 21, 16, 22, th); put(g, 11, 22, ths); put(g, 16, 21, ths); put(g, 16, 22, ths)
+    const [kc, kcs] = k === 'trousers' || k === 'jeans' ? [th, ths] : [shin, shs]
+    rect(g, 6, 23, 10, 23, kc); rect(g, 12, 23, 16, 23, kc); put(g, 10, 23, kcs); put(g, 16, 23, kcs)
+    if (k === 'shorts') { rect(g, 6, 22, 10, 22, ths); rect(g, 12, 22, 16, 22, ths) }
+    top = 24
+  }
+  for (const x0 of [7, 13]) {
+    rect(g, x0, top, x0 + 2, 29, shin); rect(g, x0 + 2, top, x0 + 2, 29, shs)
+    if (top === 24) rect(g, x0, 24, x0 + 2, 24, shs)
+  }
+  if (k === 'jeans') { rect(g, 7, 29, 8, 29, 'W'); rect(g, 13, 29, 14, 29, 'W') }
+  const sh = shoes(o.shoes)
+  for (let y = 28; y < H; y++) for (let x = 0; x < W; x++) if (sh[y][x] !== '.') put(g, x, y, sh[y][x])
+  for (const hx of [6, 15]) { rect(g, hx, 21, hx + 1, 21, 'S'); rect(g, hx, 22, hx + 1, 22, 's') }
+  return g
+}
+/** GD's kit_piano.py compose_piano(o, frame): the back-view sit with the forearms forward on the keys (hidden), the
+    elbows angled out; on each frame one arm presses (0 = left, 1 = right): its elbow drops 1 px and swings 1 px out. */
+function composePianoG(o: O, frame: 0 | 1) {
+  const g = blank(), press = frame === 0 ? 'L' : 'R', items: [number, number, number, string][] = []
+  for (const [name, Lr] of fbLayers(o, 'up')) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = Lr[y][x]; if (c === '.') continue
+    const seg = fbSegment(name, x, y, o)
+    if (seg.startsWith('leg')) { if (y < 24 + SIT_D) continue; items.push([0, x, y, c]) }
+    else if (seg.startsWith('arm')) {
+      if (y > 19) continue
+      const side = seg[seg.length - 1]; let ny = y + SIT_D, nx = x
+      if (y >= 17 && side === press) { ny += 1; nx += side === 'L' ? -1 : 1 }
+      items.push([2, nx, ny, c])
+      if (y === 19 && side === press) items.push([2, x, y + SIT_D, c])
+    } else items.push([1, x, y + SIT_D, c])
+  }
+  items.sort((a, b) => a[0] - b[0])   // stable, like Python's sorted
+  for (const [, x, y, c] of items) put(g, x, y, c)
+  return g
+}
+/** Piano pose placement on GD's solo bench (32x16 at bx,by): sprite top-left = (bx + 4, by - 21); 220 ms a frame. */
+export const PIANO_DX = 4, PIANO_DY = -21, PIANO_FRAME_MS = 220
 function outline(g: G) {
   const out = g.map(r => r.slice()), solid = (x: number, y: number) => x >= 0 && x < W && y >= 0 && y < H && g[y][x] !== '.' && g[y][x] !== 'K'
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (g[y][x] === '.' && (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1))) out[y][x] = 'K'
@@ -559,7 +610,8 @@ export function composeDir(cfg: O, d: Dir, frame: Frame = 'stand'): Uint8Clamped
   const o: O = { ...BASE }
   for (const [k, v] of Object.entries(cfg)) if (v !== undefined) o[k] = v   // Python's dict(BASE, **o)
   const fb = d === 'down' || d === 'up'
-  let g = frame === 'sit' ? (fb ? composeFbSit(o, d) : composeSideSit(o)) : fb ? composeFb(o, d, frame) : composeSide(o, frame)
+  let g = frame === 'sofaBody' ? sofaBodyG(o) : frame === 'sofaLegs' ? sofaLegsG(o) : frame === 'piano0' || frame === 'piano1' ? composePianoG(o, frame === 'piano0' ? 0 : 1)
+    : frame === 'sit' ? (fb ? composeFbSit(o, d) : composeSideSit(o)) : fb ? composeFb(o, d, frame) : composeSide(o, frame)
   g = outline(g); if (d === 'left' || d === 'right') g = fillHoles(g)
   const pal = palette(o), px = new Uint8ClampedArray(W * H * 4)
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {

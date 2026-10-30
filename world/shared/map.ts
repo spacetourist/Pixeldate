@@ -3,6 +3,7 @@
    src/world/art); the grid below is hand-written over it, tile by tile, from GD's scene layout (src/build.py landscape()).
    Legend: # wall / wall top · C bar counter (and the staff side behind it) · T table for two · c chair back
            s chair seat (sit here) · P plant · L standing lamp · S sofa / candle side table · K piano + bench
+           p the piano bench seat (one pianist; shared/piano.ts)
            D doormat (spawn) · . floor
    All blocked: # C T c P L S K. Rugs are art only (walkable). */
 export const TILE = 16
@@ -21,8 +22,8 @@ export const MAPS: Record<string, MapDef> = {
     '#CCCCCCCCC..............PDD.P....P....P#',
     '#CCCCCCCCCP.................P..........#',
     '#CCCCCCCCCP...................L........#',
-    '#.............................LSS.SSS..#',
-    '#.............................LSS.SSS..#',
+    '#.............................LSSSSSSS.#',
+    '#.............................LSSSSSSS.#',
     '#.cTTc......cTTc..cTTc..cTTc...........#',
     '#.sTTs......sTTs..sTTs..sTTs...........#',
     '#...............................cTTc...#',
@@ -35,7 +36,7 @@ export const MAPS: Record<string, MapDef> = {
     '#..............................L..KKK..#',
     '#P................................KKK..#',
     '#P..cTTc..........................KKK..#',
-    '#...sTTs....cTTc....cTTc..........KKK..#',
+    '#...sTTs....cTTc....cTTc..........KpK..#',
     '#P.......P..sTTs....sTTs...P...........#',
     '#P.........................P...........#',
     '########################################',
@@ -61,6 +62,7 @@ const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K'])
 /** Can a foot stand on tile (x, y)? The doormat counts, so people can walk in. */
 export const walkable = (x: number, y: number) => !BLOCK.has(at(x, y))
 export const isSeat = (x: number, y: number) => at(x, y) === 's'
+export const isPianoSeat = (x: number, y: number) => at(x, y) === 'p'
 export interface Table { id: number; x: number; y: number; seats: [[number, number], [number, number]] }
 /** Every table for two: a 2x2 table with a seat either side on its lower row, exactly where GD drew the chairs. */
 export const TABLES: Table[] = []

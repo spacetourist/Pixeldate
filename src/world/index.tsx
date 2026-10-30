@@ -5,13 +5,19 @@ import { savedProfile, saveProfile, loadPhoto, LB } from '../prefs'
 import { LEVELS } from '../config'
 import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
-import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
+import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
-import { walkable, isSeat, TABLES } from '../../world/shared/map.ts'
+import { walkable, isSeat, isPianoSeat, at, TABLES } from '../../world/shared/map.ts'
+import { PIECE, PIANO_SEAT, hears } from '../../world/shared/piano.ts'
+import { SOFAS, sofaAt } from '../../world/shared/sofa.ts'
+import { parseOptions } from '../avatar/kit/map.ts'
+import { SAMPLES } from '../avatar/kit/kit.gen.ts'
+import { PianoAudio, PianoPanel, NowPlaying, PIANO_CREDIT, usePianoSel, type PianoState } from './piano.tsx'
 import { WorldNet } from './net.ts'
 import { claimOf, getPairLv, setPairLv } from '../pairlv'
 import { startLook } from '../avatar/kit/defaults.ts'
 import { Renderer, MW, MH, type Layout } from './render.ts'
+import heartPng from './art/markers/heart.png'
 import './world.css'
 const Char = lazy(() => import('../avatar/kit/Char'))
 
@@ -81,6 +87,12 @@ function World() {
   const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), over = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null)
   const standRef = useRef<(() => void) | null>(null)
   const bubbles = useRef(new Map<number, Bubble>()), noteT = useRef(0), target = useRef<[number, number] | null>(null)
+  // the piano (solo v1) and the sofas: where I'm sat ('' / 'piano' / 'sofa'), what's playing, who'd hear it
+  const pa = useRef<PianoAudio | null>(null), whereRef = useRef<'' | 'piano' | 'sofa'>('')
+  const [where, setWhere] = useState<'' | 'piano' | 'sofa'>(''), [pianoS, setPianoS] = useState<PianoState>({ by: 0, song: null, at: 0 })
+  const [near, setNear] = useState(0), [muted, setMuted] = useState(localStorage.getItem('pd.pianoMute') === '1'), [song, setSong] = usePianoSel()
+  /** "Not for me": the kind card the other person gets ("<name> has moved on") */
+  const [gone, setGone] = useState('')
 
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
@@ -88,8 +100,11 @@ function World() {
     if (!prof || !invite.trim() || !adult) return
     localStorage.setItem('pd.invite', invite.trim()); if (!prof.adult) void saveProfile({ ...prof, adult: true })
     const n = new WorldNet(serverUrl(), invite.trim(), joinP(prof)); net.current = n; setPhase('joining')
+    const A = pa.current = new PianoAudio(o => n.send(o as any))
     n.onmsg = (m: ServerMsg | any) => {
-      if (m.t === 'hi') { setInst(m.inst); setPhase('in') }
+      if (m.t === 'hi') { setInst(m.inst); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
+      else if (m.t === 'tm') A.onTm(m)
+      else if (m.t === 'piano') { if (m.now) A.hint(m.now); A.set(m); setPianoS({ by: m.by, song: m.song, at: m.at }) }
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
       else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
       else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS })
@@ -115,6 +130,11 @@ function World() {
       else if (m.t === 'ansno') setAnsErr(ANSWHY[m.why] ?? 'Not sent.')
       else if (m.t === 'photo') { if (m.id === withRef.current) setPhoto(m) }
       else if (m.t === 'note') { const who = n.pubs.get(withRef.current)?.name ?? 'They'
+        if (m.k === 'moved-on') { setGone(m.name || who); return }
+        if (m.k === 'ended') { flash(`You ended the date with ${m.name || who}.`); return }
+        if (m.k === 'table-no') { flash("That table isn't for the two of you. Try another seat."); return }
+        if (m.k === 'sofa-full') { flash('That sofa is full. Try the other one.'); return }
+        if (m.k === 'piano-busy') { flash('Someone is at the piano.'); return }
         flash(m.k === 'date-no' ? `${who} said not now. You can keep talking.` : m.k === 'call-declined' ? `${who} said not now to a call. You can keep talking.` : `${who} cancelled the call.`) }
       else if (m.t === 'call') { flash('Starting your video call…'); setTimeout(() => { n.close(); handoff(m) }, 700) }
       else if (m.t === 'ack') { if (m.what === 'block') { setSel(null); setMenu(''); flash("Blocked. You won't see each other in the café again.") }
@@ -131,15 +151,25 @@ function World() {
     const r = ren.current = new Renderer(canvas.current), n = net.current!
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
     size(); const ro = new ResizeObserver(size); ro.observe(stage.current!)
-    const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0
+    const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0, lastN = 0
     const loop = (now: number) => {
-      raf = requestAnimationFrame(loop); r.frame(n, now)
-      const me = n.ents.get(n.me); if (me && target.current && Math.floor(me.x) === target.current[0] && Math.floor(me.y) === target.current[1]) { target.current = null; r.path = [] }
+      raf = requestAnimationFrame(loop)
+      const A = pa.current!, ps = A.state; r.piano = { by: ps.by, song: ps.song, at: ps.song ? A.perfAt(ps.at) : 0 }
+      r.frame(n, now)
+      const me = n.ents.get(n.me)
+      if (me) { A.listen(n.lerpX(me, now), n.lerpY(me, now)); const sat = (me.f & F_SIT) !== 0, fx = Math.floor(me.x), fy = Math.floor(me.y)
+        const w = sat && isPianoSeat(fx, fy) ? 'piano' : sat && at(fx, fy) === 'S' ? 'sofa' : ''
+        if (w !== whereRef.current) { whereRef.current = w; setWhere(w) }
+        if (now - lastN > 500) { lastN = now; let c = 0; for (const e of n.ents.values()) if (e.id !== n.me && hears(e.x, e.y)) c++; setNear(c) } }
+      if (me && target.current && Math.floor(me.x) === target.current[0] && Math.floor(me.y) === target.current[1]) { target.current = null; r.path = [] }
       // GD's 9-slice bubble (world.css): the box is snapped to whole art px (u CSS px) so the slices stay crisp, and the
       // tail tip sits 2 art px above the head (r.tip), on the head's centre column unless the bubble is pushed in from an edge
       const u = r.k / r.dpr, ov = over.current!; if (u !== lastU) { ov.style.setProperty('--u', u + 'px'); lastU = u; for (const el of els.values()) el.dataset.w = '' }
       for (const [id, b] of bubbles.current) {
         const e = n.ents.get(id), tip = r.tip(id); if (now > b.until || !e) { bubbles.current.delete(id); continue }
+        // GD: at a table for two the pair's own lines live in "Just you two"; no bubbles over the two of them (the phone
+        // strip would clip them), so neither sees an overhead bubble for the pair while seated
+        if (withRef.current && (id === n.me || id === withRef.current)) { els.get(id)?.remove(); els.delete(id); continue }
         let el = els.get(id); if (!el) { el = document.createElement('div'); el.dataset.t = 'bubble'; ov.append(el); els.set(id, el) }
         el.className = 'w-bubble' + (b.mine ? ' mine' : '') + (b.held ? ' held' : ''); el.dataset.id = String(id); el.dataset.held = b.held || ''
         if (el.dataset.text !== b.text) { el.textContent = b.text; el.dataset.text = b.text; el.dataset.w = '' }
@@ -181,6 +211,8 @@ function World() {
       state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, art: r.art, layout: layoutOf(), bytes: n.bytes,
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
+      piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
+        requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
     return () => { cancelAnimationFrame(raf); ro.disconnect(); r.destroy() }
   }, [phase])
@@ -208,8 +240,10 @@ function World() {
     }
     const up = (e: KeyboardEvent) => { const key = e.key.length === 1 ? e.key.toLowerCase() : e.key; if (held.delete(key)) steer() }
     const blur = () => { if (held.size) { held.clear(); steer() } }
-    addEventListener('keydown', down); addEventListener('keyup', up); addEventListener('blur', blur)
-    return () => { removeEventListener('keydown', down); removeEventListener('keyup', up); removeEventListener('blur', blur) }
+    // browsers only start sound from a gesture: the first tap or key in the café unlocks the piano's audio
+    const unlock = () => pa.current?.unlock()
+    addEventListener('keydown', down); addEventListener('keyup', up); addEventListener('blur', blur); addEventListener('pointerdown', unlock, true); addEventListener('keydown', unlock, true)
+    return () => { removeEventListener('keydown', down); removeEventListener('keyup', up); removeEventListener('blur', blur); removeEventListener('pointerdown', unlock, true); removeEventListener('keydown', unlock, true) }
   }, [phase])
 
   // the phone keyboard: keep the chat bar (and the café above it) in the visible part of the screen
@@ -226,6 +260,11 @@ function World() {
     if (id) { const p = n.pubs.get(id); if (p) { setSel(p); setMenu(''); r.sel = id } return }
     if (sel) { setSel(null); setMenu(''); r.sel = 0 }
     const [tx, ty] = r.toTile(cx, cy); let t: [number, number] | null = [Math.floor(tx), Math.floor(ty)]
+    // a sofa: walk to it and sit (the server picks a free spot, or says it's full)
+    const si = sofaAt(t[0], t[1])
+    if (si >= 0) { const f = SOFAS[si].front; n.send({ t: 'sofa', i: si } as any); const me = n.ents.get(n.me); r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], f) ?? [] : []; target.current = f; return }
+    // the piano or its bench: walk to the bench
+    if (at(t[0], t[1]) === 'K' || isPianoSeat(t[0], t[1])) t = [PIANO_SEAT[0], PIANO_SEAT[1]]
     if (!walkable(t[0], t[1])) t = nearestWalkable(t[0], t[1]); if (!t) return
     n.send({ t: 'go', x: t[0], y: t[1] }); const me = n.ents.get(n.me)
     r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], t) ?? [] : []; target.current = t
@@ -235,10 +274,11 @@ function World() {
   const close = () => { setSel(null); setMenu(''); if (ren.current) ren.current.sel = 0 }
   /** X / Esc at a table: step off the seat onto the nearest free floor tile next to it (the server then ends the pair) */
   const stand = () => { const n = net.current, me = n?.ents.get(n.me); if (!n || !me) return
-    const x = Math.floor(me.x), y = Math.floor(me.y)
-    const t = ([[0, 1], [0, -1], [-1, 0], [1, 0], [-1, 1], [1, 1], [-1, -1], [1, -1]] as const).map(([dx, dy]) => [x + dx, y + dy] as [number, number]).find(([a, b]) => walkable(a, b) && !isSeat(a, b))
+    const x = Math.floor(me.x), y = Math.floor(me.y), si = sofaAt(x, y)
+    if (si >= 0) { const f = SOFAS[si].front; n.send({ t: 'go', x: f[0], y: f[1] }); return }   // off the sofa onto the floor in front of it
+    const t = ([[0, 1], [0, -1], [-1, 0], [1, 0], [-1, 1], [1, 1], [-1, -1], [1, -1]] as const).map(([dx, dy]) => [x + dx, y + dy] as [number, number]).find(([a, b]) => walkable(a, b) && !isSeat(a, b) && !isPianoSeat(a, b))
     if (!t) return; n.send({ t: 'go', x: t[0], y: t[1] }); target.current = t; if (ren.current) ren.current.path = [t] }
-  standRef.current = card?.q ? stand : null
+  standRef.current = card?.q || where ? stand : null
 
   if (phase !== 'in') return (
     <main className="w-gate" data-t="w-gate">
@@ -279,23 +319,40 @@ function World() {
   const seated = !!card?.q
   const cardEl = card && card.q && <TablePanel card={card} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
     ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} say={bar} send={o => net.current?.send(o as any)} stand={stand} />
+  const myPav = net.current?.p.pav
+  const pianoEl = where === 'piano' && <PianoPanel mine={pianoS.by === net.current?.me} playing={pianoS.by === net.current?.me ? pianoS.song : null} near={near} sel={song}
+    setSel={id => { setSong(id); void pa.current?.load(id) }} onPlay={id => net.current?.send({ t: 'piano', id } as any)} onStop={() => net.current?.send({ t: 'pstop' } as any)} onStand={stand}
+    portrait={myPav ? <Suspense fallback={null}><Char json={myPav} scale={2} label="Your Pixel You" t="w-piano-av" /></Suspense> : null} />
+  const playing = pianoS.song ? PIECE.get(pianoS.song) : undefined
+  const pianist = pianoS.by === net.current?.me ? 'You' : net.current?.pubs.get(pianoS.by)?.name ?? 'Someone'
+  // GD end-received-390: a gentle card for the one turned down (never says why); the grey broken heart over the person
+  // who ended it is the server's, and only they see it
+  const goneEl = gone && <section className="w-gentle" data-t="w-gone" role="status"><h2><b>{gone}</b> has moved on.</h2>
+    <p>Thanks for the chat <img src={heartPng} alt="" width={18} height={16} data-t="w-gone-heart" /></p>
+    <button className="w-btn" data-t="w-gone-ok" onClick={() => setGone('')}>OK</button></section>
   return (
     <main className={'w-room ' + layout + (seated ? ' seated' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined}>
       <header className="w-top"><b>Café</b><span data-t="w-inst">{inst.replace('cafe-', 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
-        <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} /></div>
+        <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
+        {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}</div>
       <aside className="w-side" data-t="w-side">
         {person}
         {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
+        {goneEl}
         {cardEl}
+        {pianoEl}
+        {where === 'sofa' && <section className="w-panel w-sofa" data-t="w-sofa"><p>On the sofa · everyone can hear the room chat</p>
+          <button className="w-btn sm ghost" data-t="w-sofa-stand" onClick={stand}>Stand up</button></section>}
         {/* GD v05: at a table the "Just you two" chat (with the bar) replaces the room log */}
         {!seated && layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
           <h2 className="w-log-h">Chat</h2>
           <ol ref={logEl} role="log" aria-live="polite">{log.length ? log.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined} data-mine={l.mine ? '1' : undefined}><b>{l.mine ? 'You' : l.name}</b> <span>{l.text}</span></li>)
             : <li className="w-log-empty">What people say shows up here.</li>}</ol></section>}
         {!seated && bar}
-        {!seated && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card</p>}
+        {!seated && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card · tap the piano to play</p>}
+        {!seated && layout === 'desk' && <p className="w-help w-credit" data-t="w-credit-help">{PIANO_CREDIT}</p>}
       </aside>
     </main>)
 }
@@ -303,14 +360,16 @@ function World() {
     whole; pixelated on their phone, drawn nearest-neighbour, the app's reveal on level up. Until it arrives (or if they have
     none), their Pixel You portrait, integer-scaled. */
 const PHOTO_CSS = 64
-function Photo({ photo, name, pav }: { photo: { lv: number; data: string } | null; name: string; pav?: string }) {
+function Photo({ photo, name, pav, id }: { photo: { lv: number; data: string } | null; name: string; pav?: string; id: number }) {
+  // GD: never an empty slot. A look that won't parse (or none) falls back to the same sample look the café draws for them
+  const look = pav && parseOptions(pav) ? pav : JSON.stringify(SAMPLES[id % SAMPLES.length])
   const cv = useRef<HTMLCanvasElement>(null), prev = useRef<HTMLImageElement | null>(null), dpr = Math.max(1, Math.round(devicePixelRatio || 1))
   useEffect(() => { if (!photo || !cv.current) return; let live = true
     void loadImage(photo.data).then(img => { if (!live || !cv.current) return; animateReveal(cv.current, prev.current, img); prev.current = img; cv.current.dataset.lv = String(photo.lv); cv.current.dataset.px = String(img.naturalWidth) })
     return () => { live = false } }, [photo?.data])
   return <div className="w-photo" style={{ width: PHOTO_CSS, height: PHOTO_CSS }}>
     <canvas ref={cv} width={PHOTO_CSS * dpr} height={PHOTO_CSS * dpr} data-t="w-photo" hidden={!photo} role="img" aria-label={photo ? `${name}'s photo at level ${photo.lv}` : `${name}'s photo`} />
-    {!photo && <span className="w-photo-ph" data-t="w-photo-ph">{pav ? <Suspense fallback={null}><Char json={pav} scale={2} label={`${name}'s Pixel You`} t="w-portrait" /></Suspense> : <span aria-hidden="true">?</span>}</span>}</div>
+    {!photo && <span className="w-photo-ph" data-t="w-photo-ph"><Suspense fallback={null}><Char json={look} scale={2} label={`${name}'s Pixel You`} t="w-portrait" /></Suspense></span>}</div>
 }
 type Send = (o: { t: string; [k: string]: unknown }) => void
 /** GD's 1-bit pixel icons from the v05 table mocks (rows of '#'), drawn as crisp rects at n CSS px per pixel */
@@ -326,17 +385,23 @@ function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, 
   ans: string; setAns: (s: string) => void; ansErr: string; onAns: (e: React.FormEvent) => void; priv: { k: number; mine: boolean; text: string }[]; privEl: React.RefObject<HTMLOListElement | null>
   say: React.ReactNode; send: Send; stand: () => void }) {
   const L = LEVELS[card.lv - 1], nextL = LEVELS[card.lv], vL = LEVELS[card.video - 1], q = card.q!, qL = LEVELS[(q.lv || card.lv) - 1]
+  const [ask, setAsk] = useState<'' | 'nfm' | 'block'>(''), canNfm = !!card.rev   // GD: only once a card is revealed
   const canCall = card.lv >= card.video, rev = card.rev, fresh = rev && !card.up && card.seg > 0 && card.lv < LEVELS.length ? card.seg - 1 : -1
   return (<>
     <section className="w-panel w-who" data-t="w-strip" aria-label={`Table for two with ${name}`}>
-      <Photo photo={photo} name={name} pav={pav} />
+      <Photo photo={photo} name={name} pav={pav} id={card.with} />
       <div className="w-who-txt"><p className="w-with" data-t="w-with">{name}</p>
         <p className="w-lv" data-t="w-lv"><b>Level {card.lv}</b> {L?.name}{nextL && <span className="w-to" data-t="w-to">· {card.seg}/5 to {nextL.name}</span>}</p>
         <div className="w-meter" data-t="w-meter" data-seg={card.seg} role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={card.seg} aria-label={nextL ? `${card.seg} of 5 cards to Level ${card.lv + 1}` : 'Top level'}>
           {[0, 1, 2, 3, 4].map(i => <i key={i} className={i === fresh ? 'new' : i < card.seg ? 'on' : undefined} data-t={i === fresh ? 'w-seg-new' : undefined} />)}
           {rev && (card.up ? <span className="w-plus" data-t="w-plus">Level up!</span> : fresh >= 0 && <span className="w-plus" data-t="w-plus">+1</span>)}</div></div>
       <button className="w-stand" data-t="w-stand" aria-label="Stand up" onClick={stand}><Px i="x" /></button>
+      {/* Block is there from the first second at the table, before any card is answered */}
+      <button className="w-link w-tblock" data-t="w-tblock" onClick={() => setAsk('block')}>Block</button>
     </section>
+    {ask === 'block' && <section className="w-panel w-ask" data-t="w-tblock-confirm"><p>Block {name}? You won't see each other in any café room again. They aren't told.</p>
+      <div className="w-acts"><button className="w-btn sm danger" data-t="w-tblock-yes" onClick={() => { send({ t: 'block', id: card.with }); setAsk('') }}>Block</button>
+        <button className="w-btn sm ghost" onClick={() => setAsk('')}>Cancel</button></div></section>}
     <section className={'w-card' + (rev ? ' done' : '')} data-t="w-card" data-lv={card.lv} data-rev={rev ? '1' : undefined}>
       {rev && <div className="w-stamp" data-t="w-done"><Px i="tick" />Ticked off</div>}
       <p className="w-kick"><span className="w-tag" data-t="w-tag">{qL?.name} · Q{q.i || card.n + 1}</span>Table for two</p>
@@ -352,8 +417,15 @@ function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, 
             : <div className={'w-a wait' + (card.them ? ' in' : '')} data-t="w-them" data-them={card.them ? '1' : undefined}>
               {card.them ? <><Px i="tick" c="#48E5C2" />{name} has answered</> : card.mine ? <>{name} is thinking<span className="w-dots">…</span></> : 'Not answered yet'}</div>}</div></div>
       {ansErr && <p className="w-err" role="alert" data-t="w-ans-err">{ansErr}</p>}
-      {rev ? <div className="w-foot"><button className="w-btn" data-t="w-next" onClick={() => send({ t: 'next' })}>Next card</button></div>
+      {rev ? <div className="w-foot two">
+          <button className="w-btn" data-t="w-next" onClick={() => send({ t: 'next' })}>Next card</button>
+          {canNfm && <button className="w-btn w-no" data-t="w-nfm" onClick={() => setAsk('nfm')}>Not for me</button>}</div>
         : card.mine && <div className="w-foot"><span className="w-fnote">Answers show when you’ve both replied.</span></div>}
+      {ask === 'nfm' && <><div className="w-dim" data-t="w-dim" onClick={() => setAsk('')} />
+        <section className="w-confirm" data-t="w-nfm-confirm" role="dialog" aria-modal="true" aria-label={`End the date with ${name}?`}><div className="w-grab" />
+          <h2>End the date with <b>{name}</b>?</h2><p>You’ll both stand up. {name} won’t see why.</p>
+          <div className="w-acts2"><button className="w-btn w-keep" data-t="w-nfm-no" onClick={() => setAsk('')}>Keep chatting</button>
+            <button className="w-btn w-end" data-t="w-nfm-yes" onClick={() => { send({ t: 'nfm' }); setAsk('') }}>End it</button></div></section></>}
     </section>
     <section className="w-panel w-chat" data-t="w-priv">
       <h3 data-t="w-priv-label"><Px i="lock" n={2} />Just you two<span className="w-sub">Others see “…”</span></h3>

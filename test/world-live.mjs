@@ -134,6 +134,17 @@ if (cardP && cardD && await phone.$('[data-t=w-lv]')) {
   await shot(phone, '09-revealed'); await shot(desk, '09-revealed')
 } else console.log('  (deployed client is pre-v05: v05 table checks skipped)')
 await shot(phone, '06-card'); await shot(desk, '06-card')
+// ── outsiders (390 + 1440): two more visitors see the pair seated at their table, never their private table chat
+for (const [tag, vp, name, pav] of [['out390', PHONE, 'Ola', 4], ['out1440', DESK, 'Kit', 7]]) {
+  const o = await player(tag, vp, { name, iam: 'woman', seek: 'everyone', min: 50, max: 60, pav: JSON.stringify({ v: 1, ...SAMPLES[pav] }) })
+  await o.goto(APP + '&invite=' + encodeURIComponent(INV), { waitUntil: 'networkidle0' }); await o.waitForSelector('[data-t=w-gate]')
+  await press(o, '[data-t=w-adult]'); await press(o, '[data-t=w-enter]')
+  ok(await until(() => o.$('[data-t=w-room]'), 10000), `${tag}: joined`)
+  ok(await until(async () => { const a = await entBy(o, 'Sam'), b = await entBy(o, 'Jess'); return a && b && (a.f & F_SIT) && (b.f & F_SIT) }, 10000), `${tag}: sees Sam and Jess seated at their table`)
+  await walkTo(o, 19, 12); await o.bringToFront(); await sleep(600)
+  ok(!(await o.$('[data-t=w-card]')) && !(await o.evaluate(() => document.body.innerText.includes('just between us'))), `${tag}: no card and none of the pair's private chat`)
+  await shot(o, '10-outsider'); await o.browserContext().close()
+}
 // person panel (Heart / Pass / Report / Block) on the desktop, without pressing anything
 { const e = await entBy(desk, 'Sam'); const [x, y] = await desk.evaluate(id => window.__world.css(id), e.id); await desk.mouse.click(x, y - 8)
   ok(await until(() => desk.$('[data-t=w-person]'), 4000), 'desk: clicking Sam opens his panel'); await shot(desk, '07-person'); await desk.keyboard.press('Escape') }

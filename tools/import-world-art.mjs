@@ -14,6 +14,7 @@ const SLOTS = {
   'heart.png': [9, 8], 'heart-bob.png': [18, 9], 'broken-heart.png': [9, 7],
   'edge-arrow.png': [24, 24], 'edge-arrow-left.png': [24, 24], 'edge-arrow-up.png': [24, 24], 'edge-arrow-down.png': [24, 24],
   'count-badges.png': [103, 9], 'speech-bubble-9slice.png': [12, 12], 'speech-bubble-tail.png': [9, 6],
+  'notes-glyphs.png': [28, 9], 'speaker-on.png': [11, 9], 'speaker-off.png': [11, 9], // piano v1: floating notes over the lid, the mute toggle
   'table-typing-strip.png': [48, 16], // v05: the “…” over a table for everyone but the two sat there (3 frames, ~180 ms)
 }
 let took = 0, bad = 0

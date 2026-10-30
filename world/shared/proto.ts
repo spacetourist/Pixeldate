@@ -21,7 +21,7 @@ export const bracketLabel = ([lo, hi]: [number, number]) => hi >= 999 ? `${lo}+`
 /** What a viewer learns about another person: display name, age bracket, character JSON. Nothing else. */
 export interface Pub { id: number; name: string; br: [number, number]; pav?: string }
 export type ServerMsg =
-  | { t: 'hi'; me: number; inst: string; n: number; ka: number }
+  | { t: 'hi'; me: number; inst: string; n: number; ka: number; now?: number }
   | { t: 'no'; why: 'invite' | 'adult' | 'profile' | 'timeout' }
   | { t: 'full'; next: string }
   | { t: 'add'; p: Pub } | { t: 'del'; id: number }
@@ -35,6 +35,11 @@ export type ServerMsg =
   | { t: 'card'; q: { id: string; text: string } | null; with?: number } & Partial<Table>
   | { t: 'ack'; what: 'heart' | 'pass' | 'block' | 'report'; id: number }
   | { t: 'mutual'; id: number }
+  /** the café piano (shared/piano.ts): who is on the bench (0 = nobody), the song and the server time its first sample
+      plays at; now = the server clock when sent. why: 'end' (played out) or 'stop' (the pianist stopped it). */
+  | { t: 'piano'; by: number; song: string | null; at: number; now: number; why?: 'end' | 'stop' }
+  /** clock sync reply: c = the client's send time echoed, s = server time */
+  | { t: 'tm'; c: number; s: number }
 export type ClientMsg =
   | { t: 'join'; invite: string; p: { name: string; br: [number, number]; min: number; max: number; iam: string; seek: string; uid: string; pav?: string; adult?: boolean } }
   | { t: 'go'; x: number; y: number } | { t: 'dir'; dx: number; dy: number }
@@ -45,6 +50,8 @@ export type ClientMsg =
   | { t: 'photo'; lv: number; data: string }
   /** the app's local level for the person you're seated with (src/pairlv.ts), once per sitting */
   | { t: 'pairlv'; lv: number; drop?: boolean }
+  /** at the piano (only the one on the bench): play a manifest piece / stop it. tm: clock sync ping. */
+  | { t: 'piano'; id: string } | { t: 'pstop' } | { t: 'tm'; c: number }
 /** What one of the two at a table sees (sent only to them): level, the card, the answers (theirs only once both are in),
     the date opt-ins, and a pending call request ('out' = I asked, 'in' = they asked). */
 export interface Table { tb: number; lv: number; seg: number; up: boolean; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null

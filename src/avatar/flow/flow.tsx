@@ -46,7 +46,7 @@ const Ctx = createContext<{ step?: string; onExit?: () => void }>({})
 const DBG = /[?&]avatar=debug\b/.test(location.search)
 function Top({ onBack }: { onBack?: () => void }) {
   const { step, onExit } = useContext(Ctx)
-  return <div className="av-top"><button className="av-back" aria-label="Back" onClick={onBack ?? onExit} data-t="av-back">‹</button>{step && <div className="av-step" data-t="av-step">{step}</div>}</div>
+  return <div className="av-top"><button className="av-back" aria-label="Back" onClick={onBack ?? onExit} data-t="av-back"><svg width="10" height="14" viewBox="0 0 5 7" fill="currentColor" aria-hidden="true" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1"/><rect x="2" y="1" width="1" height="1"/><rect x="1" y="2" width="1" height="1"/><rect x="0" y="3" width="1" height="1"/><rect x="1" y="4" width="1" height="1"/><rect x="2" y="5" width="1" height="1"/><rect x="3" y="6" width="1" height="1"/><rect x="4" y="0" width="1" height="1"/><rect x="3" y="1" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/><rect x="1" y="3" width="1" height="1"/><rect x="2" y="4" width="1" height="1"/><rect x="3" y="5" width="1" height="1"/><rect x="4" y="6" width="1" height="1"/></svg></button>{step && <div className="av-step" data-t="av-step">{step}</div>}</div>
 }
 
 function Upload({ onPhoto, onHand, onCurrent, onSkip, progress, busy, error }: { onPhoto: (f: File) => void; onHand: () => void; onCurrent?: () => void; onSkip?: () => void; progress: Progress | null; busy: string; error: { message: string; detail?: string } | null }) {

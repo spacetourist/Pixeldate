@@ -235,11 +235,11 @@ async function flow(p, o) {
     for (const r of [0, 1]) { for (const [i, k] of who.entries()) { cast[k].send({ t: 'say', text: `${lines[(i + r * 3) % 10]}${r ? ' :)' : ''}` }); await sleep(60) } await sleep(400) }
     await until(() => p.$$eval('[data-t=w-log] li', es => es.length >= 22), 6000); await sleep(400)
     const c = await p.evaluate(() => { const q = s => document.querySelector(s), R = s => q(s)?.getBoundingClientRect().toJSON(), side = q('[data-t=w-side]'), ol = q('[data-t=w-log] ol')
-      return { side: R('[data-t=w-side]'), person: R('[data-t=w-person]'), log: R('[data-t=w-log]'), bar: R('[data-t=w-say]'), help: R('[data-t=w-help]'), hf: parseFloat(getComputedStyle(q('[data-t=w-help]')).fontSize),
+      return { side: R('[data-t=w-side]'), person: R('[data-t=w-person]'), log: R('[data-t=w-log]'), bar: R('[data-t=w-say]'), help: R('[data-t=w-help]'), cred: R('[data-t=w-credit-help]'), hf: parseFloat(getComputedStyle(q('[data-t=w-help]')).fontSize),
         sideOver: side.scrollHeight - side.clientHeight, oy: getComputedStyle(ol).overflowY, sh: ol.scrollHeight, ch: ol.clientHeight, st: ol.scrollTop,
         items: [...ol.querySelectorAll('li')].map(li => [li.querySelector('b')?.textContent, li.querySelector('span')?.textContent, li.dataset.mine === '1']) } })
     ok(c.person && Math.abs(c.person.top - c.side.top - 14) < 2.5, `${L}: person panel pinned at the top of the side column (${(c.person?.top - c.side.top).toFixed(0)} px down)`)
-    ok(c.person && c.log.top >= c.person.bottom && c.bar.top >= c.log.bottom && c.help.top >= c.bar.bottom && Math.abs(c.side.bottom - c.help.bottom - 14) < 2.5 && c.sideOver <= 0, `${L}: then the chat log, the bar, and the help panel at the bottom; nothing spills out of the column`)
+    ok(c.person && c.log.top >= c.person.bottom && c.bar.top >= c.log.bottom && c.help.top >= c.bar.bottom && (!c.cred || c.cred.top >= c.help.bottom) && Math.abs(c.side.bottom - (c.cred ?? c.help).bottom - 14) < 2.5 && c.sideOver <= 0, `${L}: then the chat log, the bar, the help panel and the piano credit at the bottom; nothing spills out of the column`)
     ok(c.hf <= 12 && c.help.height < 60, `${L}: help is a small panel (${c.hf}px text, ${c.help.height.toFixed(0)} px tall)`)
     ok(c.oy === 'auto' && c.sh > c.ch + 20 && c.st + c.ch >= c.sh - 2, `${L}: chat log scrolls and stays on the newest line (${c.items.length} lines, ${c.sh} of ${c.ch} px, at the bottom)`)
     ok(c.items.some(([n, t, m]) => n === 'Mia' && t === 'love the lamps in here' && !m) && c.items.some(([n, t, m]) => n === 'You' && t === myLine && m), `${L}: log has names + text, my own line marked "You"`)

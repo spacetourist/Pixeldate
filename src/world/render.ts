@@ -2,9 +2,11 @@
    GD's café art is the background; the hand-written grid in world/shared/map.ts says what is blocked. Everything is in
    the café's native 16 px grid, scaled by an INTEGER factor k in device pixels with nearest sampling, so every art pixel
    is exactly k×k screen pixels. */
-import { MAP, W, H, TILE, at, TABLES } from '../../world/shared/map.ts'
+import { MAP, W, H, TILE, at, TABLES, isPianoSeat } from '../../world/shared/map.ts'
+import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
+import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { F_HEART, F_BROKEN, F_MOVING, F_SIT, F_ME } from '../../world/shared/proto.ts'
-import { composeDir, footX, WALK_FRAME_MS, WALK_W, WALK_H, SIT_D, SIT_CHAIR, type Dir, type Frame } from './walk.ts'
+import { composeDir, footX, WALK_FRAME_MS, WALK_W, WALK_H, SIT_D, SIT_CHAIR, PIANO_FRAME_MS, type Dir, type Frame } from './walk.ts'
 import { parseOptions } from '../avatar/kit/map.ts'
 import { SAMPLES } from '../avatar/kit/kit.gen.ts'
 import type { WorldNet, Seen } from './net.ts'
@@ -47,10 +49,14 @@ const tex = (c: HTMLCanvasElement) => new Texture({ source: source(c) })
 const load = (f: string) => new Promise<HTMLCanvasElement>((ok, no) => { const i = new Image(); i.decoding = 'async'
   i.onload = () => { const c = cnv(i.naturalWidth, i.naturalHeight); c.getContext('2d')!.drawImage(i, 0, 0); ok(c) }
   i.onerror = () => no(new Error('art ' + f)); i.src = ART['./art/' + f] })
+/** one sort key for a sofa's layers: its bottom row (y + 32), then the layer (GD sofa README: 0 back, 1..3 sitter bodies L/M/R,
+    4 front, 5..7 sitter legs L/M/R) */
+export const sofaZ = (ty: number, layer: number) => ((ty + 2) * TILE) * 1024 - 8 + layer
 const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
+    if (isPianoSeat(tx, ty)) return 'up'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
   return Math.abs(e.dx) > Math.abs(e.dy) ? (e.dx < 0 ? 'left' : 'right') : (e.dy < 0 ? 'up' : 'down')
 }
@@ -60,7 +66,7 @@ export type Layout = 'phone' | 'desk'
 export type Arrow = { id: number; ids: number[]; n: number; x: number; y: number; dir: Edge; cover: boolean; badge: string }
 type Spr = { t: Texture; ax: number; fy: number }
 /** sx, sy: sprite cell top-left this frame (art px, map space), for the markers and the bubble tail */
-type Ent = { root: Container; shadow: Sprite; me: Sprite; sel: Sprite; body: Sprite; mark: Sprite; sx: number; sy: number; sit: boolean }
+type Ent = { root: Container; shadow: Sprite; me: Sprite; sel: Sprite; body: Sprite; legs: Sprite; mark: Sprite; sx: number; sy: number; sit: boolean }
 type Box = [number, number, number, number]
 const hit = (a: Box, b: Box) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 
@@ -76,6 +82,12 @@ export class Renderer {
   private ui = new Container(); private dots = new Container(); private goal = new Sprite()
   private T: Record<string, Texture> = {}; private badges: Texture[] = []
   private arrowPool: Sprite[] = []; private countPool: Sprite[] = []
+  /** the café piano as the server last said (index.tsx sets it): the song and its start, in this client's clock (ms,
+      performance.now() time base), for the pianist's hands and the notes over the lid */
+  piano: { by: number; song: string | null; at: number } = { by: 0, song: null, at: 0 }
+  /** notes drawn last frame (tests) */
+  notesOn = 0
+  private notes = new Container(); private G: Texture[] = []
   /** GD's marker files in use, with their sizes in art px (tests check them against world/markers/README.md). */
   art: Record<string, [number, number]> = {}
   constructor(c: HTMLCanvasElement) {
@@ -83,7 +95,7 @@ export class Renderer {
     this.ready = this.init().catch(err => { console.error('[world] renderer', err); throw err })
   }
   private async init() {
-    const MK = ['heart', 'heart-bob', 'broken-heart', ...Object.values(ARROWS), 'count-badges']
+    const MK = ['heart', 'heart-bob', 'broken-heart', ...Object.values(ARROWS), 'count-badges', 'notes-glyphs']
     const [map, ...rest] = await Promise.all([load(MAP.art), ...Object.values(GLOW).map(load), ...MK.map(f => load(`markers/${f}.png`))])
     const glows = rest.slice(0, 3), mk = Object.fromEntries(MK.map((f, i) => [f, rest[3 + i]]))
     const px = await autoDetectRenderer({ canvas: this.c, width: this.dw, height: this.dh, resolution: 1, autoDensity: false, antialias: false,
@@ -99,6 +111,13 @@ export class Renderer {
     const bob = T['heart-bob'].source; T.bob0 = new Texture({ source: bob, frame: new Rectangle(0, 0, 9, 9) }); T.bob1 = new Texture({ source: bob, frame: new Rectangle(9, 0, 9, 9) })
     const strip = T['count-badges'].source
     this.badges = [...Array.from({ length: 8 }, (_, i) => new Texture({ source: strip, frame: new Rectangle(i * 11, 0, 11, 9) })), new Texture({ source: strip, frame: new Rectangle(88, 0, 15, 9) })]
+    // GD's three note glyphs (notes-glyphs.png 28x9: quaver 1-6, quaver 9-14, beamed pair 17-26)
+    const ng = T['notes-glyphs'].source; this.G = [[0, 8], [8, 8], [16, 12]].map(([x, w]) => new Texture({ source: ng, frame: new Rectangle(x, 0, w, 9) }))
+    for (let i = 0; i < 3; i++) this.notes.addChild(new Sprite(this.G[0]))
+    // GD's sofa3: the back is in the map art; over it the sitters' bodies (L, M, R), the front layer (cushions, arms,
+    // feet), then the sitters' legs (L, M, R), all sorted as one object at the sofa's bottom (y + 32)
+    const front = await load('tiles/sofa3-front.png'); T.sofaFront = tex(front); this.art['sofa3-front'] = [front.width, front.height]
+    for (const sf of SOFAS) { const sp = new Sprite(T.sofaFront); sp.position.set(sf.x * TILE, sf.y * TILE); sp.zIndex = sofaZ(sf.y, 4); sp.label = 'sofa-front-' + sf.id; this.people.addChild(sp) }
     T.dot = tex(paint(['mm', 'mm'], { m: '#48E5C2' }))
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
@@ -107,7 +126,7 @@ export class Renderer {
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }
     this.goal.texture = T.goal; this.goal.visible = false
     this.people.sortableChildren = true
-    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.marks)
+    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.notes, this.marks)
     this.stage.addChild(this.world, this.ui)
     this.px = px; this.apply()
   }
@@ -142,8 +161,9 @@ export class Renderer {
   private ent(id: number): Ent {
     let x = this.ents.get(id); if (x) return x
     const T = this.T, root = new Container(), shadow = new Sprite(T.shadow), me = new Sprite(T.me), sel = new Sprite(T.sel), body = new Sprite(), mark = new Sprite()
-    root.addChild(shadow, me, sel, body); this.people.addChild(root); this.marks.addChild(mark)
-    x = { root, shadow, me, sel, body, mark, sx: 0, sy: 0, sit: false }; this.ents.set(id, x); return x
+    const legs = new Sprite(); legs.visible = false; legs.label = 'legs-' + id
+    root.addChild(shadow, me, sel, body); this.people.addChild(root, legs); this.marks.addChild(mark)
+    x = { root, shadow, me, sel, body, legs, mark, sx: 0, sy: 0, sit: false }; this.ents.set(id, x); return x
   }
   frame(net: WorldNet, now: number) {
     this.frames.push(now); while (this.frames.length && now - this.frames[0] > 1000) this.frames.shift(); this.fps = this.frames.length
@@ -174,17 +194,24 @@ export class Renderer {
     for (const e of net.ents.values()) {
       seen.add(e.id); const x = this.ent(e.id), d = dirOf(e), sit = !!(e.f & F_SIT)
       let [fx, fy] = this.feet(net, e, now)
-      const fr: Frame = sit ? 'sit' : (e.f & F_MOVING) ? (Math.floor((now + e.id * 53) / WALK_FRAME_MS) % 4) as Frame : 'stand'
-      const s = this.sprite(e.id, net.pubs.get(e.id)?.pav ?? (e.id === net.me ? net.p.pav : undefined), d, fr)
-      let sx: number, sy: number
-      if (sit && (d === 'right' || d === 'left')) {
+      const atPiano = sit && isPianoSeat(Math.floor(e.x), Math.floor(e.y)), playing = atPiano && e.id === this.piano.by && !!this.piano.song && now >= this.piano.at
+      const onSofa = sit && at(Math.floor(e.x), Math.floor(e.y)) === 'S'
+      const fr: Frame = onSofa ? 'sofaBody' : atPiano ? (playing && !calm && Math.floor((now - this.piano.at) / PIANO_FRAME_MS) % 2 ? 'piano1' : 'piano0') : sit ? 'sit' : (e.f & F_MOVING) ? (Math.floor((now + e.id * 53) / WALK_FRAME_MS) % 4) as Frame : 'stand'
+      const pav = net.pubs.get(e.id)?.pav ?? (e.id === net.me ? net.p.pav : undefined), s = this.sprite(e.id, pav, onSofa ? 'down' : d, fr)
+      let sx: number, sy: number, seatZ = 0
+      if (atPiano) { [sx, sy] = PIANO_PX.sprite as unknown as [number, number]; fx = sx + 12; fy = sy + 32 }
+      else if (onSofa) { const st = seatOf(e.x, e.y)!; [sx, sy] = seatPx(st[0], st[1]); fx = sx + 12; fy = sy + 32; seatZ = sofaZ(SOFAS[st[0]].y, 1 + st[1])
+        // the legs layer, same offset as the body, over the sofa front
+        x.legs.texture = this.sprite(e.id, pav, 'down', 'sofaLegs').t; x.legs.position.set(sx, sy); x.legs.zIndex = sofaZ(SOFAS[st[0]].y, 5 + st[1]) }
+      else if (sit && (d === 'right' || d === 'left')) {
         // GD's chair tile is 16x32 with its top on the back-rest row (the seat tile's row - 1); the map art already has the
         // chair and the table, so drawing the sitter over it gives chair, table, sitter (feet tuck under the table)
         const tx = Math.floor(e.x), ty = Math.floor(e.y), [dx, dy] = d === 'right' ? SIT_CHAIR.leftSeat : SIT_CHAIR.rightSeat
         sx = tx * TILE + dx; sy = (ty - 1) * TILE + dy; fx = sx + 12; fy = sy + 32
       } else { if (sit) { fx = Math.floor(e.x) * TILE + 8; fy = Math.floor(e.y) * TILE + 8 } sx = fx - s.ax; sy = fy - s.fy }
+      x.legs.visible = onSofa
       x.body.texture = s.t; x.body.position.set(sx, sy); x.sx = sx; x.sy = sy; x.sit = sit
-      x.root.zIndex = fy * 1024 + (e.id & 1023)
+      x.root.zIndex = seatZ || fy * 1024 + (e.id & 1023)
       x.shadow.visible = !sit; x.shadow.position.set(fx - 6, fy - 2)
       x.me.visible = !!(e.f & F_ME); x.me.position.set(fx - 7, fy + 1)
       x.sel.visible = e.id === this.sel; x.sel.position.set(fx - 8, fy + 1)
@@ -199,10 +226,31 @@ export class Renderer {
       if (!off) bodies.push(box)
       else if (heart && e.id !== net.me) far.push({ id: e.id, x: fx - this.camX, y: fy - 14 - this.camY })
     }
-    for (const [id, x] of this.ents) if (!seen.has(id)) { x.root.destroy(); x.mark.destroy(); this.ents.delete(id) }
+    for (const [id, x] of this.ents) if (!seen.has(id)) { x.root.destroy(); x.legs.destroy(); x.mark.destroy(); this.ents.delete(id) }
+    this.drawNotes(now, calm)
     this.arrows = this.placeArrows(far, bodies)
     this.px.render(this.stage)
   }
+  /** GD's floating notes over the lid while a song plays: one note per noteEveryMs() (2 beats; a bar in slow 3/4; the
+      Audio Engineer's Clair de lune / Nocturne overrides), counted from the song's start so every screen agrees; each
+      lives 6 frames of 120 ms, rising 4 px a frame with GD's sway and fade. Reduced motion: one still note. */
+  private drawNotes(now: number, calm: boolean) {
+    const p = this.piano, pc = p.song ? PIECE.get(p.song) : undefined, spr = this.notes.children as Sprite[]
+    for (const s of spr) s.visible = false; this.notesOn = 0
+    if (!pc || now < p.at || now > p.at + pc.durationSec * 1000) return
+    const [bx, by] = PIANO_PX.notes, life = NOTE.frameMs * NOTE.life
+    if (calm) { const s = spr[0]; s.texture = this.G[0]; s.alpha = 1; s.position.set(bx - 4, by - 9 - 8); s.visible = true; this.notesOn = 1; return }
+    const every = noteEveryMs(pc), t = now - p.at, i0 = Math.max(0, Math.floor((t - life) / every) + 1), i1 = Math.floor(t / every)
+    for (let i = i0, k = 0; i <= i1 && k < spr.length; i++, k++) {
+      const age = t - i * every, f = Math.floor(age / NOTE.frameMs); if (f < 0 || f >= NOTE.life) continue
+      const s = spr[k], g = i % 3; s.texture = this.G[g]; s.alpha = NOTE.alpha[f] / 255
+      s.position.set(bx - 12 + NOTE.x[g] + NOTE.sway[f], by - 9 - NOTE.rise * f); s.visible = true; this.notesOn++
+    }
+  }
+  /** test hook: the drawn sprite of a person / a sofa front (art px, map space) and its place in the draw order */
+  drawn(id: number) { const x = this.ents.get(id); if (!x) return null
+    const list = [...this.people.children].sort((a, b) => a.zIndex - b.zIndex)
+    return { sx: x.body.x, sy: x.body.y, z: x.root.zIndex, order: list.indexOf(x.root), legs: x.legs.visible ? { x: x.legs.x, y: x.legs.y, z: x.legs.zIndex, order: list.indexOf(x.legs) } : null, fronts: SOFAS.map(f => { const c = this.people.children.find(o => o.label === 'sofa-front-' + f.id)!; return { x: c.x, y: c.y, z: c.zIndex, order: list.indexOf(c) } }) } }
   /** Off-screen hearts → edge arrows (GD's README): each goes on the edge its direction from the view centre crosses,
       drawn with that edge's upright art, tip TIP_IN px inside the edge, the other axis at the target's position clamped to
       the view. Arrows that would overlap on the same edge merge into one with a count badge; an arrow then slides along

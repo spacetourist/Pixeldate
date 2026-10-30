@@ -18,6 +18,7 @@ const store: Store = {
   load: async uid => structuredClone(users.get(uid) ?? emptyRec()),
   add: (uid, f, other) => { let r = users.get(uid); if (!r) users.set(uid, r = emptyRec()); if (!r[f].includes(other)) r[f].push(other) },
   report: r => { reports.push(r) },
+  del: (uid, f, other) => { const r = users.get(uid); if (r) r[f] = r[f].filter(x => x !== other) },
 }
 const INVITES = new Set(['dev-invite-1', 'dev-invite-2', 'dev-invite-3'])
 const capArg = process.argv.find(a => a.startsWith('--cap='))

@@ -1,6 +1,8 @@
 /* One café instance, as a pure class: no Cloudflare APIs, so it runs (and is benchmarked) in plain Node too.
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
-import { TABLES, SPAWNS, walkable, isSeat, type Table } from '../shared/map.ts'
+import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, type Table } from '../shared/map.ts'
+import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
+import { SOFAS, SEAT_ORDER, SOFA_FRONT_Y } from '../shared/sofa.ts'
 import { findPath, nearestWalkable, type P } from '../shared/path.ts'
 import { CAP, ENT_BYTES, FIX, F_BROKEN, F_HEART, F_ME, F_MOVING, F_SIT, HEAD_BYTES, LV_MAX, LV_SEG, MAX_ANS, PHOTO_MAX, SAY_MAX, SAY_WINDOW_MS, SNAP, SPEED, STALE_MS, VIDEO_LEVEL, type Pub, type Table as TableView } from '../shared/proto.ts'
 import { compatible, okBracket, type Prefs } from '../shared/compat.ts'
@@ -13,7 +15,8 @@ export type Field = 'met' | 'hearted' | 'passed' | 'refusedBy' | 'blocked' | 'bl
 export type Rec = Record<Field, string[]>
 export const emptyRec = (): Rec => ({ met: [], hearted: [], passed: [], refusedBy: [], blocked: [], blockedBy: [] })
 /** Per-user memory (UserDO in production, a Map in tests). add() is fire-and-forget from the Room's point of view. */
-export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Field, other: string): void; report(r: Report): void }
+export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Field, other: string): void; report(r: Report): void
+  /** take one record out again (Not for me clears the hearts between the two) */ del?(uid: string, f: Field, other: string): void }
 export interface Report { at: number; inst: string; by: string; who: string; why: string; ctx: { said: { at: number; text: string }[]; heard: { at: number; text: string }[]; where: [number, number][]; tick: number } }
 /** v05: what a pair keeps across the whole app (one Pair Durable Object per pair in production, shared by every room
     and instance): their level, how many cards into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
@@ -44,6 +47,8 @@ class Player {
   x: number; y: number; path: P[] = []; dir: [number, number] | null = null; moving = false; sitting = false; stuck = 0
   says: number[] = []; recent: { at: number; text: string; to?: string }[] = []; heard: { at: number; text: string }[] = []
   bucket = INPUT_PER_S; table: Table | null = null; seen = 0
+  /** on a sofa: [sofa index, slot]; sitAt = the tick the player last sat down (who sat second at a table) */
+  sofa: [number, number] | null = null; sofaWant: [number, number] | null = null; sitAt = 0
   sets: Record<Field, Set<string>>
   constructor(id: number, uid: string, name: string, p: Prefs & { pav?: string }, sock: Sock, rec: Rec, spawn: P) {
     this.id = id; this.uid = uid; this.name = name; this.br = p.br; this.min = p.min; this.max = p.max; this.iam = p.iam; this.seek = p.seek; this.pav = p.pav; this.sock = sock
@@ -56,6 +61,9 @@ interface Pair { tb: number; key: string; a: Player; b: Player; level: number; s
   ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null
   /** pair store read done; each side's local level claim; reconciled (both claims in, or CLAIM_MS passed); tag of the other per side */
   loaded: boolean; claims: Map<Player, { lv: number; drop: boolean }>; rc: boolean; peer: Map<Player, string> }
+/** The café piano: who is on the bench, and the song (server time of its first sample, so every client schedules its audio
+    against the same clock and a late joiner seeks to now − at). Duets later: seats.bass / seats.melody + a count-in. */
+interface Piano { by: Player | null; song: string | null; at: number; role: Role; seats: { bass: Player | null; melody: Player | null } | null }
 const pairKey = (a: Player, b: Player) => [a.uid, b.uid].sort().join('|')
 /** Only the two people at a table ever receive anything from these maps. */
 const other = (pr: Pair, p: Player) => pr.a === p ? pr.b : pr.a
@@ -77,6 +85,7 @@ export function imageDims(u8: Uint8Array): { kind: 'png' | 'jpeg'; w: number; h:
 export class Room {
   players = new Map<Sock, Player>(); byId = new Map<number, Player>(); pending = new Set<Sock>()
   joining = 0; tickN = 0; nextId = 1; pairs = new Map<number, Pair>(); ps: PairStore
+  piano: Piano = { by: null, song: null, at: 0, role: 'solo', seats: null }
   name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
   constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
   get size() { return this.players.size }
@@ -92,6 +101,7 @@ export class Room {
     const p = this.players.get(s); if (!p) return
     p.seen = this.now()
     if (m.t === 'ka') return
+    if (m.t === 'tm') { if (typeof m.c === 'number') s.send(JSON.stringify({ t: 'tm', c: m.c, s: this.now() })); return }   // clock sync, unmetered (tiny, 5 a join)
     if (p.bucket < 1) return; p.bucket--
     switch (m.t) {
       case 'go': return this.go(p, m.x, m.y)
@@ -104,6 +114,10 @@ export class Room {
       case 'call': case 'callyes': case 'callno': return this.callMsg(p, m.t)
       case 'photo': return this.photo(p, m.lv, m.data)
       case 'pairlv': return this.claim(p, m.lv, m.drop)
+      case 'piano': return this.pianoPlay(p, m.id)
+      case 'pstop': return this.pianoStop(p)
+      case 'nfm': return this.notForMe(p)
+      case 'sofa': return this.sofaGo(p, m.i)
     }
   }
   close(s: Sock) {
@@ -111,6 +125,7 @@ export class Room {
     this.players.delete(s); this.byId.delete(p.id)
     for (const o of this.players.values()) if (!this.hidden(o, p)) o.sock.send(JSON.stringify({ t: 'del', id: p.id }))
     this.unpair(p)
+    if (this.piano.by === p) { this.piano = { by: null, song: null, at: 0, role: 'solo', seats: null }; this.pianoSend() }
   }
 
   private async join(s: Sock, m: any) {
@@ -133,12 +148,13 @@ export class Room {
     if (this.nextId > 65000) this.nextId = 1
     me.seen = this.now(); this.players.set(s, me); this.byId.set(me.id, me)
     // 'add' below goes to you for EVERYONE in the room, yourself included: the client's count is its list's size
-    s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)) }))
+    s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)), now: this.now(), sofas: true }))
     for (const o of this.players.values()) {
       if (this.hidden(me, o)) continue
       s.send(JSON.stringify({ t: 'add', p: o.pub() }))
       if (o !== me) o.sock.send(JSON.stringify({ t: 'add', p: me.pub() }))
     }
+    s.send(JSON.stringify(this.pianoView(me)))   // a late joiner hears the song from where it is now
   }
   private spawn(): P {
     for (const sp of SPAWNS) if (![...this.players.values()].some(o => Math.hypot(o.x - sp[0] - .5, o.y - sp[1] - .5) < 1)) return sp
@@ -157,13 +173,15 @@ export class Room {
 
   private go(p: Player, x: unknown, y: unknown) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) return
+    this.sofaLeave(p); p.sofaWant = null
+    if (x === PIANO_SEAT[0] && y === PIANO_SEAT[1] && this.piano.by && this.piano.by !== p) { p.sock.send(JSON.stringify({ t: 'note', k: 'piano-busy' })); return }   // one pianist at a time
     const t = walkable(x as number, y as number) ? [x, y] as P : nearestWalkable(x as number, y as number); if (!t) return
     const path = findPath([Math.floor(p.x), Math.floor(p.y)], t); if (!path) return
     p.path = path; p.dir = null; p.stuck = 0
   }
   private steer(p: Player, dx: unknown, dy: unknown) {
     if (typeof dx !== 'number' || typeof dy !== 'number') return
-    const sx = Math.sign(dx), sy = Math.sign(dy); p.dir = sx || sy ? [sx, sy] : null; if (p.dir) p.path = []
+    const sx = Math.sign(dx), sy = Math.sign(dy); p.dir = sx || sy ? [sx, sy] : null; if (p.dir) { p.path = []; this.sofaLeave(p); p.sofaWant = null }
   }
   private boxFree(x: number, y: number) {
     return walkable(Math.floor(x - BOX), Math.floor(y - BOX)) && walkable(Math.floor(x + BOX), Math.floor(y - BOX))
@@ -212,11 +230,15 @@ export class Room {
     if (this.tickN % 5 === 0) this.prune()
     for (const p of this.players.values()) {
       p.bucket = Math.min(INPUT_PER_S, p.bucket + INPUT_PER_S / 10)
+      if (p.sofa) { p.moving = false; p.sitting = true; continue }
       p.moving = this.move(p)
-      const tx = Math.floor(p.x), ty = Math.floor(p.y)
-      p.sitting = !p.moving && !p.dir && isSeat(tx, ty) && Math.abs(p.x - tx - .5) < .05 && Math.abs(p.y - ty - .5) < .05
+      const tx = Math.floor(p.x), ty = Math.floor(p.y), was = p.sitting
+      p.sitting = !p.moving && !p.dir && (isSeat(tx, ty) || isPianoSeat(tx, ty)) && Math.abs(p.x - tx - .5) < .05 && Math.abs(p.y - ty - .5) < .05
+      if (p.sitting && !was) p.sitAt = this.tickN
+      if (p.sofaWant && !p.moving && !p.path.length) this.sofaSit(p)
     }
     this.tables()
+    this.pianoTick()
     this.snapshots()
   }
   private tables() {
@@ -224,6 +246,8 @@ export class Room {
     for (const p of this.players.values()) if (p.sitting) seated.set(Math.floor(p.x) + ',' + Math.floor(p.y), p)
     for (const t of TABLES) {
       const a = seated.get(t.seats[0].join(',')), b = seated.get(t.seats[1].join(',')), cur = this.pairs.get(t.id)
+      // Not for me is for good: those two never get a table together again (the one who sat down second is stood up)
+      if (a && b && this.refused(a, b)) { const late = a.sitAt >= b.sitAt ? a : b; this.standUp(late, t.seats[late === a ? 0 : 1]); late.sock.send(JSON.stringify({ t: 'note', k: 'table-no' })); continue }
       const ok = !!(a && b && !this.hidden(a, b))
       if (cur && (!ok || cur.a !== a || cur.b !== b)) this.endPair(t.id)
       if (ok && a && b && !this.pairs.has(t.id)) {
@@ -361,6 +385,75 @@ export class Room {
   /** Next card: once this one is revealed (both answered). */
   private nextCard(p: Player) { const pr = this.pairOf(p); if (pr && pr.rev) this.deal(pr) }
 
+  /** One pianist at a time: whoever is sitting on the bench. Standing up (or leaving) stops their song; a song that has
+      played to its end clears itself. */
+  private pianoTick() {
+    const pn = this.piano
+    const atBench = (p: Player) => p.sitting && Math.floor(p.x) === PIANO_SEAT[0] && Math.floor(p.y) === PIANO_SEAT[1]
+    let on: Player | null = pn.by && this.byId.get(pn.by.id) === pn.by && atBench(pn.by) ? pn.by : null   // the pianist keeps the bench
+    if (!on) for (const p of this.players.values()) if (p.sitting && Math.floor(p.x) === PIANO_SEAT[0] && Math.floor(p.y) === PIANO_SEAT[1]) { on = p; break }
+    if (on !== pn.by) { pn.by = on; pn.song = null; pn.at = 0; this.pianoSend() }
+    else if (pn.song && this.now() >= pn.at + (PIECE.get(pn.song)?.durationSec ?? 0) * 1000) { pn.song = null; pn.at = 0; this.pianoSend('end') }
+  }
+  /** What viewer v knows about the piano; someone who blocked the pianist (or was blocked) hears nothing from them. */
+  pianoView(v: Player, why?: string) {
+    const pn = this.piano, by = pn.by && !this.hidden(v, pn.by) ? pn.by : null
+    return { t: 'piano', by: by?.id ?? 0, song: by ? pn.song : null, at: by && pn.song ? pn.at : 0, now: this.now(), ...(why ? { why } : {}) }
+  }
+  private pianoSend(why?: string) { for (const v of this.players.values()) v.sock.send(JSON.stringify(this.pianoView(v, why))) }
+  private pianoPlay(p: Player, id: unknown) {
+    if (p !== this.piano.by || typeof id !== 'string' || !PIECE.has(id)) return
+    this.piano.song = id; this.piano.at = this.now() + LEAD_MS; this.pianoSend()
+  }
+  private pianoStop(p: Player) { if (p === this.piano.by && this.piano.song) { this.piano.song = null; this.piano.at = 0; this.pianoSend('stop') } }
+
+  /** Either of the two said Not for me to the other. */
+  refused(a: Player, b: Player) { return a.sets.passed.has(b.uid) || b.sets.passed.has(a.uid) }
+  /** Walk off a seat onto the floor next to it (away from the table / piano). */
+  private standUp(p: Player, seat: P) {
+    const [x, y] = seat, t = ([[0, 1], [0, -1], [-1, 0], [1, 0]] as const).map(([dx, dy]) => [x + dx, y + dy] as P).find(([a, b]) => walkable(a, b) && !isSeat(a, b) && !isPianoSeat(a, b))
+    if (t) { p.path = [t]; p.dir = null; p.sitting = false }
+  }
+  /** "Not for me", once a card has been revealed: ends the sitting for both and stands them up, records the refusal (the
+      other sees a grey broken heart over you from now on, nobody else does), clears the hearts between the two, ends the
+      level (no more cards) and any Start call, and tells the other, kindly, that you moved on. Not a block: both stay
+      visible to each other. */
+  private notForMe(p: Player) {
+    const pr = this.pairOf(p); if (!pr || !(pr.rev || pr.n > 0)) return
+    const o = other(pr, p), tb = TABLES.find(t => t.id === pr.tb)!
+    const add = (x: Player, f: Field, y: Player) => { if (!x.sets[f].has(y.uid)) { x.sets[f].add(y.uid); this.store.add(x.uid, f, y.uid) } }
+    add(p, 'passed', o); add(o, 'refusedBy', p)
+    for (const [x, y] of [[p, o], [o, p]]) if (x.sets.hearted.delete(y.uid)) this.store.del?.(x.uid, 'hearted', y.uid)
+    this.endPair(pr.tb)
+    for (const x of [pr.a, pr.b]) this.standUp(x, x === pr.a ? tb.seats[0] : tb.seats[1])
+    p.sock.send(JSON.stringify({ t: 'note', k: 'ended', id: o.id, name: o.name }))
+    o.sock.send(JSON.stringify({ t: 'note', k: 'moved-on', id: p.id, name: p.name }))
+  }
+  /** Sofas: a casual hangout. Tapping one walks you to the floor in front of it, then you take the free slot nearest to
+      where you tapped; up to SOFA_CAP a sofa, a full sofa says so. Room chat stays public; no cards. */
+  private sofaGo(p: Player, i: unknown) {
+    const sf = typeof i === 'number' ? SOFAS[i] : undefined; if (!sf) return
+    if (p.sofa?.[0] === i) return
+    const free = this.sofaFree(i as number); if (free < 0) { p.sock.send(JSON.stringify({ t: 'note', k: 'sofa-full' })); return }
+    this.sofaLeave(p)
+    const t: P = [sf.front[0], SOFA_FRONT_Y], path = findPath([Math.floor(p.x), Math.floor(p.y)], t); if (!path) return
+    p.path = path; p.dir = null; p.stuck = 0; p.sofaWant = [i as number, free]
+  }
+  private sofaFree(i: number) {
+    const used = new Set([...this.players.values()].filter(o => o.sofa?.[0] === i).map(o => o.sofa![1]))
+    return SEAT_ORDER.find(k => !used.has(k)) ?? -1   // GD: L, then R, then M
+  }
+  private sofaSit(p: Player) {
+    const [i] = p.sofaWant!; p.sofaWant = null
+    const k = this.sofaFree(i); if (k < 0) { p.sock.send(JSON.stringify({ t: 'note', k: 'sofa-full' })); return }
+    const [x, y] = SOFAS[i].slots[k]; p.sofa = [i, k]; p.x = x; p.y = y; p.path = []; p.dir = null; p.sitting = true; p.moving = false; p.sitAt = this.tickN
+  }
+  /** Standing up from a sofa puts you back on the floor in front of your slot. */
+  private sofaLeave(p: Player) {
+    if (!p.sofa) return
+    const [x] = SOFAS[p.sofa[0]].slots[p.sofa[1]]; p.sofa = null; p.sitting = false; p.x = Math.floor(x) + .5; p.y = SOFA_FRONT_Y + .5
+  }
+
   private snapshots() {
     const all = [...this.players.values()], max = HEAD_BYTES + all.length * ENT_BYTES
     for (const v of all) {
@@ -414,6 +507,7 @@ export class Room {
       add(p, 'blocked', o); add(o, 'blockedBy', p)
       p.sock.send(JSON.stringify({ t: 'del', id: o.id })); o.sock.send(JSON.stringify({ t: 'del', id: p.id }))
       if (p.table && p.table === o.table) this.unpair(p)
+      if (this.piano.by === p || this.piano.by === o) this.pianoSend()
     } else {
       this.store.report({
         at: this.now(), inst: this.name, by: p.uid, who: o.uid, why: typeof why === 'string' && REASONS.has(why) ? why : 'other',

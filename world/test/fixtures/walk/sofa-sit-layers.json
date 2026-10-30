@@ -1,0 +1,63 @@
+{
+ "frame": "sofa",
+ "direction": "down",
+ "cell": [
+  24,
+  32
+ ],
+ "anchor": "bottom-centre of the cell (x 11, row 31), same as stand/sit",
+ "layers": {
+  "body": "sofa-sit-body.png",
+  "legs": "sofa-sit-legs.png"
+ },
+ "cols": [
+  "default-woman",
+  "default-man",
+  "sample-00",
+  "sample-01",
+  "sample-02",
+  "sample-03",
+  "sample-04",
+  "sample-05",
+  "sample-06",
+  "sample-07",
+  "sample-08",
+  "sample-09",
+  "sample-10",
+  "sample-11"
+ ],
+ "api": "kit_dir.compose_sofa(config) -> (body, legs); kit_dir.compose_dir(config, 'down', 'sofa') -> both merged (preview only)",
+ "seats": {
+  "loveseat": {
+   "L": [
+    -1,
+    -2
+   ],
+   "R": [
+    11,
+    -2
+   ]
+  },
+  "sofa3": {
+   "L": [
+    -1,
+    -2
+   ],
+   "M": [
+    12,
+    -2
+   ],
+   "R": [
+    26,
+    -2
+   ]
+  }
+ },
+ "draw_order": [
+  "sofa back (z 0)",
+  "sitter bodies L, M, R (z 1.0 / 1.1 / 1.2)",
+  "sofa front (z 2)",
+  "sitter legs L, M, R (z 3.0 / 3.1 / 3.2)"
+ ],
+ "sort": "all layers sort at the sofa bottom (sofa y + 32)"
+}

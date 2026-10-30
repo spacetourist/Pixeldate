@@ -82,6 +82,8 @@ export function parseOptions(s: unknown): KitOptions | null {
   if (typeof s !== 'string' || s.length > MAX_JSON) return null
   let j: any; try { j = JSON.parse(s) } catch { return null }
   if (!j || typeof j !== 'object' || Array.isArray(j)) return null
+  // a dress hides the bottom (compose skips it), so GD's kit looks may leave bottom/bottomc out: fill them, never draw them
+  if (j.top === 'dress') { j.bottom ??= NEUTRAL.bottom; j.bottomc ??= typeof j.topc === 'string' ? j.topc : NEUTRAL.bottomc }
   const o: any = { v: 1 }
   for (const [k, ok] of Object.entries(ONE)) {
     const x = j[k]

@@ -15,11 +15,16 @@ export class User extends DurableObject<Env> {
     const r = await this.load(); if (r[f].includes(other)) return
     r[f].push(other); if (r[f].length > 5000) r[f].shift(); await this.ctx.storage.put('rec', r)
   }
+  async del(f: Field, other: string) {
+    const r = await this.load(); if (!r[f].includes(other)) return
+    r[f] = r[f].filter(x => x !== other); await this.ctx.storage.put('rec', r)
+  }
 }
 const store = (env: Env): Store => ({
   load: uid => env.User.get(env.User.idFromName(uid)).load(),
   add: (uid, f, other) => { env.User.get(env.User.idFromName(uid)).add(f, other).catch(() => {}) },
   report: r => { env.Mod.get(env.Mod.idFromName('mod')).report(r).catch(() => {}) },
+  del: (uid, f, other) => { env.User.get(env.User.idFromName(uid)).del(f, other).catch(() => {}) },
 })
 /** One object per pair (named by the two uids, sorted): their level, meter and date opt-ins, shared by every room and
     instance of every space, so a pair picks up where they left off wherever they meet next. */

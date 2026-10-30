@@ -227,6 +227,37 @@ await test('v05 answers: own field each, hidden until both are in, filtered, the
   await done()
 })
 
+await test('v05 pair levels belong to the pair, app-wide: level 2 in cafe-1, both leave, meet again in cafe-2 at level 2 with the meter; tags not uids; app claims raise only when both agree, a drop from either lowers', async () => {
+  const { peerTag } = await import('../src/sim.ts')
+  const uA = 'bot-' + crypto.randomUUID(), uB = 'bot-' + crypto.randomUUID()
+  let A = await J({ name: 'Pia', uid: uA }), B = await J({ name: 'Pat', uid: uB }); await sleep(200)
+  await seat(A, B, 4); const up = await play(A, B, 5); assert.equal(up.lv, 2); await play(A, B, 1); assert.equal(A.last('card').seg, 1)
+  A.close(); B.close(); await sleep(300)
+  // a different instance (a different Area DO in production): same pair, same level and meter
+  A = await J({ name: 'Pia', uid: uA }, { room: 'cafe-2' }); B = await J({ name: 'Pat', uid: uB }, { room: 'cafe-2' }); assert.equal(A.inst, 'cafe-2'); await sleep(200)
+  await seat(A, B, 1); await A.wait(() => A.last('card').peer, 3000)
+  let a = A.last('card'); assert.equal(a.lv, 2, 'level not kept across instances'); assert.equal(a.seg, 1, 'meter not kept across instances'); assert.equal(a.up, false, 'a picked-up level is not a level-up')
+  assert.equal(a.peer, await peerTag(uB), 'A is not sent B\'s tag'); assert.equal(B.last('card').peer, await peerTag(uA))
+  assert.ok(!textOf(A).includes(uB) && !textOf(B).includes(uA), 'a raw uid was sent to the partner')
+  // the app's local levels: a one-sided higher claim does nothing; both claims raise to the lower of the two
+  A.send({ t: 'pairlv', lv: 5 }); await sleep(300); assert.equal(A.last('card').lv, 2, 'one side alone raised the level'); assert.equal(A.last('card').rc, false)
+  B.send({ t: 'pairlv', lv: 4 }); await A.wait(() => A.last('card').lv === 4); await B.wait(() => B.last('card').lv === 4)
+  a = A.last('card'); assert.equal(a.rc, true); assert.equal(a.seg, 0); assert.equal(a.up, false)
+  A.send({ t: 'pairlv', lv: 1 }); await sleep(200); assert.equal(A.last('card').lv, 4, 'a second claim in one sitting was accepted')
+  A.close(); B.close(); await sleep(300)
+  // overflow back to cafe-1: still 4; nobody claims, so it settles (rc) after CLAIM_MS; a drop from either side lowers it
+  A = await J({ name: 'Pia', uid: uA }); B = await J({ name: 'Pat', uid: uB }); await sleep(200); await seat(A, B, 4)
+  await A.wait(() => A.last('card').lv === 4, 3000); assert.equal(A.last('card').lv, 4)
+  await A.wait(() => A.last('card').rc, 6000); assert.equal(A.last('card').rc, true, 'never reconciled without claims')
+  A.close(); B.close(); await sleep(300)
+  A = await J({ name: 'Pia', uid: uA }); B = await J({ name: 'Pat', uid: uB }); await sleep(200); await seat(A, B, 4); await A.wait(() => A.last('card').lv === 4, 3000)
+  B.send({ t: 'pairlv', lv: 2, drop: true }); await A.wait(() => A.last('card').lv === 2); assert.equal(B.last('card').lv, 2)
+  A.send({ t: 'pairlv', lv: 2 }); await sleep(200); A.close(); B.close(); await sleep(300)
+  A = await J({ name: 'Pia', uid: uA }, { room: 'cafe-3' }); B = await J({ name: 'Pat', uid: uB }, { room: 'cafe-3' }); await sleep(200); await seat(A, B, 4)
+  await A.wait(() => A.last('card').peer, 3000); assert.equal(A.last('card').lv, 2, 'the drop was not saved for the pair')
+  await done()
+})
+
 await test('v05 private table chat: the partner gets the words, everyone else a "…" over the table, never the text', async () => {
   const A = await J({ name: 'Pia' }), B = await J({ name: 'Pat' }), C = await J({ name: 'Cy' }); await sleep(200)
   const tb = await seat(A, B, 1)

@@ -26,6 +26,7 @@ import { Net, bracketLabel, type Profile, type Match } from './net'
 import { toast, dismiss, clearToasts, Toast, Toasts } from './ui/toast'
 import { Lobby } from './ui/lobby'
 import { takeHandoff, type Handoff, HANDOFF_MS } from './handoff'
+import { peerTag, getPairLv, setPairLv, claimOf, settle, type Claim } from './pairlv'
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const deck: QuestionSource = localDeck
@@ -130,6 +131,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     slow.current = window.setTimeout(() => toast({ id: 'conn', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'plug', t: 'notice-noconn', title: "Couldn't connect", body: "Check your connection. We'll keep trying." }), 1500) }
   // World café "Start call" hand-off: both people tapped there, so the match + video call start straight away (see takeHandoff)
   const hand = useRef<Handoff | null>(null)
+  // v05 pair level (src/pairlv.ts): the partner's tag, my claim and theirs; synced once both are in
+  const pl = useRef<{ mm: Match; tag?: string; mine?: Claim; theirs?: Claim; sync: boolean } | null>(null)
   const start = async (p: Profile, ph: string) => {
     setMe(p); setPhoto(await loadImage(ph)); setScreen('lobby')
     const n = new Net(p); net.current = n
@@ -212,10 +215,12 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
     setLevel(lv0); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); setEnded(null); setCamErr(''); prevLv.current = lv0; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
     setM(mm); setScreen('match'); setPage(null); clearToasts('page'); clearToasts('match')
     hist.current = { id: mm.them.uid + '-' + Date.now(), uid: mm.them.uid, name: mm.them.name, br: mm.them.br, lv: 1, pct: 0, at: Date.now() }; saveHist(hist.current)
+    const p: NonNullable<typeof pl.current> = pl.current = { mm, sync: false }
+    void peerTag(mm.them.uid).then(tag => { if (pl.current !== p) return; p.tag = tag; p.mine = claimOf(tag); try { mm.conn.send({ t: 'pairlv', ...p.mine }) } catch {}; pairSync() })
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('left', true))
   }
   const leave = (why: keyof typeof NOTICE, again = false) => {
-    endCall(false); const c = st.current.m; if (!c) return; st.current.m = null; setM(null)
+    endCall(false); const c = st.current.m; if (!c) return; st.current.m = null; setM(null); pl.current = null
     const h = hist.current; if (h) { hist.current = null; saveHist({ ...h, lv: st.current.level, pct: Math.floor(st.current.pct), end: Date.now(), how: why }) }
     setTimeout(() => { try { c.conn.close() } catch {} }, 300); net.current!.busy = false; net.current!.release()
     clearToasts('match'); clearToasts('call'); const n = NOTICE[why]; toast({ id: 'left', role: n[3], icon: n[2], t: 'notice-' + why, title: n[0], body: again ? n[1] : undefined })
@@ -224,6 +229,13 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const doSkip = (blk = false) => { const t = st.current.m?.them; if (!t) return; if (blk) blockUser({ uid: t.uid, name: t.name, br: t.br, av: hist.current?.av }); skip.current.add(t.uid); send({ t: 'skip' }); leave(blk ? 'blocked' : 'skipped', true) }
 
   useEffect(() => { if (m) sendPhoto(level) }, [m, level, photo])
+  // both sides' remembered levels are in: pick up where the pair left off (café or chat), silently, then keep the store current
+  const pairSync = () => { const p = pl.current; if (!p?.tag || !p.mine || !p.theirs || p.sync) return
+    const cur = st.current.level, to = settle(cur, p.mine, p.theirs); p.sync = true
+    if (to !== cur) { prevLv.current = to; setLevel(to); setPct(0); setTaps({ me: false, them: false }) } }
+  // a level set here (both tapped, or either lowered) is stored as set-in-chat, which the café takes as is, even if lower
+  useEffect(() => { const p = pl.current; if (!m || p?.mm !== m || !p.tag) return; const r = getPairLv(p.tag)
+    if (r?.lv !== level && (p.sync || level > (r?.lv ?? 0))) setPairLv(p.tag, level, true) }, [level, m, pl.current?.tag])
   // matches history (09): the level reached and a coarse avatar at that level, kept on this device only
   useEffect(() => { const h = hist.current; if (!h || !m) return; const av = coarse(theirImgs.current[level], AV_BLOCKS[level - 1]) || h.av
     hist.current = { ...h, lv: level, pct: Math.floor(pct), av }; saveHist(hist.current) }, [level, photoV, m])
@@ -266,6 +278,7 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
         if (!s.ans[d.id]?.me) { setEvt({ id: d.id, kind: 'turn', from: 0 }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name} answered ${qn(d.id)} · your turn` }]); if (s.tab !== 'chat') setUnread(n => n + 1) }
         break
       case 'tap': if (d.level === s.level) setTaps(t => ({ ...t, them: true })); break
+      case 'pairlv': { const p = pl.current; if (p && !p.theirs) { p.theirs = { lv: d.lv, drop: d.drop === true }; pairSync() } break }
       case 'season': if (['winter', 'spring', 'summer', 'autumn'].includes(d.s)) setThemSeason(d.s); break
       case 'drop': if (!(d.level >= 1 && d.level < s.level)) break; setLevel(d.level); setPct(0); setTaps({ me: false, them: false }); setMsgs(x => [...x, { from: 'sys', text: `${s.m?.them.name} lowered to ${LEVELS[d.level - 1].name}` }]); break
       case 'photo': (window as any).__pdRecv?.push({ level: d.level, src: d.data }); loadImage(d.data).then(img => { if (d.level === st.current.level) (window as any).__pd = { photoW: img.naturalWidth, photoH: img.naturalHeight }; theirImgs.current[d.level] = img; setPhotoV(v => v + 1); if (d.level === st.current.level) paint(img) }); break

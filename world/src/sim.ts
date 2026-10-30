@@ -15,13 +15,27 @@ export const emptyRec = (): Rec => ({ met: [], hearted: [], passed: [], refusedB
 /** Per-user memory (UserDO in production, a Map in tests). add() is fire-and-forget from the Room's point of view. */
 export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Field, other: string): void; report(r: Report): void }
 export interface Report { at: number; inst: string; by: string; who: string; why: string; ctx: { said: { at: number; text: string }[]; heard: { at: number; text: string }[]; where: [number, number][]; tick: number } }
-/** v05: what a pair keeps for the session (Area DO storage in production): their level, how many cards
-    into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
+/** v05: what a pair keeps across the whole app (one Pair Durable Object per pair in production, shared by every room
+    and instance): their level, how many cards into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
 export interface PairRec { lv: number; seg?: number; date: string[] }
+/** Where pair records live. load() is async (a Durable Object call); save() is fire-and-forget. */
+export interface PairStore { load(key: string): Promise<PairRec | undefined>; save(key: string, r: PairRec): void }
+/** In-memory pair store: one per process is shared by every room (tests, the Node dev server). */
+export const memPairs = (m = new Map<string, PairRec>()): PairStore & { m: Map<string, PairRec> } => ({ m,
+  load: async k => { const r = m.get(k); return r && structuredClone(r) },
+  save: (k, r) => { m.set(k, structuredClone(r)); if (m.size > 50000) m.delete(m.keys().next().value!) } })
+/** The tag a client keys its local pair level by: sha256('pd-pair:' + their uid), 32 hex chars. The same function runs
+    in the app (src/pairlv.ts), so the café never has to send anyone a raw uid. */
+export async function peerTag(uid: string) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pd-pair:' + uid)))
+  return [...h.slice(0, 16)].map(x => x.toString(16).padStart(2, '0')).join('')
+}
+/** How long a pair waits for both clients' local levels before it stops listening for them. */
+export const CLAIM_MS = 4000
 export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => number; next?: string
   /** a socket that sends nothing (not even the keepalive) for this long is dropped (default STALE_MS) */ staleMs?: number
-  /** pair records loaded at start, and the hook that persists one when it changes (both optional: tests keep them in memory) */
-  pairs?: Map<string, PairRec>; savePair?: (key: string, r: PairRec) => void }
+  /** the app-wide pair store (default: an in-memory one for this room only) */
+  pairs?: PairStore }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
 const R_SPACE = 0.75, BOX = 0.28, INPUT_PER_S = 20
 
@@ -39,7 +53,9 @@ class Player {
   pub(): Pub { return { id: this.id, name: this.name, br: this.br, pav: this.pav } }
 }
 interface Pair { tb: number; key: string; a: Player; b: Player; level: number; seg: number; up: boolean; used: Set<string>; q: Question | null
-  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null }
+  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null
+  /** pair store read done; each side's local level claim; reconciled (both claims in, or CLAIM_MS passed); tag of the other per side */
+  loaded: boolean; claims: Map<Player, { lv: number; drop: boolean }>; rc: boolean; peer: Map<Player, string> }
 const pairKey = (a: Player, b: Player) => [a.uid, b.uid].sort().join('|')
 /** Only the two people at a table ever receive anything from these maps. */
 const other = (pr: Pair, p: Player) => pr.a === p ? pr.b : pr.a
@@ -60,9 +76,9 @@ export function imageDims(u8: Uint8Array): { kind: 'png' | 'jpeg'; w: number; h:
 
 export class Room {
   players = new Map<Sock, Player>(); byId = new Map<number, Player>(); pending = new Set<Sock>()
-  joining = 0; tickN = 0; nextId = 1; pairs = new Map<number, Pair>(); mem: Map<string, PairRec>
+  joining = 0; tickN = 0; nextId = 1; pairs = new Map<number, Pair>(); ps: PairStore
   name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
-  constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.mem = opts.pairs ?? new Map() }
+  constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
   get size() { return this.players.size }
   nextName() { const m = /^(.*?)-?(\d+)$/.exec(this.name); return this.opts.next ?? (m ? `${m[1]}-${+m[2] + 1}` : `${this.name}-2`) }
 
@@ -87,6 +103,7 @@ export class Room {
       case 'date': return this.dateAsk(p, m.yes !== false)
       case 'call': case 'callyes': case 'callno': return this.callMsg(p, m.t)
       case 'photo': return this.photo(p, m.lv, m.data)
+      case 'pairlv': return this.claim(p, m.lv, m.drop)
     }
   }
   close(s: Sock) {
@@ -210,12 +227,12 @@ export class Room {
       const ok = !!(a && b && !this.hidden(a, b))
       if (cur && (!ok || cur.a !== a || cur.b !== b)) this.endPair(t.id)
       if (ok && a && b && !this.pairs.has(t.id)) {
-        const key = pairKey(a, b), rec = this.mem.get(key)
-        const pr: Pair = { tb: t.id, key, a, b, level: Math.min(LV_MAX, Math.max(1, rec?.lv ?? 1)), seg: Math.min(LV_SEG, Math.max(0, rec?.seg ?? 0)), up: false, used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
-          date: new Set([a, b].filter(x => rec?.date.includes(x.uid))), call: null }
+        const key = pairKey(a, b)
+        const pr: Pair = { tb: t.id, key, a, b, level: 1, seg: 0, up: false, used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
+          date: new Set(), call: null, loaded: false, claims: new Map(), rc: false, peer: new Map() }
         this.pairs.set(t.id, pr); a.table = b.table = t
         for (const [x, y] of [[a, b], [b, a]]) if (!x.sets.met.has(y.uid)) { x.sets.met.add(y.uid); this.store.add(x.uid, 'met', y.uid) }
-        this.deal(pr)
+        this.deal(pr); void this.sync(pr)
       }
     }
   }
@@ -234,13 +251,57 @@ export class Room {
     const o = other(pr, v), mine = pr.ans.get(v) ?? null
     return { t: 'card', q: pr.q && { id: pr.q.id, text: pr.q.text, lv: pr.q.level, i: pr.q.index }, with: o.id, tb: pr.tb, lv: pr.level, seg: pr.seg, up: pr.up, n: pr.n, mine, them: pr.ans.has(o),
       rev: pr.rev ? { mine: mine ?? '', theirs: pr.ans.get(o) ?? '' } : null, date: { me: pr.date.has(v), them: pr.date.has(o) },
-      call: pr.call ? (pr.call === v ? 'out' : 'in') : null, video: VIDEO_LEVEL }
+      call: pr.call ? (pr.call === v ? 'out' : 'in') : null, video: VIDEO_LEVEL, ...(pr.peer.has(v) ? { peer: pr.peer.get(v) } : {}), rc: pr.rc }
+  }
+  /** Pick up where the pair left off anywhere in the app: the pair's record (any room, any instance), then each side's
+      local level from the app (reconcile()). */
+  private async sync(pr: Pair) {
+    const [rec, ta, tb] = await Promise.all([this.ps.load(pr.key).catch(() => undefined), peerTag(pr.b.uid), peerTag(pr.a.uid)])
+    if (this.pairs.get(pr.tb) !== pr) return
+    pr.peer.set(pr.a, ta); pr.peer.set(pr.b, tb)
+    const lv0 = pr.level
+    if (rec) {
+      const lv = Math.min(LV_MAX, Math.max(1, Math.floor(rec.lv) || 1)), seg = Math.min(LV_SEG, Math.max(0, Math.floor(rec.seg ?? 0)))
+      if (lv > pr.level || (lv === pr.level && seg > pr.seg)) { pr.level = lv; pr.seg = seg }
+      for (const x of [pr.a, pr.b]) if (rec.date?.includes(x.uid)) pr.date.add(x)
+    }
+    pr.loaded = true
+    if (!this.reconcile(pr) && pr.level !== lv0) this.redeal(pr)
+    this.sendCard(pr)
+    setTimeout(() => { if (this.pairs.get(pr.tb) === pr && !pr.rc) { pr.rc = true; this.sendCard(pr) } }, CLAIM_MS)
+  }
+  /** A client's local pair level from the app (src/pairlv.ts), sent once per sitting. Raising needs BOTH sides to
+      remember at least that level (min of the two claims), so editing one device's storage can't unlock a sharper
+      photo; a level set in the app chat (drop: lowered there, or changed there since the café last saw the pair) from either
+      side is honoured when it is lower, since lowering is always safe. */
+  private claim(p: Player, lv: unknown, drop: unknown) {
+    const pr = this.pairOf(p); if (!pr || pr.claims.has(p) || typeof lv !== 'number' || !Number.isInteger(lv) || lv < 1 || lv > LV_MAX) return
+    pr.claims.set(p, { lv, drop: drop === true || drop === 1 })
+    this.reconcile(pr); this.sendCard(pr)
+  }
+  /** The level is max(pair record, the level both clients' app stores agree on); a drop from either side lowers it. */
+  private reconcile(pr: Pair) {
+    if (!pr.loaded) return false
+    const cs = [...pr.claims.values()], drops = cs.filter(c => c.drop && c.lv < pr.level)
+    let to = pr.level
+    if (drops.length) to = Math.min(...drops.map(c => c.lv))
+    else if (cs.length === 2) to = Math.max(pr.level, Math.min(cs[0].lv, cs[1].lv))
+    if (cs.length === 2) pr.rc = true
+    if (to === pr.level) return false
+    pr.level = to; pr.seg = 0; pr.up = false; if (to < VIDEO_LEVEL) pr.call = null
+    this.persist(pr); this.redeal(pr); return true
+  }
+  /** a level change before anyone answered: the card comes from the new level's pool (sent by the caller) */
+  private redeal(pr: Pair) {
+    if (pr.rev || pr.ans.size) return
+    if (pr.q) pr.used.delete(pr.q.id)
+    let q: Question | null = null
+    for (let l = pr.level; l >= 1 && !q; l--) q = localDeck.next(l, pr.used)
+    pr.q = q; if (q) pr.used.add(q.id)
   }
   private sendCard(pr: Pair) { for (const v of [pr.a, pr.b]) v.sock.send(JSON.stringify(this.view(pr, v))) }
   private persist(pr: Pair) {
-    const r: PairRec = { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid) }; this.mem.set(pr.key, r)
-    if (this.mem.size > 20000) this.mem.delete(this.mem.keys().next().value!)
-    this.opts.savePair?.(pr.key, r)
+    this.ps.save(pr.key, { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid) })
   }
   pairOf(p: Player) { for (const pr of this.pairs.values()) if (pr.a === p || pr.b === p) return pr; return null }
   private answer(p: Player, text: unknown) {

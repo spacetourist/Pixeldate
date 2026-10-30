@@ -25,7 +25,16 @@ class_name = "User"
 name = "Mod"
 class_name = "Mod"
 
+[[durable_objects.bindings]]
+name = "Pair"
+class_name = "Pair"
+
 # SQLite-backed Durable Objects (the kind available on the Workers Free plan)
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Area", "User", "Mod"]
+
+# v05: app-wide pair levels (one object per pair)
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Pair"]

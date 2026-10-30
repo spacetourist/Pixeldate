@@ -16,6 +16,7 @@ const WQ = '?world=cafe&loopback&ws=ws://127.0.0.1:18794&invite=dev-invite-1&aut
 const OUT = '/workspace/pixeldate/shots/world-cafe-v05/'
 let bad = 0, n = 0
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
+const { createHash } = await import('node:crypto')
 const until = async (f, ms = 6000, step = 60) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await f(); if (v) return v; await sleep(step) } return null }
 await sleep(300)
 
@@ -178,6 +179,13 @@ await shot(mia, 'v05-05a-answered'); await shot(sam, 'v05-05b-they-answered')
 await typeIn(sam, '[data-t=w-ans-input]', 'A dog noticing me on the street'); await press(sam, '[data-t=w-ans-send]'); await until(() => sam.$('[data-t=w-done]'), 6000)
 await play(4)
 ok(/^Level 3 Crush/.test((await sam.$eval('[data-t=w-lv]', e => e.textContent)).trim()), 'level 3: Crush after 10 cards')
+// 7 ── pair levels are app-wide: what the café table reached is in each phone's app pair store (src/pairlv.ts), keyed by a tag, not the uid
+const tagOf = uid => createHash('sha256').update('pd-pair:' + uid).digest('hex').slice(0, 32)
+const plv = (p, q) => p.evaluate(t => JSON.parse(sessionStorage.getItem('pd.pairlv') || '{}')[t] ?? null, tagOf(q.prof.uid))
+const store2 = async () => [await plv(sam, mia), await plv(mia, sam)]
+{ const r = await until(async () => { const [a, b] = await store2(); return a?.lv === 3 && b?.lv === 3 && [a, b] }, 4000)
+  const raw = await sam.evaluate(() => sessionStorage.getItem('pd.pairlv') || '')
+  ok(r && !r[0].drop && !raw.includes(mia.prof.uid), `pair store: the café level is in both phones' app store (Sam→Mia ${JSON.stringify(r?.[0])}, Mia→Sam ${JSON.stringify(r?.[1])}), keyed by tag, no raw uid`) }
 // 6 ── Start call
 for (const p of [sam, mia]) { const c = await p.evaluate(() => ({ s: document.querySelector('[data-t=w-callrow]')?.dataset.call, bg: getComputedStyle(document.querySelector('[data-t=w-call]')).backgroundColor, t: document.querySelector('[data-t=w-callrow]')?.textContent }))
   ok(c.s === 'open' && /both tap/.test(c.t), `call open ${p.tag}: coral Start call (${c.bg}), "The call starts when you both tap."`) }
@@ -205,6 +213,45 @@ const inApp = p => until(() => p.evaluate(() => !document.querySelector('[data-t
 const [a, b] = await Promise.all([inApp(sam), inApp(mia)])
 ok(a && b, 'call: both tapped → both land in the app\'s video call')
 if (a && b) { await sleep(1500); await shot(sam, 'v05-06d-in-call'); await shot(mia, 'v05-06d-in-call') }
+const chip = p => p.evaluate(() => [...document.querySelectorAll('.chip')].map(e => e.textContent).find(t => /LV \d/.test(t)) ?? '')
+if (a && b) {
+  await sleep(1500); const [ca, cb] = [await chip(sam), await chip(mia)]
+  ok(/LV 3/.test(ca) && /LV 3/.test(cb), `app chat: the pair is at the café's level in the app ("${ca.trim()}" / "${cb.trim()}")`)
+  const [x, y] = await store2(); ok(x?.lv === 3 && y?.lv === 3, `app chat: after the chat's pair-level exchange both stores still read 3 (${JSON.stringify([x, y])})`)
+  // a level set in the app chat (here: Sam lowers to 2 with the real Lower level button) is what the café picks up next time
+  await front(sam); const dropped = await sam.evaluate(() => { const b = document.querySelector('[data-t=drop]'); if (!b) return false; b.click(); return true })
+  if (!dropped) { await sam.evaluate(() => document.querySelector('[data-t=hangup]')?.click()); await sleep(800); await sam.evaluate(() => document.querySelector('[data-t=drop]')?.click()) }
+  const d = await until(async () => { const [x, y] = await store2(); return x?.lv === 2 && y?.lv === 2 && [x, y] }, 6000)
+  ok(d && d[0].drop && d[1].drop, `app chat: Sam lowered to Spark in the chat → both stores 2, marked set-in-chat (${JSON.stringify(d)})`)
+}
+// back to the café (a fresh sitting at the same table): the chat's level wins over the café's last 3
+const STALE_WAIT = 3500
+const sitAgain = async () => {
+  for (const p of [sam, mia]) await p.goto('about:blank'); await sleep(STALE_WAIT)   // leave first, so last sitting's seats are free
+  for (const p of [sam, mia]) { await p.goto(APP + WQ, { waitUntil: 'networkidle0' }); await p.waitForSelector('[data-t=w-room]', { timeout: 20000 }); front.cur = null }
+  // from the door, go down the aisle first: a long diagonal edge-tap can land on another table's chair and seat you there
+  for (const p of [sam, mia]) { await walkTo(p, 20, 12, 15000); await walkTo(p, 9, 11, 15000) }
+  const w1 = await walkTo(sam, 2, 9, 20000), w2 = await walkTo(mia, 5, 9, 25000) || await walkTo(mia, 5, 9, 15000)
+  if (!w1 || !w2) { console.log('  sitAgain at', JSON.stringify(await meEnt(sam)), JSON.stringify(await meEnt(mia)), (await st(sam))?.ents.length); await sam.screenshot({ path: '/workspace/tmp/sitfail-sam.png' }); await mia.screenshot({ path: '/workspace/tmp/sitfail-mia.png' }) }
+  return w1 && w2 && await until(() => sam.$('[data-t=w-card]'), 10000) && await until(() => mia.$('[data-t=w-card]'), 10000)
+}
+const lvText = p => p.$eval('[data-t=w-lv]', e => e.textContent.trim()).catch(() => '')
+ok(await sitAgain(), 'café again: both sat at table 1')
+{ const r = await until(async () => /^Level 2 Spark/.test(await lvText(sam)) && /^Level 2 Spark/.test(await lvText(mia)), 8000)
+  ok(r, `café again: the level lowered in the app chat is carried into the café ("${await lvText(sam)}" / "${await lvText(mia)}")`)
+  const s2 = await until(async () => { const [x, y] = await store2(); return x?.lv === 2 && !x.drop && y?.lv === 2 && !y.drop && [x, y] }, 6000)
+  ok(s2, `café again: reconciled, stores 2 without the set-in-chat mark (${JSON.stringify(await store2())})`) }
+// a HIGHER level reached in the app chat (stores written exactly as the chat writes them) is carried into the café
+for (const p of [sam, mia]) await p.evaluate((t, at) => { const o = JSON.parse(sessionStorage.getItem('pd.pairlv') || '{}'); o[t] = { lv: 4, at, drop: 1 }; sessionStorage.setItem('pd.pairlv', JSON.stringify(o)) }, tagOf((p === sam ? mia : sam).prof.uid), Date.now())
+ok(await sitAgain(), 'café, third sitting: both sat at table 1')
+{ const r = await until(async () => /^Level 4 Close/.test(await lvText(sam)) && /^Level 4 Close/.test(await lvText(mia)), 8000)
+  ok(r, `café: a higher chat level (4) is carried into the café ("${await lvText(sam)}" / "${await lvText(mia)}")`)
+  const c = await sam.evaluate(() => document.querySelector('[data-t=w-callrow]')?.dataset.call); ok(c === 'open', 'café: at Close, Start call is open (' + c + ')') }
+// one phone alone claiming more (an edited store) does not raise it
+await sam.evaluate(t => { const o = JSON.parse(sessionStorage.getItem('pd.pairlv') || '{}'); o[t] = { lv: 5, at: Date.now() }; sessionStorage.setItem('pd.pairlv', JSON.stringify(o)) }, tagOf(mia.prof.uid))
+ok(await sitAgain(), 'café, fourth sitting: both sat')
+await sleep(1500); ok(/^Level 4 Close/.test(await lvText(sam)), `café: one phone claiming 5 alone leaves the pair at 4 ("${await lvText(sam)}")`)
+{ const [x] = await store2(); ok(x?.lv === 4, `café: Sam's edited store is put back to the pair's level (${JSON.stringify(x)})`) }
 await browser.close()
 console.log(bad ? `world v05: ${bad} FAILED of ${n}` : `world v05: ALL ${n} OK`)
 process.exit(bad ? 1 : 0)

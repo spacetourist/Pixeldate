@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core'
+import { createHash } from 'node:crypto'
 import { cfg as mockCfg } from './r1-shots.mjs'
 const LB = !!process.env.LOOPBACK
 const BASE = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
@@ -233,6 +234,12 @@ log('level-up event on both:', await a.$eval('[data-t=lvup-name]', e => e.textCo
 for (const p of [a, b]) await p.click('[data-t=lvup-close]'); await sleep(500)
 log('after both tapped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))
 if (await pw(a) !== 16) throw 'not 16'
+// pair level (app-wide): each phone stores the level under the partner's tag, marked as set in the chat
+const ptag = uid => createHash('sha256').update('pd-pair:' + uid).digest('hex').slice(0, 32)
+const plv = async (p, q) => { const u = (await prof(q)).uid; return p.evaluate(t => JSON.parse(sessionStorage.getItem('pd.pairlv') || localStorage.getItem('pd.pairlv') || '{}')[t] || null, ptag(u)) }
+const plv2 = async () => [await plv(a, b), await plv(b, a)]
+{ let r; for (let i = 0; i < 30; i++) { r = await plv2(); if (r[0]?.lv === 2 && r[1]?.lv === 2) break; await sleep(200) }
+  if (!(r[0]?.lv === 2 && r[0].drop && r[1]?.lv === 2 && r[1].drop)) throw 'pair level not stored at Spark ' + JSON.stringify(r); log('pair level stored on both phones:', JSON.stringify(r)) }
 await tab(b, 'profile'); await t(b, '[data-t=season-badge]'); log('season badge at Spark:', await b.$eval('[data-t=season-badge]', e => e.textContent))
 await b.setViewport({ width: 412, height: 915, deviceScaleFactor: 2 }); await sleep(300); await clean(b); await shot(b, 'v3.9-match-bracket-412'); await b.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 })
 await shot(b, '08-after-reveal-spark')
@@ -240,6 +247,7 @@ await shot(b, '08-after-reveal-spark')
 await a.click('[data-t=drop]'); await sleep(1500)
 log('after A dropped:', await a.$eval('.chip', e => e.textContent), '/', await b.$eval('.chip', e => e.textContent), 'photo widths', await pw(a), await pw(b))
 if (await pw(b) !== 8) throw 'drop not applied'
+{ const r = await plv2(); if (r[0]?.lv !== 1 || r[1]?.lv !== 1) throw 'drop not stored ' + JSON.stringify(r); log('drop stored on both phones:', JSON.stringify(r)) }
 // call
 // call: request from the chat screen, B accepts
 const shotW = async (p, n) => { for (const w of [360, 412]) { await p.setViewport({ width: w, height: 800, deviceScaleFactor: 2 }); await shot(p, `${n}-${w}`) } await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }) }

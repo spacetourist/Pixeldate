@@ -4,10 +4,10 @@
 import { Server, routePartykitRequest, type Connection } from 'partyserver'
 import { DurableObject } from 'cloudflare:workers'
 import './profanity.ts'
-import { Room, emptyRec, type Field, type PairRec, type Rec, type Report, type Sock, type Store } from './sim.ts'
+import { Room, emptyRec, type Field, type PairRec, type PairStore, type Rec, type Report, type Sock, type Store } from './sim.ts'
 import { TICK_MS } from '../shared/proto.ts'
 
-interface Env { Area: DurableObjectNamespace<Area>; User: DurableObjectNamespace<User>; Mod: DurableObjectNamespace<Mod>; INVITES?: string; DEV?: string; STALE_MS?: string }
+interface Env { Area: DurableObjectNamespace<Area>; User: DurableObjectNamespace<User>; Mod: DurableObjectNamespace<Mod>; Pair: DurableObjectNamespace<Pair>; INVITES?: string; DEV?: string; STALE_MS?: string }
 
 export class User extends DurableObject<Env> {
   async load(): Promise<Rec> { return { ...emptyRec(), ...(await this.ctx.storage.get<Rec>('rec')) } }
@@ -21,6 +21,16 @@ const store = (env: Env): Store => ({
   add: (uid, f, other) => { env.User.get(env.User.idFromName(uid)).add(f, other).catch(() => {}) },
   report: r => { env.Mod.get(env.Mod.idFromName('mod')).report(r).catch(() => {}) },
 })
+/** One object per pair (named by the two uids, sorted): their level, meter and date opt-ins, shared by every room and
+    instance of every space, so a pair picks up where they left off wherever they meet next. */
+export class Pair extends DurableObject<Env> {
+  async get(): Promise<PairRec | null> { return (await this.ctx.storage.get<PairRec>('rec')) ?? null }
+  async put(r: PairRec) { await this.ctx.storage.put('rec', r) }
+}
+const pairs = (env: Env): PairStore => ({
+  load: async k => (await env.Pair.get(env.Pair.idFromName(k)).get()) ?? undefined,
+  save: (k, r) => { env.Pair.get(env.Pair.idFromName(k)).put(r).catch(() => {}) },
+})
 /** Reports: one storage key per report (time-ordered), in the Mod object's SQLite-backed storage. */
 export class Mod extends DurableObject<Env> {
   async report(r: Report) { await this.ctx.storage.put(`r:${String(r.at).padStart(15, '0')}:${crypto.randomUUID()}`, r) }
@@ -30,12 +40,10 @@ export class Mod extends DurableObject<Env> {
 export class Area extends Server<Env> {
   static options = { hibernate: false }
   room!: Room; timer: ReturnType<typeof setInterval> | null = null; joinTimers = new Map<Connection, ReturnType<typeof setTimeout>>()
-  /** v05: each pair's level and date opt-ins live in this instance's storage (key pair:<uidA>|<uidB>, sorted), loaded once */
+  /** pair levels live in the app-wide Pair objects, not in this instance */
   async onStart() {
-    const pairs = new Map<string, PairRec>()
-    for (const [k, v] of await this.ctx.storage.list<PairRec>({ prefix: 'pair:' })) pairs.set(k.slice(5), v)
     this.room = new Room(this.name, store(this.env), { invites: new Set((this.env.INVITES ?? "").split(',').map(s => s.trim()).filter(Boolean)),
-      staleMs: this.env.STALE_MS ? +this.env.STALE_MS : undefined, pairs, savePair: (k, r) => { this.ctx.storage.put('pair:' + k, r).catch(() => {}) } })
+      staleMs: this.env.STALE_MS ? +this.env.STALE_MS : undefined, pairs: pairs(this.env) })
   }
   onConnect(c: Connection) {
     const s = c as unknown as Sock

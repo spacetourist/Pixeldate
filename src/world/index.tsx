@@ -9,6 +9,7 @@ import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, bracketLabel, type Pu
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
 import { walkable, isSeat, TABLES } from '../../world/shared/map.ts'
 import { WorldNet } from './net.ts'
+import { claimOf, getPairLv, setPairLv } from '../pairlv'
 import { startLook } from '../avatar/kit/defaults.ts'
 import { Renderer, MW, MH, type Layout } from './render.ts'
 import './world.css'
@@ -70,6 +71,8 @@ function World() {
   const [priv, setPriv] = useState<{ k: number; mine: boolean; text: string }[]>([]), privEl = useRef<HTMLOListElement>(null)
   const [ans, setAns] = useState(''), [ansErr, setAnsErr] = useState('')
   const murmurs = useRef(new Map<number, number>()), withRef = useRef(0)
+  /** v05 pair levels: the partner tag we already sent our app-wide level for, this sitting */
+  const claimed = useRef('')
   const [note, setNote] = useState(''); const [text, setText] = useState('')
   // desktop chat log: recent bubbles that went out (the server only relays text that passed the filter; held lines stay out)
   const [log, setLog] = useState<{ k: number; name: string; text: string; mine: boolean }[]>([]), logEl = useRef<HTMLOListElement>(null), logK = useRef(0)
@@ -101,6 +104,13 @@ function World() {
         const c = m.q && m.with ? m as Tbl : null
         if (!c || c.with !== withRef.current) { setPriv([]); setPhoto(null); setAns(''); setAnsErr('') }   // a new partner (or none): start clean
         withRef.current = c?.with ?? 0; setCard(c); if (c?.mine) { setAns(''); setAnsErr('') }
+        // the pair's level is app-wide (src/pairlv.ts): tell the server what this phone remembers for them, once a sitting;
+        // once it has reconciled (rc), remember what the server says, so the app chat picks up at the same level
+        if (!c) claimed.current = ''
+        else if (c.peer) {
+          if (claimed.current !== c.peer) { claimed.current = c.peer; n.send({ t: 'pairlv', ...claimOf(c.peer) }) }
+          const r = getPairLv(c.peer); if (c.rc ? r?.lv !== c.lv || r.drop : c.lv > (r?.lv ?? 0)) setPairLv(c.peer, c.lv)
+        }
       }
       else if (m.t === 'ansno') setAnsErr(ANSWHY[m.why] ?? 'Not sent.')
       else if (m.t === 'photo') { if (m.id === withRef.current) setPhoto(m) }

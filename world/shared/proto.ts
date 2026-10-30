@@ -43,7 +43,11 @@ export type ClientMsg =
   | { t: 'next' } | { t: 'ka' }
   | { t: 'ans'; text: string } | { t: 'date'; yes: boolean } | { t: 'call' | 'callyes' | 'callno' }
   | { t: 'photo'; lv: number; data: string }
+  /** the app's local level for the person you're seated with (src/pairlv.ts), once per sitting */
+  | { t: 'pairlv'; lv: number; drop?: boolean }
 /** What one of the two at a table sees (sent only to them): level, the card, the answers (theirs only once both are in),
     the date opt-ins, and a pending call request ('out' = I asked, 'in' = they asked). */
 export interface Table { tb: number; lv: number; seg: number; up: boolean; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null
-  date: { me: boolean; them: boolean }; call: 'out' | 'in' | null; video: number }
+  date: { me: boolean; them: boolean }; call: 'out' | 'in' | null; video: number
+  /** v05 pair levels: the other person's tag (sha256 of their uid, never the uid) and whether the level is reconciled */
+  peer?: string; rc: boolean }

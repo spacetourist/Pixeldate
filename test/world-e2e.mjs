@@ -3,7 +3,9 @@
 //   desktop 1440x900 @1x, mouse + keys: click-to-walk, arrows/WASD, Enter to talk, Esc to close, camera follows
 //   cross-device: both players in one room see each other move and swap a bubble
 //   phone camera: 2 CSS px per art px, eased follow, clamped at the walls (no empty bands), coral arrows to off-screen hearts
-//   shots of every state at both sizes → shots/world-cafe-v02/     Run: node test/world-e2e.mjs   (FPS=1 adds the 40-player FPS run)
+//   GD v02 review: secondary Say while empty, night question card, merged arrows that keep off people
+//   GD v03 finals: seated pose on the chair tiles, heart-bob / broken-heart, 4 upright edge arrows + ×n badges, 9-slice bubble
+//   shots of every state at both sizes → shots/world-cafe-v03/     Run: node test/world-e2e.mjs   (FPS=1 adds the 40-player FPS run)
 import puppeteer from 'puppeteer-core'
 process.env.WORLD_PORT = '18793'; process.env.WORLD_URL = 'ws://127.0.0.1:18793'
 const dev = await import('../world/dev/server.ts')
@@ -13,9 +15,11 @@ const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
 const { F_HEART, F_BROKEN, F_SIT } = await import('../world/shared/proto.ts')
 const APP = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const Q = '?world=cafe&ws=ws://127.0.0.1:18793'
-const OUT = '/workspace/pixeldate/shots/world-cafe-v02/'
+const OUT = process.env.OUT || '/workspace/pixeldate/shots/world-cafe-v03/'
 const { mkdirSync: mk } = await import('node:fs'); mk(OUT, { recursive: true })
 let bad = 0, n = 0
+// GD's bubble art, as the built CSS may carry it (a hashed file or, under Vite's inline limit, a data: URI)
+const { readFileSync: rf } = await import('node:fs'), artIs = (css, f) => css.includes(f) || css.includes(rf(new URL(`../src/world/art/markers/${f}.png`, import.meta.url)).toString('base64'))
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
 const until = async (f, ms = 6000, step = 60) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await f(); if (v) return v; await sleep(step) } return null }
 await sleep(300)
@@ -103,6 +107,13 @@ async function flow(p, o) {
   if (o.layout === 'phone') ok(s0.k / o.dpr === 2 && Math.abs(s0.vw / 16 - 12.2) < 0.3, `${L}: 2x scale, ${(s0.vw / 16).toFixed(1)} tiles across at 390`)
   else { const side = await p.$eval('.w-side, [data-t=w-say]', e => e.getBoundingClientRect().left); ok(side > 1000, `${L}: chat bar down the side (x=${side})`); ok(s0.vw < MW && s0.vh < MH, `${L}: camera view ${s0.vw.toFixed(0)}x${s0.vh.toFixed(0)} smaller than the map, so it follows`) }
   const sb = await p.$eval('[data-t=w-say]', e => e.getBoundingClientRect().toJSON()); ok(sb.bottom <= o.h + 0.5, `${L}: chat bar on screen (bottom ${sb.bottom.toFixed(0)})`)
+  // Say: the #281D52 secondary style while the input is empty, primary butter once there is text
+  const sendBg = () => p.$eval('[data-t=w-send]', b => [b.disabled, getComputedStyle(b).backgroundColor, getComputedStyle(b).color, getComputedStyle(b).opacity])
+  { const [dis, bg, fg, op] = await sendBg(); ok(dis && bg === 'rgb(40, 29, 82)' && fg === 'rgb(164, 156, 194)' && op === '1', `${L}: Say disabled while empty, secondary #281D52 (${bg}, text ${fg})`) }
+  await shot(p, '15-say-disabled')
+  await p.type('[data-t=w-input]', 'hi')
+  { const [dis, bg] = await sendBg(); ok(!dis && bg === 'rgb(255, 216, 77)', `${L}: Say back to primary butter with text (${bg})`) }
+  await p.$eval('[data-t=w-input]', e => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(e, ''); e.dispatchEvent(new Event('input', { bubbles: true })); e.blur() })
 
   // walk: phone taps, desktop clicks; then desktop keys
   const before = await st(p)
@@ -127,13 +138,24 @@ async function flow(p, o) {
   ok(await until(async () => ((await entBy(p, 'Noor'))?.f & F_BROKEN), 4000), `${L}: broken heart over Noor (passed on me)`)
   const jo = await entBy(p, 'Jo'); ok(jo && !(jo.f & (F_HEART | F_BROKEN)), `${L}: nothing over Jo (not compatible)`)
   const noorSees = cast.noor.ents.get(idOf(cast.noor, p.prof.name)); ok(noorSees && !(noorSees.f & (F_HEART | F_BROKEN)), `${L}: Noor sees no marker over me (she passed)`)
-  if (o.layout === 'phone') {
-    // off-screen heart: walk to the left wall, Mia (heart) is out of view to the right → an arrow on the right edge
+  // off-screen hearts: walk to the left wall; Mia and Lea (hearts) are out of view to the right, within 30° of each other,
+  // so they share one arrow with a ×2 tag. The desktop sees further, so Mia steps over beside Lea first.
+  if (o.layout === 'desk') { cast.mia.send({ t: 'go', x: 29, y: 12 }); await until(() => at(cast.mia, [29, 12]), 8000) }
+  {
     await walkTo(p, ...o.arrowAt); await sleep(900)
-    const mia = await entBy(p, 'Mia'), s = await st(p), a = s.arrows.find(x => x.id === mia.id)
-    ok(a && a.oct === 0 && a.x > s.css[0] - 30, `${L}: coral arrow at the right edge points to Mia off screen (${a ? `${a.x.toFixed(0)},${a.y.toFixed(0)} oct ${a.oct}` : 'none'})`)
-    ok(s.arrows.every(x => s.ents.find(e => e.id === x.id)?.f & F_HEART), `${L}: arrows only for people with a heart (${s.arrows.length})`)
-    await shot(p, '13-arrow')
+    const mia = await entBy(p, 'Mia'), lea = await entBy(p, 'Lea'), s = await st(p), a = s.arrows.find(x => x.ids.includes(mia.id))
+    const u = s.k / s.dpr, gap = a ? s.css[0] / u - (a.x / u + 10) : -1   // arrow centre → tip column is +10 art px
+    ok(a && a.dir === 'right' && gap >= 3 - 1e-6 && gap < 4, `${L}: right-edge arrow (GD's edge-arrow) points to Mia off screen, tip 2 art px inside the edge (${a ? `${a.x.toFixed(0)},${a.y.toFixed(0)} ${a.dir}, gap ${gap.toFixed(2)}` : 'none'})`)
+    ok(a && a.n === 2 && a.ids.includes(lea.id) && s.arrows.filter(x => x.dir === 'right').length === 1, `${L}: Mia and Lea share one arrow with ×${a?.n} (${s.arrows.length} arrow(s): ${s.arrows.map(x => `${x.dir} ×${x.n}`).join(', ')})`)
+    ok(a && a.badge === 'x2' && s.arrows.every(x => x.badge === (x.n > 1 ? (x.n > 9 ? 'x9+' : 'x' + x.n) : '')), `${L}: merged arrow wears the ×2 count badge (${a?.badge})`)
+    ok(s.arrows.every(x => x.ids.every(id => s.ents.find(e => e.id === id)?.f & F_HEART)), `${L}: arrows only for people with a heart`)
+    ok(s.arrows.every(x => !x.cover), `${L}: no arrow covers a person at the edge`)
+    { const want = { heart: [9, 8], 'heart-bob': [18, 9], 'broken-heart': [9, 7], 'edge-arrow': [24, 24], 'edge-arrow-left': [24, 24], 'edge-arrow-up': [24, 24], 'edge-arrow-down': [24, 24], 'count-badges': [103, 9] }
+      ok(Object.entries(want).every(([f, wh]) => s.art?.[f]?.join() === wh.join()), `${L}: GD's final marker files loaded at their README sizes (${JSON.stringify(s.art)})`) }
+    await shot(p, '13-arrows-x2')
+  }
+  if (o.layout === 'desk') { cast.mia.send({ t: 'go', x: 17, y: 11 }); await until(() => at(cast.mia, [17, 11]), 8000); await walkTo(p, o.stand[0], o.stand[1], 15000); await sleep(900) }
+  if (o.layout === 'phone') {
     // walls: bottom-left corner, the camera stops at the room edge and shows nothing outside it
     await walkTo(p, ...o.wallAt); await sleep(1000)
     const w = await st(p)
@@ -147,6 +169,14 @@ async function flow(p, o) {
   // bubbles: someone else's, then mine
   cast.mia.send({ t: 'say', text: 'love the lamps in here' }); cast.jo.send({ t: 'say', text: 'first time here?' })
   ok(await until(() => p.$$eval('[data-t=bubble]', es => es.some(e => e.textContent === 'love the lamps in here'))), `${L}: Mia's bubble shows over her`)
+  await sleep(200)
+  { const b = await p.evaluate(() => { const W = window.__world, e = [...document.querySelectorAll('[data-t=bubble]')].find(e => e.textContent === 'love the lamps in here'), cs = getComputedStyle(e), r = e.getBoundingClientRect(), o = e.parentElement.getBoundingClientRect()
+      const t = getComputedStyle(e, '::after'), u = W.r.k / W.r.dpr, tip = W.r.tip(+e.dataset.id)
+      return { src: cs.borderImageSource, sl: cs.borderImageSlice, col: cs.color, w: r.width / u, h: r.height / u, tail: t.backgroundImage, tw: parseFloat(t.width) / u, tipY: tip && (tip[1] - (r.bottom - o.top)) / u, tipX: tip && (tip[0] - (r.left - o.left)) / u, kids: e.children.length } })
+    ok(artIs(b.src, 'speech-bubble-9slice') && /^4 fill$/.test(b.sl) && b.col === 'rgb(255, 241, 193)', `${L}: bubble is GD's 9-slice (slice ${b.sl}), cream text (${b.col})`)
+    ok(Math.abs(b.w - Math.round(b.w)) < 0.02 && Math.abs(b.h - Math.round(b.h)) < 0.02 && b.w >= 12 && b.h >= 12, `${L}: bubble box snapped to whole art px (${b.w.toFixed(2)}x${b.h.toFixed(2)})`)
+    ok(artIs(b.tail, 'speech-bubble-tail') && Math.abs(b.tw - 9) < 0.02 && Math.abs(b.tipY - 4) < 0.02 && b.tipX >= 4 - 0.02, `${L}: tail tip 2 art px above her head (tail ${b.tw.toFixed(1)} wide, tip ${b.tipY?.toFixed(2)} below the box, column ${b.tipX?.toFixed(1)})`)
+    ok(b.kids === 0, `${L}: bubble text is plain text (no markup)`) }
   const myLine = o.layout === 'phone' ? 'anyone into climbing?' : 'coffee or tea?'
   await sayUI(p, myLine, o.layout === 'desk')
   ok(await until(() => p.$$eval('[data-t=bubble].mine', es => es.some(e => e.textContent === 'coffee or tea?' || e.textContent === 'anyone into climbing?'))), `${L}: my bubble shows (${o.layout === 'desk' ? 'Enter → type → Enter' : 'tap input, type, Say'})`)
@@ -183,6 +213,19 @@ async function flow(p, o) {
   const q = await p.$eval('[data-t=w-q]', e => e.textContent), bc = await until(() => cast[o.partner].last('card')?.q)
   ok(bc && bc.text === q, `${L}: ${cast[o.partner].p.name} got the same card ("${q.slice(0, 40)}…")`)
   ok(((await meEnt(p)).f & F_SIT), `${L}: I'm sitting`)
+  await until(async () => ((await entBy(p, cast[o.partner].p.name))?.f & F_SIT), 8000); await sleep(300)
+  for (const [who, t] of [['me', mine], [cast[o.partner].p.name, theirs]]) {
+    const v = await p.evaluate((who, t) => { const W = window.__world, s = W.state(), e = who === 'me' ? s.ents.find(e => e.id === s.me) : s.ents.find(e => e.name === who), x = W.r.ents.get(e.id)
+      return x && { sit: x.sit, dx: x.sx - t[0] * 16, dy: x.sy - (t[1] - 1) * 16, d: e.d ?? null } }, who, t)
+    const want = t[0] < (t === mine ? theirs : mine)[0] ? -2 : -6   // left seat faces right: -2; right seat faces left: -6
+    ok(v && v.sit && v.dy === -10 && v.dx === want, `${L}: ${who} drawn seated on GD's chair tile (sprite at chair ${v?.dx},${v?.dy}, want ${want},-10)`)
+  }
+  { const c = await p.$eval('[data-t=w-card]', e => { const g = (q, k) => getComputedStyle(e.querySelector(q) || e)[k], cs = getComputedStyle(e)
+      return { bg: cs.backgroundColor, bw: cs.borderTopWidth, bc: cs.borderTopColor, with: e.querySelector('[data-t=w-with]')?.textContent, wf: g('[data-t=w-with]', 'fontFamily'), q: g('[data-t=w-q]', 'color'), nb: g('[data-t=w-next]', 'backgroundColor') } })
+    const name = cast[o.partner].p.name
+    ok(c.bg === 'rgb(30, 22, 64)' && c.bw === '2px' && c.bc === 'rgb(255, 216, 77)', `${L}: card is a #1E1640 panel with a 2px butter border (${c.bg}, ${c.bw} ${c.bc})`)
+    ok(c.with === 'with ' + name && /Jersey 15/.test(c.wf), `${L}: "${c.with}" in Jersey 15`)
+    ok(c.q === 'rgb(255, 246, 236)' && c.nb === 'rgb(255, 216, 77)', `${L}: question in cream (${c.q}), Next card is a butter button (${c.nb})`) }
   await shot(p, '08-card')
   await press(p, '[data-t=w-next]'); ok(await until(async () => (await p.$eval('[data-t=w-q]', e => e.textContent)) !== q), `${L}: Next card`)
 
@@ -206,7 +249,7 @@ await press(phone, '[data-t=w-input]'); await phone.setViewport({ ...PHONE, heig
   await phone.type('[data-t=w-input]', 'typing with the keyboard up'); await shot(phone, '11-keyboard') }
 await phone.$eval('[data-t=w-input]', e => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(e, ''); e.dispatchEvent(new Event('input', { bubbles: true })); e.blur() })
 await phone.setViewport(PHONE); await sleep(400)
-const deskId = await flow(desk, { layout: 'desk', dpr: 1, h: 900, stand: [20, 10], reportee: 'Zed', table: [[18, 15], [21, 15]], partner: 'lea', blockee: 'Kit' })
+const deskId = await flow(desk, { layout: 'desk', dpr: 1, h: 900, stand: [20, 10], arrowAt: [1, 12], reportee: 'Zed', table: [[18, 15], [21, 15]], partner: 'lea', blockee: 'Kit' })
 
 // ── cross-device: same room, each sees the other move, bubbles both ways
 ok((await st(phone)).inst === (await st(desk)).inst, `cross: phone and desktop in the same room (${(await st(phone)).inst})`)

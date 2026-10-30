@@ -6,7 +6,8 @@
 .w-field { display: grid; gap: 6px; font: var(--t-label) } .w-field input, .w-say input { font: var(--t-ui); color: var(--text); background: var(--c-surface-2, #1E1640); border: 2px solid var(--edge, #05020F); box-shadow: inset 0 0 0 1px var(--c-track, #2A2150); padding: 12px; border-radius: 0; min-height: 48px }
 .w-adult { display: flex; gap: 10px; align-items: center; min-height: 48px; font: var(--t-ui) } .w-adult input { width: 22px; height: 22px; accent-color: var(--c-mint, #48E5C2) }
 .w-btn { font: var(--t-btn, 700 16px/1 system-ui); background: var(--cta, #FFD84D); color: var(--text-on-accent, #05020F); border: 2px solid var(--edge, #05020F); box-shadow: 0 3px 0 var(--edge, #05020F); min-height: 48px; padding: 0 18px; cursor: pointer }
-.w-btn:disabled { opacity: .45; cursor: default } .w-btn.sm { min-height: 44px; padding: 0 14px; font-size: 15px }
+/* GD v02: disabled = the #281D52 secondary style (same fix as signup Continue), not a faded butter that reads olive */
+.w-btn:disabled { background: var(--c-surface-3, #281D52); color: var(--text-muted, #A49CC2); box-shadow: 0 3px 0 var(--edge, #05020F); cursor: not-allowed } .w-btn.sm { min-height: 44px; padding: 0 14px; font-size: 15px }
 .w-btn.ghost { background: var(--raised, #1E1640); color: var(--text) } .w-btn.danger { background: var(--c-raspberry, #FF5C7A) } .w-btn.heart { background: var(--c-coral, #FF6F59) }
 .w-warn { margin: 0; padding: 10px 12px; background: var(--error-bg, #2E0F22); border-left: 3px solid var(--error, #FF5C7A) } .w-warn a { color: var(--c-violet, #8F7BFF) }
 .w-room { position: fixed; inset: 0 0 auto 0; height: calc(100dvh - var(--kb)); display: grid; overflow: hidden; touch-action: manipulation }
@@ -16,10 +17,14 @@
 .w-top b { font: 400 26px/1 var(--font-px, monospace) } .w-top span { color: var(--text-muted) } .w-leave { margin-left: auto; color: var(--text); min-height: 44px; display: grid; place-items: center }
 .w-stage { position: relative; min-height: 0; overflow: hidden } .w-stage canvas { display: block; image-rendering: pixelated; touch-action: none; cursor: pointer }
 .w-over { position: absolute; inset: 0; pointer-events: none }
-.w-bubble { position: absolute; left: 0; top: 0; max-width: 170px; padding: 5px 8px; font: 600 13px/1.25 var(--font-ui); color: var(--edge, #05020F); background: var(--text, #FFF6EC); border: 2px solid var(--edge, #05020F); white-space: pre-wrap; overflow-wrap: anywhere; text-align: center }
-.w-bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -4px; width: 8px; height: 4px; background: inherit; border: 2px solid var(--edge, #05020F); border-top: 0; clip-path: polygon(0 0, 100% 0, 50% 100%) }
-.w-bubble.mine { background: var(--c-mint, #48E5C2) }
-.w-bubble.held { background: var(--c-surface-2, #1E1640); color: var(--text-muted); border-style: dashed; border-color: var(--c-raspberry, #FF5C7A); text-decoration: line-through }
+/* GD's 9-slice speech bubble (world/markers/README.md): 4 px slices, 3 px content inset, tail 9x6 overlapping the bottom
+   2 rows. --u = one art px in CSS px (set by index.tsx); index.tsx snaps the box to whole u and sets --tx (tail column). */
+.w-bubble { position: absolute; left: 0; top: 0; box-sizing: border-box; max-width: 170px; min-width: calc(12 * var(--u, 2px)); padding: 0 var(--u, 2px); font: 600 13px/1.25 var(--font-ui); color: #FFF1C1; white-space: pre-wrap; overflow-wrap: anywhere; text-align: center;
+  border: calc(3 * var(--u, 2px)) solid transparent; border-image: url('./art/markers/speech-bubble-9slice.png') 4 fill / calc(4 * var(--u, 2px)) / 0 stretch; image-rendering: pixelated; display: flex; align-items: center; justify-content: center }
+.w-bubble::after { content: ''; position: absolute; width: calc(9 * var(--u, 2px)); height: calc(6 * var(--u, 2px)); top: calc(100% + var(--u, 2px)); left: calc(var(--tx, 50%) - 7 * var(--u, 2px)); background: url('./art/markers/speech-bubble-tail.png') 0 0 / 100% 100% no-repeat; image-rendering: pixelated }
+/* .mine: GD drew one bubble, so your own uses the same art */
+.w-bubble.held { border-image: none; background: var(--c-surface-2, #1E1640); color: var(--text-muted); border: 2px dashed var(--c-raspberry, #FF5C7A); text-decoration: line-through; flex-direction: column }
+.w-bubble.held::after { display: none }
 .w-bubble.held::before { content: 'not sent'; display: block; text-decoration: none; font: var(--t-micro, 700 11px/1.2 system-ui); color: var(--c-raspberry, #FF5C7A) }
 .w-side { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--c-night, #0C0722); min-height: 0 }
 .w-room.phone .w-side { border-top: 2px solid var(--edge, #05020F); padding-bottom: max(8px, env(safe-area-inset-bottom)) }
@@ -29,8 +34,12 @@
 .w-x { margin-left: auto; min-width: 44px; min-height: 44px; background: none; border: 0; color: var(--text); font-size: 26px; cursor: pointer }
 .w-acts { display: flex; flex-wrap: wrap; gap: 8px } .w-acts .w-btn { flex: 1 1 auto }
 .w-list { display: grid; gap: 6px } .w-list p { margin: 0 } .w-room.phone .w-list { grid-template-columns: 1fr 1fr } .w-room.phone .w-list p { grid-column: 1 / -1 }
-.w-card { background: var(--c-butter, #FFD84D); color: var(--edge, #05020F) } .w-kick { margin: 0; font: var(--t-label) } .w-q { margin: 0; font: var(--t-display) }
-.w-card .w-btn { background: var(--edge, #05020F); color: var(--c-butter, #FFD84D); justify-self: start }
+/* GD v02 question card: night panel, 2 px butter pixel border (ink ring outside it), name in Jersey 15, question in cream, butter button */
+.w-card { background: var(--c-surface-2, #1E1640); color: var(--c-text, #FFF6EC); border: 2px solid var(--c-butter, #FFD84D); box-shadow: 0 0 0 2px var(--edge, #05020F); margin: 2px }
+.w-kick { margin: 0; font: var(--t-label); color: var(--text-muted, #A49CC2); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px }
+.w-with { font: 400 24px/1 var(--font-px, monospace); color: var(--c-butter, #FFD84D) }
+.w-q { margin: 0; font: var(--t-display); color: var(--c-text, #FFF6EC) }
+.w-card .w-btn { justify-self: start }
 .w-note { margin: 0; padding: 8px 10px; background: var(--raised, #1E1640); border-left: 3px solid var(--c-mint, #48E5C2); font: var(--t-small) }
 .w-help { margin: 0; color: var(--text-muted); font: var(--t-small) }
 .w-say { display: flex; gap: 8px; align-items: center } .w-say input { flex: 1; min-width: 0 } .w-left { font: var(--t-micro); color: var(--text-muted); min-width: 2ch; text-align: right } .w-left.low { color: var(--c-butter) }

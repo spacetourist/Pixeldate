@@ -76,22 +76,35 @@ function World() {
     const r = ren.current = new Renderer(canvas.current), n = net.current!
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
     size(); const ro = new ResizeObserver(size); ro.observe(stage.current!)
-    const els = new Map<number, HTMLDivElement>(); let raf = 0
+    const els = new Map<number, HTMLDivElement>(); let raf = 0, lastU = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop); r.frame(n, now)
       const me = n.ents.get(n.me); if (me && target.current && Math.floor(me.x) === target.current[0] && Math.floor(me.y) === target.current[1]) { target.current = null; r.path = [] }
+      // GD's 9-slice bubble (world.css): the box is snapped to whole art px (u CSS px) so the slices stay crisp, and the
+      // tail tip sits 2 art px above the head (r.tip), on the head's centre column unless the bubble is pushed in from an edge
+      const u = r.k / r.dpr, ov = over.current!; if (u !== lastU) { ov.style.setProperty('--u', u + 'px'); lastU = u; for (const el of els.values()) el.dataset.w = '' }
       for (const [id, b] of bubbles.current) {
-        const e = n.ents.get(id); if (now > b.until || !e) { bubbles.current.delete(id); continue }
-        let el = els.get(id); if (!el) { el = document.createElement('div'); el.dataset.t = 'bubble'; over.current!.append(el); els.set(id, el) }
+        const e = n.ents.get(id), tip = r.tip(id); if (now > b.until || !e) { bubbles.current.delete(id); continue }
+        let el = els.get(id); if (!el) { el = document.createElement('div'); el.dataset.t = 'bubble'; ov.append(el); els.set(id, el) }
         el.className = 'w-bubble' + (b.mine ? ' mine' : '') + (b.held ? ' held' : ''); el.dataset.id = String(id); el.dataset.held = b.held || ''
-        if (el.dataset.text !== b.text) { el.textContent = b.text; el.dataset.text = b.text }
-        const [x, y] = r.toCss(n.lerpX(e, now), n.lerpY(e, now)); el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y - 34 * r.k / r.dpr - 6)}px) translate(-50%, -100%)`
+        if (el.dataset.text !== b.text) { el.textContent = b.text; el.dataset.text = b.text; el.dataset.w = '' }
+        if (!el.dataset.w) {   // measure the natural size once per text / scale change, then snap it to the art grid
+          el.style.width = el.style.height = ''; const bb = el.getBoundingClientRect()
+          const w = Math.max(12, Math.ceil(bb.width / u - 1e-3)) * u, h = Math.max(12, Math.ceil(bb.height / u - 1e-3)) * u
+          el.style.width = w + 'px'; el.style.height = h + 'px'; el.dataset.w = String(w); el.dataset.h = String(h)
+        }
+        if (!tip) { el.style.visibility = 'hidden'; continue } el.style.visibility = ''
+        const w = +el.dataset.w!, h = +el.dataset.h!, cols = Math.round(w / u), W = ov.clientWidth
+        let tx = Math.floor((cols - 1) / 2) * u, left = tip[0] - tx
+        if (left < 0) left += Math.ceil(-left / u) * u; else if (left + w > W) left -= Math.ceil((left + w - W) / u) * u
+        tx = Math.min(Math.max(tip[0] - left, 4 * u), w - 5 * u); left = tip[0] - tx   // tail stays ≥4 art px from either side
+        el.style.setProperty('--tx', tx + 'px'); el.style.transform = `translate(${left}px, ${tip[1] - h - 4 * u}px)`
       }
       for (const [id, el] of els) if (!bubbles.current.has(id)) { el.remove(); els.delete(id) }
     }
     raf = requestAnimationFrame(loop)
     ;(window as any).__world = { net: n, r, bubbles: bubbles.current,
-      state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, layout: layoutOf(), bytes: n.bytes,
+      state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, art: r.art, layout: layoutOf(), bytes: n.bytes,
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
@@ -167,7 +180,7 @@ function World() {
         <div className="w-acts"><button className="w-btn sm danger" data-t="w-block-yes" onClick={() => act('block')}>Block</button><button className="w-btn sm ghost" onClick={() => setMenu('')}>Cancel</button></div></div>}
     </section>)
   const cardEl = card && (
-    <section className="w-panel w-card" data-t="w-card"><p className="w-kick">Table for two · with {net.current?.pubs.get(card.with)?.name ?? 'someone'}</p>
+    <section className="w-panel w-card" data-t="w-card"><p className="w-kick">Table for two <span className="w-with" data-t="w-with">with {net.current?.pubs.get(card.with)?.name ?? 'someone'}</span></p>
       <p className="w-q" data-t="w-q">{card.q.text}</p><button className="w-btn sm" data-t="w-next" onClick={() => net.current?.send({ t: 'next' })}>Next card</button></section>)
   const left = MAX_SAY - text.length
   const bar = (

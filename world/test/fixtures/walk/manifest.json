@@ -636,8 +636,60 @@
    }
   }
  ],
+ "sit": {
+  "file": "sit-sheet.png",
+  "rows": [
+   "down",
+   "up",
+   "left",
+   "right"
+  ],
+  "cols": [
+   "sample-00",
+   "sample-01",
+   "sample-02",
+   "sample-03",
+   "sample-04",
+   "sample-05",
+   "sample-06",
+   "sample-07",
+   "sample-08",
+   "sample-09",
+   "sample-10",
+   "sample-11"
+  ],
+  "frame": "sit",
+  "upper_body_drop": 3,
+  "feet": "rows 30-31, same anchor as standing (bottom-centre of the cell)",
+  "chair": {
+   "left_chair_sitter": "right",
+   "right_chair_sitter": "left",
+   "sprite_top_left_from_chair_tile": {
+    "chair-left-seat": [
+     -2,
+     -10
+    ],
+    "chair-right-seat": [
+     -6,
+     -10
+    ]
+   },
+   "feet_anchor_from_chair_tile": {
+    "chair-left-seat": [
+     10,
+     22
+    ],
+    "chair-right-seat": [
+     6,
+     22
+    ]
+   },
+   "draw_order": "chair, table, sitter (sitter above the table so the hands rest on it)"
+  }
+ },
  "shots": [
   "../../shots/walk-board.png",
-  "../../shots/walk-preview.gif"
+  "../../shots/walk-preview.gif",
+  "../../shots/sit-board.png"
  ]
 }

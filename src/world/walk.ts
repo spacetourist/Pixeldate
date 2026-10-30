@@ -1,10 +1,10 @@
 /* Four-direction walk cycle: a line-for-line TS port of GD's tools/kit_dir.py compose_dir() (and the kit.py front
-   parts it builds on), pixel-exact; world/test/walk.mjs checks all 12 samples x 4 directions x 5 poses against it.
+   parts it builds on), pixel-exact; world/test/walk.mjs checks all 12 samples x 4 directions x 6 poses (4 walk frames, stand, sit) against it.
    Pure (no DOM), so it runs in Node tests too. Palettes come from kit.gen.ts, same as the app's composeRGBA. */
 import { BASE, CLOTH, FIXED, HAIRC, SKIN } from '../avatar/kit/kit.gen.ts'
 
 export type Dir = 'down' | 'up' | 'left' | 'right'
-export type Frame = 0 | 1 | 2 | 3 | 'stand'
+export type Frame = 0 | 1 | 2 | 3 | 'stand' | 'sit'
 export const DIRS: Dir[] = ['down', 'up', 'left', 'right']
 export const WALK_FRAME_MS = 160
 const W = 24, H = 32, CX = 11
@@ -327,15 +327,19 @@ function bottomLeft(kind: string, p: P) {
   }
   return gs
 }
+function shoeLeft(g: G, kind: string, x0: number, y: number) {
+  // one side-view shoe under a 3px leg whose last row is (x0..x0+2, y); toe points left
+  const u = y + 1, s = y + 2
+  if (kind === 'trainers') { rect(g, x0 - 1, u, x0 + 2, u, 'F'); rect(g, x0 - 1, s, x0 + 2, s, 'f') }
+  else if (kind === 'boots') { rect(g, x0, u - 2, x0 + 2, u, 'F'); put(g, x0 - 1, u, 'F'); rect(g, x0 - 1, s, x0 + 2, s, 'f') }
+  else if (kind === 'flats') { rect(g, x0 - 1, u, x0 + 2, u, 'F'); rect(g, x0 - 1, s, x0 + 1, s, 'f'); put(g, x0 + 2, s, 'F') }
+  else if (kind === 'heels') { rect(g, x0, u, x0 + 2, u, 'F'); put(g, x0 - 1, s, 'F'); put(g, x0 + 2, s, 'f') }
+}
 function shoesLeft(kind: string, p: P) {
   const gs: Gs = {}
   for (const [grp, k, ps] of limbs(p)) {
     if (k !== 'leg') continue
-    const g = gg(gs, grp), [x0, y] = ps[ps.length - 1], u = y + 1, s = y + 2
-    if (kind === 'trainers') { rect(g, x0 - 1, u, x0 + 2, u, 'F'); rect(g, x0 - 1, s, x0 + 2, s, 'f') }
-    else if (kind === 'boots') { rect(g, x0, u - 2, x0 + 2, u, 'F'); put(g, x0 - 1, u, 'F'); rect(g, x0 - 1, s, x0 + 2, s, 'f') }
-    else if (kind === 'flats') { rect(g, x0 - 1, u, x0 + 2, u, 'F'); rect(g, x0 - 1, s, x0 + 1, s, 'f'); put(g, x0 + 2, s, 'F') }
-    else if (kind === 'heels') { rect(g, x0, u, x0 + 2, u, 'F'); put(g, x0 - 1, s, 'F'); put(g, x0 + 2, s, 'f') }
+    const [x0, y] = ps[ps.length - 1]; shoeLeft(gg(gs, grp), kind, x0, y)
   }
   return gs
 }
@@ -425,6 +429,113 @@ function composeSide(o: O, frame: Frame) {
   for (const [x, y] of seam) g[y][x] = 'K'
   return g
 }
+// ═══ SIT POSE ('sit'): kit_dir.py compose_side_sit / compose_fb_sit ═══
+// Head, torso and arms drop SIT_D px; the feet stay on rows 30-31 as standing (same bottom-centre anchor).
+export const SIT_D = 3
+/** sprite top-left from the chair tile's top-left (kit_dir.py SIT_CHAIR_DX/DY): chair-left-seat → 'right' sitter, chair-right-seat → 'left' */
+export const SIT_CHAIR = { leftSeat: [-2, -10], rightSeat: [-6, -10] } as const
+const SIT_SIDE = { thigh: [24, 26, 6, 13], shin: [5, 27, 29], upperArm: [[11, 18], [11, 19], [10, 20]], forearm: [21, 22, 4, 11], hand: [2, 3] }
+const SLEEVE: Record<string, number> = { tee: 3, longsleeve: 99, shirt: 99, hoodie: 99, jacket: 99, jumper: 99, tank: 0, dress: 0 }
+type LegCodes = { thigh: string; thigh_s: string; cover: number; shin: string; shin_s: string; hem: string | null; k: string }
+function sitLegCodes(o: O): LegCodes {
+  const k = o.top === 'dress' ? 'dress' : (o.bottom ?? 'none')
+  if (k === 'trousers' || k === 'jeans') return { thigh: 'B', thigh_s: 'b', cover: 13 - 7, shin: 'B', shin_s: 'b', hem: k === 'jeans' ? 'W' : null, k }
+  if (k === 'shorts') return { thigh: 'B', thigh_s: 'b', cover: 4, shin: 'J', shin_s: 'j', hem: null, k }
+  if (k === 'skirt') return { thigh: 'B', thigh_s: 'b', cover: 6, shin: 'J', shin_s: 'j', hem: null, k }
+  if (k === 'dress') return { thigh: 'T', thigh_s: 't', cover: 6, shin: 'J', shin_s: 'j', hem: null, k }
+  return { thigh: 'J', thigh_s: 'j', cover: 0, shin: 'J', shin_s: 'j', hem: null, k }
+}
+/** far_leg, far_arm, near_leg, lap, near_arm of the side sit pose (facing left) */
+function sitSideLimbs(o: O): Gs {
+  const gs: Gs = {}, C = sitLegCodes(o)
+  const [y0, y1, x0, x1] = SIT_SIDE.thigh, [sx, s0, s1] = SIT_SIDE.shin
+  for (const [grp, dx, dy] of [['far_leg', 2, -1], ['near_leg', 0, 0]] as const) {
+    const g = gg(gs, grp), near = grp === 'near_leg'
+    const [th, ths] = near ? [C.thigh, C.thigh_s] : [C.thigh_s, C.thigh_s]
+    const [sh, shs] = near ? [C.shin, C.shin_s] : [C.shin_s, C.shin_s]
+    // thigh: skin/tights from the knee, cloth from `cover` px behind the knee back to the hip
+    for (let x = x0 + dx; x <= x1; x++) {
+      let cloth = C.cover < x1 - x0 + 1 ? x >= x1 - C.cover + 1 : true
+      if (C.k === 'trousers' || C.k === 'jeans') cloth = true
+      for (let y = y0 + dy; y <= y1 + dy; y++) put(g, x, y, cloth ? (y < y1 + dy ? th : ths) : (y < y1 + dy ? sh : shs))
+    }
+    // shin straight down from the knee
+    for (let y = near ? s0 : s0 + dy; y <= s1; y++) { rect(g, sx + dx, y, sx + dx + 2, y, sh); put(g, sx + dx + 2, y, shs) }
+    if (C.hem && near) rect(g, sx, s1, sx + 2, s1, C.hem)
+    else if (C.hem) rect(g, sx + dx, s1, sx + dx + 2, s1, 'w')
+    shoeLeft(g, o.shoes, sx + dx, s1)
+  }
+  // skirt / dress drape over the lap, hanging 1px past the seat line
+  if (C.k === 'skirt') { const lap = gg(gs, 'lap'); rect(lap, 7, 23, 13, 26, 'B'); rect(lap, 8, 27, 13, 27, 'b'); put(lap, 7, 26, 'b') }
+  else if (C.k === 'dress') { const lap = gg(gs, 'lap'); rect(lap, 7, 24, 13, 26, 'T'); rect(lap, 8, 27, 13, 27, 't'); put(lap, 7, 26, 't') }
+  // arms: upper arm down, forearm forward at table height, hand resting at the front
+  const UA = SIT_SIDE.upperArm, [f0, f1, fx0, fx1] = SIT_SIDE.forearm, [hx0, hx1] = SIT_SIDE.hand
+  const n = SLEEVE[o.top] ?? 0, cuff = o.top === 'jumper'
+  for (const [grp, dx, dy] of [['far_arm', 1, -1], ['near_arm', 0, 0]] as const) {
+    const g = gg(gs, grp), near = grp === 'near_arm'
+    const units: number[][][] = UA.map(([x, y]) => [[x + dx, y + dy], [x + 1 + dx, y + dy]])   // upper arm angles forward to the elbow
+    for (let x = fx1 + dx; x > fx0 - 1; x--) units.push([[x, f0 + dy], [x, f1 + dy]])
+    const L = Math.min(n, units.length)
+    units.forEach((u, i) => {
+      const sleeve = i < L, c = sleeve ? (near ? (cuff && i === L - 1 ? 't' : 'T') : 't') : (near ? 'S' : 's')
+      u.forEach(([x, y], j) => { const under = i >= UA.length && j === 1; put(g, x, y, under && near ? (sleeve ? 't' : 's') : c) })
+    })
+    rect(g, hx0 + dx - (near ? 0 : 1), f0 + dy, hx1 + dx, f1 + dy, near ? 'S' : 's')
+    if (near) put(g, hx0, f1, 's')
+  }
+  return gs
+}
+function composeSideSit(o: O) {
+  const layers = sideLayers(o, SIDE_FRAMES.stand), L = sitSideLimbs(o), g = blank(), own: (string | null)[][] = Array.from({ length: H }, () => Array(W).fill(null))
+  const paint = (grid: G | undefined, grp: string, dy = 0) => { if (!grid) return
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const c = grid[y][x]; if (c !== '.' && y + dy >= 0 && y + dy < H) { g[y + dy][x] = c; own[y + dy][x] = grp } } }
+  paint(L.far_leg, 'far_leg'); paint(L.far_arm, 'far_arm')
+  for (const [, gs] of layers) if (gs.main) paint(gs.main, 'main', SIT_D)
+  paint(L.near_leg, 'near_leg'); paint(L.lap, 'skirt'); paint(L.near_arm, 'near_arm')
+  const seam: number[][] = []
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (own[y][x] === 'near_arm')
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, 1]]) { const X = x + dx, Y = y + dy
+        if (X >= 0 && X < W && Y >= 0 && Y < H && (own[Y][X] === 'main' || own[Y][X] === 'skirt') && g[Y][X] !== '.' && Y >= 18 + SIT_D) seam.push([X, Y]) }
+    if (own[y][x] === 'far_leg' && y >= 27 && [-1, 1].some(dx => x + dx >= 0 && x + dx < W && own[y][x + dx] === 'near_leg')) seam.push([x, y])
+  }
+  for (const [x, y] of seam) g[y][x] = 'K'
+  return g
+}
+/** front/back sit: rows above the hips drop SIT_D, legs keep only their lower rows (shins), feet stay put */
+function composeFbSit(o: O, d: Dir) {
+  const g = blank(), [[l0, l1], [r0, r1]] = armCols(o.build), keep = d === 'down' ? 19 : 20
+  const items: [number, number, number, string][] = []
+  for (const [name, Lr] of fbLayers(o, d)) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = Lr[y][x]; if (c === '.') continue
+    const seg = fbSegment(name, x, y, o)
+    if (seg.startsWith('leg')) { if (y < 24 + SIT_D) continue; items.push([0, x, y, c]) }
+    else if (seg.startsWith('arm')) { if (y > keep) continue; items.push([2, x, y + SIT_D, c]) }
+    else items.push([1, x, y + SIT_D, c])
+  }
+  items.sort((a, b) => a[0] - b[0])   // stable, like Python's sorted
+  for (const [, x, y, c] of items) put(g, x, y, c)
+  // knees: the top shin row widens 1px each side, the row under it is the knee shadow, so the legs read as bent
+  const ky = 24 + SIT_D, C = sitLegCodes(o)
+  if (C.k !== 'skirt' && C.k !== 'dress') {
+    const [kc, ks] = C.k === 'trousers' || C.k === 'jeans' ? ['B', 'b'] : ['J', 'j']
+    rect(g, 7, ky, 10, ky, kc); rect(g, 12, ky, 15, ky, kc); put(g, 10, ky, ks); put(g, 15, ky, ks)
+    for (const x of [8, 9, 10, 12, 13, 14]) if ([kc, ks, 'W'].includes(g[ky + 1][x])) g[ky + 1][x] = ks
+  }
+  if (d === 'down') {   // forearms come forward: hands rest in front of the lap
+    const n = SLEEVE[o.top] ?? 0, yb = keep + SIT_D
+    for (const [side, [a0, a1]] of [[-1, [l0, l1]], [1, [r0, r1]]] as const) {
+      const inner = side < 0 ? a1 : a0, step = -side, c1 = n >= 8 ? 'T' : 'S'
+      put(g, inner, yb + 1, c1); put(g, inner + step, yb + 1, c1 === 'S' ? c1 : 't')
+      put(g, inner + 2 * step, yb + 1, c1 === 'T' ? 't' : 'S')
+      put(g, inner + 2 * step, yb + 2, 'S'); put(g, inner + 3 * step, yb + 2, 'S')
+      put(g, inner + 2 * step, yb + 3, 's'); put(g, inner + 3 * step, yb + 3, 's')
+      put(g, inner + step, yb + 2, 'K')
+      for (const x of [a0, a1]) if (x !== inner) put(g, x, yb + 1, '.')
+    }
+  } else for (const x of [l0, r1]) put(g, x, keep + SIT_D, '.')   // from behind the forearms are hidden
+  return g
+}
 function outline(g: G) {
   const out = g.map(r => r.slice()), solid = (x: number, y: number) => x >= 0 && x < W && y >= 0 && y < H && g[y][x] !== '.' && g[y][x] !== 'K'
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (g[y][x] === '.' && (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1))) out[y][x] = 'K'
@@ -443,11 +554,12 @@ export function palette(o: O): Record<string, string> {
   return { ...FIXED, S: sk[0], s: sk[1], r: sk[2], L: sk[3], q: sk[3], H: hc[0], h: hc[1], g: hc[2], T: tc[0], t: tc[1], n: tc[2],
     B: bc[0], b: bc[1], J: tg ? tg[0] : sk[0], j: tg ? tg[1] : sk[1], F: fc[0], f: fc[1], A: ac[0], a: ac[1], O: ac[2] }
 }
-/** compose_dir(config, direction, frame) → RGBA bytes, 24x32, row-major. */
+/** compose_dir(config, direction, frame) → RGBA bytes (frame 0..3, 'stand' or 'sit'), 24x32, row-major. */
 export function composeDir(cfg: O, d: Dir, frame: Frame = 'stand'): Uint8ClampedArray<ArrayBuffer> {
   const o: O = { ...BASE }
   for (const [k, v] of Object.entries(cfg)) if (v !== undefined) o[k] = v   // Python's dict(BASE, **o)
-  let g = d === 'down' || d === 'up' ? composeFb(o, d, frame) : composeSide(o, frame)
+  const fb = d === 'down' || d === 'up'
+  let g = frame === 'sit' ? (fb ? composeFbSit(o, d) : composeSideSit(o)) : fb ? composeFb(o, d, frame) : composeSide(o, frame)
   g = outline(g); if (d === 'left' || d === 'right') g = fillHoles(g)
   const pal = palette(o), px = new Uint8ClampedArray(W * H * 4)
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {

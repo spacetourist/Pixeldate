@@ -7,8 +7,9 @@ import puppeteer from 'puppeteer-core'
 import { readFileSync, mkdirSync } from 'node:fs'
 const { F_HEART, F_SIT } = await import('../world/shared/proto.ts')
 const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
-const ORIGIN = process.env.LIVE || 'https://pixeldate-world.pixeldate.workers.dev', APP = ORIGIN + '/Pixeldate/app/?world=cafe'
-const INV = readFileSync(new URL('../.secrets/world-invite.txt', import.meta.url), 'utf8').trim()
+// Rehearse locally (no production writes): LIVE=http://localhost:4173 WS=ws://127.0.0.1:8787 INVITE_FILE=<file> OUT=… node test/world-live.mjs
+const ORIGIN = process.env.LIVE || 'https://pixeldate-world.pixeldate.workers.dev', APP = ORIGIN + '/Pixeldate/app/?world=cafe' + (process.env.WS ? '&ws=' + encodeURIComponent(process.env.WS) : '')
+const INV = readFileSync(process.env.INVITE_FILE || new URL('../.secrets/world-invite.txt', import.meta.url), 'utf8').trim()
 const OUT = process.env.OUT || '/workspace/pixeldate/shots/world-cafe-live/'; mkdirSync(OUT, { recursive: true })
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 let bad = 0, n = 0
@@ -77,6 +78,9 @@ ok(await until(() => desk.$('[data-t=w-room]'), 10000), 'desk: joined from the i
 for (const p of [phone, desk]) { const s = await until(async () => { const s = await st(p); return s?.gl ? s : null }, 10000); ok(s && s.gl === 'webgl', `${p.tag}: café renders (${s?.gl}, layout ${s?.layout}, k=${s?.k})`) }
 ok((await st(phone)).inst === (await st(desk)).inst, `both in the same room (${(await st(phone)).inst})`)
 ok(await until(async () => (await entBy(phone, 'Jess')) && (await entBy(desk, 'Sam'))), 'each sees the other')
+// v05 here count: the header counts exactly the people in the room (you included), no phantom +1
+for (const p of [phone, desk]) { const c = await until(async () => { const n = await p.$eval('[data-t=w-count]', e => +(e.dataset.n ?? parseInt(e.textContent))).catch(() => -1), s = await st(p); return n >= 2 && n === s.ents.length ? [n, s.ents.length] : null }, 8000)
+  ok(!!c, `${p.tag}: "here" count = people on the map (${c?.join(' = ')})`) }
 
 // ── walk near each other; hearts both ways (each other's type, not met yet)
 ok(await walkTo(phone, 15, 10), 'phone: tap-to-walk to 15,10'); ok(await walkTo(desk, 18, 10), 'desk: click-to-walk to 18,10')
@@ -109,8 +113,26 @@ if (cardP && cardD) {
   const qp = await phone.$eval('[data-t=w-q]', e => e.textContent), qd = await desk.$eval('[data-t=w-q]', e => e.textContent)
   ok(qp === qd, `same question on both ("${qp.slice(0, 50)}…")`)
   ok(((await meEnt(phone)).f & F_SIT) && ((await meEnt(desk)).f & F_SIT), 'both seated')
-  ok(await phone.$eval('[data-t=w-with]', e => e.textContent) === 'with Jess' && await desk.$eval('[data-t=w-with]', e => e.textContent) === 'with Sam', 'card names the other person')
+  const w = async p => (await p.$eval('[data-t=w-with]', e => e.textContent)).replace(/^with /, '')
+  ok(await w(phone) === 'Jess' && await w(desk) === 'Sam', 'card names the other person')
 }
+// ── v05 table (only when the deployed client has GD's v05 panel): private chat, hidden answers revealed together,
+//    the meter, Start call locked until Level 3. Writes only the pair's level record for these two throwaway uids.
+if (cardP && cardD && await phone.$('[data-t=w-lv]')) {
+  const typeIn = async (p, sel, t) => { await p.bringToFront(); await p.focus(sel); await p.keyboard.type(t) }
+  const lv0 = (await phone.$eval('[data-t=w-lv]', e => e.textContent)).trim(); ok(/^Level 1 Stranger\s*·\s*0\/5 to Spark$/.test(lv0), `v05 header: "${lv0}"`)
+  const line = 'just between us, live ' + run
+  await press(phone, '[data-t=w-input]'); await typeIn(phone, '[data-t=w-input]', line); await press(phone, '[data-t=w-send]')
+  ok(await until(() => desk.$$eval('[data-t=w-priv] li', (es, t) => es.some(e => e.textContent.includes(t)), line)), 'v05 private: Jess sees the table line in "Just you two"')
+  await shot(phone, '08-private'); await shot(desk, '08-private')
+  await typeIn(phone, '[data-t=w-ans-input]', 'coffee, obviously'); await press(phone, '[data-t=w-ans-send]')
+  ok(await until(() => phone.$('[data-t=w-hid]')) && !(await desk.evaluate(() => document.body.innerText.includes('coffee, obviously'))), 'v05 card: my answer hidden from Jess until she answers')
+  await typeIn(desk, '[data-t=w-ans-input]', 'tea, sorry'); await desk.keyboard.press('Enter')
+  ok(await until(() => phone.$('[data-t=w-done]')) && await until(() => desk.$('[data-t=w-done]')), 'v05 card: both revealed together, "Ticked off"')
+  for (const p of [phone, desk]) { const r = await p.evaluate(() => ({ lv: document.querySelector('[data-t=w-lv]')?.textContent, s: document.querySelector('[data-t=w-callrow]')?.dataset.call, dis: document.querySelector('[data-t=w-call]')?.disabled }))
+    ok(/1\/5/.test(r.lv) && r.s === 'locked' && r.dis, `v05 ${p.tag}: meter "${r.lv?.trim()}", Start call locked`) }
+  await shot(phone, '09-revealed'); await shot(desk, '09-revealed')
+} else console.log('  (deployed client is pre-v05: v05 table checks skipped)')
 await shot(phone, '06-card'); await shot(desk, '06-card')
 // person panel (Heart / Pass / Report / Block) on the desktop, without pressing anything
 { const e = await entBy(desk, 'Sam'); const [x, y] = await desk.evaluate(id => window.__world.css(id), e.id); await desk.mouse.click(x, y - 8)

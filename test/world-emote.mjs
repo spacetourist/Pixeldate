@@ -39,6 +39,8 @@ async function player(tag, vp, name, extra = {}) {
 const front = async p => { if (front.cur !== p) { await p.bringToFront(); front.cur = p; await sleep(120) } }
 const press = async (p, sel) => { await front(p); return p.touch ? p.tap(sel) : p.click(sel) }
 const shot = async (p, name) => { await front(p); await sleep(400); await p.screenshot({ path: `${OUT}${name}-${p.sz}.png` }); console.log('  📷', `${name}-${p.sz}.png`) }
+// the phone folds the tray behind one button (it closes again after an emote)
+const emo = async (p, e) => { if (p.touch && !(await p.$('[data-t=w-emotes]'))) { await press(p, '[data-t=w-emote-toggle]'); await p.waitForSelector('[data-t=w-emotes]', { timeout: 2000 }) } return press(p, `[data-t=w-emote][data-e=${e}]`) }
 const em = (p, k) => p.evaluate(k => window.__world.emote[k](), k)
 const st = p => p.evaluate(() => window.__world?.state())
 const meEnt = async p => { const s = await st(p); return s?.ents.find(e => e.id === s.me) }
@@ -48,34 +50,43 @@ const ben = await player('ben', PHONE, 'Ben', { pav: JSON.stringify({ v: 1, ...S
 await sleep(1200)
 ok(ann.reqs.length + ben.reqs.length === 0, 'lazy: no emote audio fetched on joining')
 ok(await ann.$$eval('[data-t=w-emote]', b => b.map(x => x.dataset.e).join()) === EMOTES.join(), 'tray: five emote buttons (placeholder art)')
+{ const t = await ben.$eval('[data-t=w-emote-toggle]', e => e.getBoundingClientRect().toJSON()).catch(() => null)
+  ok(t && !(await ben.$('[data-t=w-emotes]')) && t.width <= 40 && t.height <= 40, `phone: the tray is folded behind one ${t?.width}×${t?.height} button`)
+  await press(ben, '[data-t=w-emote-toggle]'); ok((await ben.$$eval('[data-t=w-emote]', b => b.length)) === 5 && (await ben.$eval('[data-t=w-emote-toggle]', e => e.getAttribute('aria-expanded'))) === 'true', 'phone: tapping it opens the five emotes')
+  await shot(ben, 'emote-tray-open'); await press(ben, '[data-t=w-emote-toggle]'); ok(!(await ben.$('[data-t=w-emotes]')), 'phone: tapping again folds it'); await shot(ben, 'emote-tray-folded') }
 // a bot far across the room
 // Ben taps the floor once (unlocks his audio: browsers need a gesture)
 await front(ben); { const c = await ben.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON()); await ben.touchscreen.tap(c.left + c.width / 2 + 30, c.top + c.height / 2) }
 await sleep(1500)
 const far = new Bot(profile({ name: 'Far', iam: 'woman' }), { room: 'cafe-1' }); await far.connect(); far.send({ t: 'go', x: 3, y: 12 }); await sleep(4000)
 
-await press(ann, '[data-t=w-emote][data-e=giggle]')
+await emo(ann, 'giggle')
 const a1 = await until(async () => (await em(ann, 'played')).at(-1)); ok(a1 && /^emotes\/giggle_f[12]$/.test(a1.path) && a1.gain === 1 && a1.pan === 0, 'Ann (woman) hears her own giggle from the female set at full gain, centred: ' + a1?.path)
+// placeholder effect over the one who emoted, on every screen
+{ const me = (await st(ann)).me, fx = p => p.$$eval('[data-t=w-emofx]', l => l.map(e => ({ id: +e.dataset.id, t: e.textContent, v: e.style.visibility }))) 
+  const fa = await until(async () => { const f = await fx(ann); return f.length && f }, 1000) || [], fb = await until(async () => { const f = await ben.evaluate(() => window.__world.emoteFx()); return f.length && f }, 1000) || []
+  ok(fa.length === 1 && fa[0].id === me && fa[0].t === 'hehe' && fb.length === 1 && fb[0].id === me && fb[0].e === 'giggle', `emote effect: a "${fa[0]?.t}" tag over Ann, on her screen and Ben's`)
+  await sleep(1600); ok(!(await ann.$('[data-t=w-emofx]')), 'emote effect: gone after ~1.2 s') }
 const b1 = await until(async () => (await em(ben, 'played')).at(-1)); const A = await meEnt(ann), B = await meEnt(ben)
 const want = gainAt(Math.hypot(A.x - B.x, A.y - B.y)), wp = panAt(A.x - B.x)
 ok(b1 && b1.path === a1.path && Math.abs(b1.gain - want) < 0.08 && Math.abs(b1.pan - wp) < 0.15, `Ben hears the same take with the piano falloff (gain ${b1?.gain?.toFixed(2)} ≈ ${want.toFixed(2)}, pan ${b1?.pan?.toFixed(2)} ≈ ${wp.toFixed(2)})`)
 const fe = far.events.filter(e => e.t === 'emote'); ok(fe.length === 1 && fe[0].take === a1.path.slice(7), 'the far bot is told too (public), same take')
 ok(ann.reqs.some(u => /\/audio\/emotes\/giggle_f[12]\.ogg$/.test(u)), 'fetched as .ogg from audio/emotes/ on demand')
 // cooldown: a second tap inside 1.5 s
-await press(ann, '[data-t=w-emote][data-e=sigh]')
+await emo(ann, 'sigh')
 ok(await until(() => ann.$eval('[data-t=w-note]', e => /One at a time/.test(e.textContent)).catch(() => false), 2000), 'cooldown: a second emote inside 1.5 s is refused (flash)')
 await sleep(400); ok((await em(ben, 'played')).length === 1, 'cooldown: and Ben never hears it')
 await shot(ann, 'emote'); await shot(ben, 'emote')
 // rotation over the UI
 const seen = [a1.path]
-for (let i = 0; i < 3; i++) { await sleep(EMOTE_COOLDOWN_MS + 100); await press(ann, '[data-t=w-emote][data-e=giggle]'); await until(async () => (await em(ann, 'played')).length === seen.length + 1, 3000); seen.push((await em(ann, 'played')).at(-1).path) }
+for (let i = 0; i < 3; i++) { await sleep(EMOTE_COOLDOWN_MS + 100); await emo(ann, 'giggle'); await until(async () => (await em(ann, 'played')).length === seen.length + 1, 3000); seen.push((await em(ann, 'played')).at(-1).path) }
 ok(seen.every((t, i) => !i || t !== seen[i - 1]), 'rotation: never the same take twice in a row: ' + seen.join(' '))
 // Ben (man) → male set
-await sleep(EMOTE_COOLDOWN_MS + 100); await press(ben, '[data-t=w-emote][data-e=gasp]')
+await sleep(EMOTE_COOLDOWN_MS + 100); await emo(ben, 'gasp')
 const b2 = await until(async () => (await em(ann, 'played')).find(x => /gasp/.test(x.path))); ok(b2 && /^emotes\/gasp_m[12]$/.test(b2.path), 'Ben (man) gasps from the male set: ' + b2?.path)
 // mute: the piano mute (remembered) silences emotes, which go through its master
 await ben.evaluate(() => localStorage.setItem('pd.pianoMute', '1')); await ben.reload({ waitUntil: 'networkidle0' }); await ben.waitForSelector('[data-t=w-room]', { timeout: 20000 })
-await sleep(1500); await press(ben, '[data-t=w-emote][data-e=aww]'); await sleep(EMOTE_COOLDOWN_MS + 100); await press(ann, '[data-t=w-emote][data-e=aww]')
+await sleep(1500); await emo(ben, 'aww'); await sleep(EMOTE_COOLDOWN_MS + 100); await emo(ann, 'aww')
 const b3 = await until(async () => (await em(ben, 'played')).find(x => /aww_f/.test(x.path)), 3000)
 ok(b3 && (await em(ben, 'master')) === 0, 'mute: a muted listener\'s emotes play into a silent master (gain 0)')
 await ben.evaluate(() => localStorage.setItem('pd.pianoMute', '0'))

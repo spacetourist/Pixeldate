@@ -169,3 +169,34 @@
 .w-emotes { position: absolute; z-index: 5; left: 8px; bottom: 8px; display: flex; gap: 4px; flex-wrap: wrap; max-width: calc(100% - 16px) }
 .w-emo { font: 600 11px/1 var(--font, inherit); color: #F4ECFF; background: #281D52; border: 2px solid #05020F; box-shadow: inset 0 0 0 1px #4A3886, 0 2px 0 #05020F; padding: 6px 8px; min-height: 28px; cursor: pointer }
 .w-emo:active { transform: translateY(1px); box-shadow: inset 0 0 0 1px #4A3886 }
+/* PLACEHOLDER voice emote effect over the one who emoted (until GD's art): rises 6 art px and fades over 1.2 s */
+.w-emofx { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; font: 700 10px/1 var(--font, inherit); color: #05020F; background: #FFD84D; border: 2px solid #05020F; padding: 2px 4px 3px; translate: -50% -100%; animation: w-emofx 1.2s steps(6) forwards; white-space: nowrap }
+@keyframes w-emofx { 0% { opacity: 0; margin-top: 0 } 15% { opacity: 1 } 70% { opacity: 1 } 100% { opacity: 0; margin-top: calc(var(--u, 2px) * -6) } }
+@media (prefers-reduced-motion: reduce) { .w-emofx { animation: none } }
+/* phone: the tray folds behind one button (bottom-left), and closes after an emote */
+.w-emo-tg { position: absolute; z-index: 6; left: 8px; bottom: 8px; width: 36px; height: 36px; padding: 0; font-size: 16px; display: grid; place-items: center }
+.w-emo-tg.on { background: #4A3886 }
+.w-emotes.folded { left: 50px; right: 8px; max-width: none; bottom: 8px }
+/* GD couple-call-390: the call in the café (src/couple.css) */
+.w-oncall { display: flex; flex-direction: column; gap: 8px; padding: 10px }
+.w-oc-hd { display: flex; align-items: center; gap: 8px; font: 700 12.5px/1.2 var(--font, inherit); color: #48E5C2 }
+.w-oc-hd b { color: #F4ECFF; font-variant-numeric: tabular-nums }
+.w-oc-sub { margin-left: auto; color: #A49CC2; font-weight: 500; font-size: 11px; display: flex; gap: 5px; align-items: center }
+.w-vid { position: relative; height: 214px; border: 2px solid #05020F; box-shadow: 0 0 0 1px #281D52; background: #000; overflow: hidden }
+.w-oncall.desk .w-vid { height: 260px }
+.w-vid > video { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; display: block }
+.w-vid-nm { position: absolute; left: 8px; top: 8px; font: 700 12.5px/1 var(--font, inherit); color: #05020F; background: #FFD84D; border: 2px solid #05020F; padding: 3px 6px 4px }
+.w-vid-self { position: absolute; right: 8px; bottom: 8px; width: 76px; height: 96px; border: 2px solid #05020F; box-shadow: 0 0 0 2px #48E5C2; background: #281D52; overflow: hidden }
+.w-vid-self video { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1) }
+.w-vid-self span { position: absolute; left: 4px; bottom: 4px; font: 700 11px/1 var(--font, inherit); color: #05020F; background: #48E5C2; border: 2px solid #05020F; padding: 2px 4px 3px }
+.w-oc-ctl { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px }
+.w-oc-ctl .w-btn { min-height: 44px; font-size: 14.5px; display: flex; gap: 8px; align-items: center; justify-content: center }
+.w-oc-ctl .w-btn.ghost { color: #FFF1C1 } .w-oc-ctl .w-btn.ghost.on { background: #4A3886 }
+.w-oc-ctl .w-oc-end { background: #FF6F59; color: #05020F }
+.w-show { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px }
+.w-show-hi { width: 45px; height: 39px; image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; background-size: 270px 39px; display: block }
+.w-show b { display: block; font: 700 14.5px/1.25 var(--font, inherit); color: #F4ECFF }
+.w-show .s { display: block; font: 500 12px/1.3 var(--font, inherit); color: #A49CC2; margin-top: 2px }
+.w-sw { width: 56px; height: 32px; padding: 0; background: #48E5C2; border: 2px solid #05020F; box-shadow: inset 0 2px 0 rgb(255 255 255 / .3), 0 3px 0 #05020F; position: relative; flex: none; cursor: pointer }
+.w-sw::after { content: ''; position: absolute; right: 2px; top: 2px; width: 24px; height: 24px; background: #FFF1C1; border: 2px solid #05020F; box-sizing: border-box }
+.w-sw.off { background: #281D52 } .w-sw.off::after { right: auto; left: 2px; background: #A49CC2 }

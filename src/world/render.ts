@@ -23,6 +23,22 @@ export const MW = W * TILE, MH = H * TILE
      count-badges.png     strip: x2..x9 11 px wide at 0, 11 .. 77; x9+ 15 px at 88. On the arrow at right/down (0,0),
                           left (13,0), up (0,15)
      speech-bubble-*.png  the chat bubble (DOM, world.css): 12x12 9-slice (4 px) + 9x6 tail, tip 2 px over the head */
+/* GD's couple heart (world/couple/README.md), copied into ./art/couple/: couple-heart.png 90x13 (six 15x13 frames),
+   couple-steam.png 28x32 (7x16 wisps, row 0 left, row 16 right; 4 x 180 ms), couple-drift.png 19x6 (coral, butter, cream) */
+const COUPLE_MS = [300, 140, 140, 240, 200, 180], COUPLE_LOOP = 1200, STEAM_MS = 180
+/** the drifting hearts alive at time t (README): one per 600 ms, alternating L (8,-3) / R (23,-3), coral/butter/cream,
+    1600 ms life, 14 px rise with ease-out, +-1 px sine sway (800 ms), 3 px outward drift, fade in 10% / out after 50%,
+    at most 4 (oldest dropped), whole px. x, y: particle bottom-centre, table-local. */
+function drift(t: number) {
+  const SPAWN = 600, LIFE = 1600, out: { age: number; v: number; x: number; y: number; a: number }[] = []
+  for (let k = Math.floor((t - LIFE) / SPAWN) + 1; k <= Math.floor(t / SPAWN); k++) {
+    const age = t - k * SPAWN; if (age < 0 || age >= LIFE) continue
+    const u = age / LIFE, L = ((k % 2) + 2) % 2 === 0, [tx, ty] = L ? [8, -3] : [23, -3]
+    const rise = 14 * (1 - (1 - u) ** 2), dx = (L ? -1 : 1) * 3 * u + Math.sin(2 * Math.PI * age / 800)
+    out.push({ age, v: ((k % 3) + 3) % 3, x: Math.round(tx + dx), y: Math.round(ty - rise), a: Math.max(0, Math.min(1, u < 0.1 ? u / 0.1 : u > 0.5 ? (1 - u) / 0.5 : 1)) })
+  }
+  out.sort((a, b) => b.age - a.age); return out.slice(-4)
+}
 const ART = import.meta.glob<string>('./art/**/*.png', { eager: true, query: '?url', import: 'default' })
 const ARROWS = { right: 'edge-arrow', left: 'edge-arrow-left', up: 'edge-arrow-up', down: 'edge-arrow-down' } as const
 type Edge = keyof typeof ARROWS
@@ -88,6 +104,12 @@ export class Renderer {
   /** notes drawn last frame (tests) */
   notesOn = 0
   private notes = new Container(); private G: Texture[] = []
+  /** GD's couple heart (world/couple/README.md): tables whose pair is on a café call with "Show our heart" on (the server
+      says only on/off per table; the animation is all local). Room layer, above everything in the room, unlit. */
+  hearts = new Set<number>()
+  private couple = new Container(); private CH: Texture[] = []; private CS: Texture[][] = []; private CD: Texture[] = []
+  /** couple-heart sprites drawn last frame per table, for tests: tb -> [heart frame, drift particles alive] */
+  coupleOn: Record<number, [number, number]> = {}
   /** GD's marker files in use, with their sizes in art px (tests check them against world/markers/README.md). */
   art: Record<string, [number, number]> = {}
   constructor(c: HTMLCanvasElement) {
@@ -116,6 +138,12 @@ export class Renderer {
     for (let i = 0; i < 3; i++) this.notes.addChild(new Sprite(this.G[0]))
     // GD's sofa3: the back is in the map art; over it the sitters' bodies (L, M, R), the front layer (cushions, arms,
     // feet), then the sitters' legs (L, M, R), all sorted as one object at the sofa's bottom (y + 32)
+    const [ch, cs, cd] = await Promise.all(['couple-heart', 'couple-steam', 'couple-drift'].map(f => load(`couple/${f}.png`)))
+    for (const [f, im] of [['couple-heart', ch], ['couple-steam', cs], ['couple-drift', cd]] as const) this.art[f] = [im.width, im.height]
+    const chS = tex(ch).source, csS = tex(cs).source, cdS = tex(cd).source
+    this.CH = COUPLE_MS.map((_, i) => new Texture({ source: chS, frame: new Rectangle(i * 15, 0, 15, 13) }))
+    this.CS = [0, 16].map(y => [0, 1, 2, 3].map(i => new Texture({ source: csS, frame: new Rectangle(i * 7, y, 7, 16) })))
+    this.CD = [[0, 5, 5], [6, 5, 5], [12, 7, 6]].map(([x, w, h]) => new Texture({ source: cdS, frame: new Rectangle(x, 6 - h, w, h) }))
     const front = await load('tiles/sofa3-front.png'); T.sofaFront = tex(front); this.art['sofa3-front'] = [front.width, front.height]
     for (const sf of SOFAS) { const sp = new Sprite(T.sofaFront); sp.position.set(sf.x * TILE, sf.y * TILE); sp.zIndex = sofaZ(sf.y, 4); sp.label = 'sofa-front-' + sf.id; this.people.addChild(sp) }
     T.dot = tex(paint(['mm', 'mm'], { m: '#48E5C2' }))
@@ -126,7 +154,7 @@ export class Renderer {
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }
     this.goal.texture = T.goal; this.goal.visible = false
     this.people.sortableChildren = true
-    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.notes, this.marks)
+    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.notes, this.marks, this.couple)
     this.stage.addChild(this.world, this.ui)
     this.px = px; this.apply()
   }
@@ -228,8 +256,27 @@ export class Renderer {
     }
     for (const [id, x] of this.ents) if (!seen.has(id)) { x.root.destroy(); x.legs.destroy(); x.mark.destroy(); this.ents.delete(id) }
     this.drawNotes(now, calm)
+    this.drawCouple(now, calm)
     this.arrows = this.placeArrows(far, bodies)
     this.px.render(this.stage)
+  }
+  /** GD's couple heart over a table (README): steam L then R, the drifting hearts oldest first, then the heart, from the
+      table sprite's top-left (tile x*16, (seat row - 1)*16). Every screen runs the same clock (performance.now()), so the
+      loop is local; reduced motion: the still first heart frame and steam, no drift. */
+  private drawCouple(now: number, calm: boolean) {
+    const c = this.couple; this.coupleOn = {}; let i = 0
+    const put = (t: Texture, x: number, y: number, a = 1) => { let s = c.children[i] as Sprite | undefined
+      if (!s) { s = new Sprite(t); c.addChild(s) } s.texture = t; s.position.set(x, y); s.alpha = a; s.visible = true; i++ }
+    for (const tb of this.hearts) {
+      const t = TABLES[tb]; if (!t || !this.CH.length) continue
+      const X = t.x * TILE, Y = (t.y - 1) * TILE, sf = calm ? 0 : Math.floor(now / STEAM_MS) % 4
+      put(this.CS[0][sf], X + 3, Y - 4); put(this.CS[1][sf], X + 22, Y - 4)
+      const ps = calm ? [] : drift(now)
+      for (const p of ps) { const d = this.CD[p.v]; put(d, X + p.x - Math.floor(d.width / 2), Y + p.y - d.height + 1, p.a) }
+      let hf = 0; if (!calm) { let m = now % COUPLE_LOOP; while (m >= COUPLE_MS[hf]) m -= COUPLE_MS[hf++] }
+      put(this.CH[hf], X + 8, Y - 21); this.coupleOn[tb] = [hf, ps.length]
+    }
+    for (; i < c.children.length; i++) c.children[i].visible = false
   }
   /** GD's floating notes over the lid while a song plays: one note per noteEveryMs() (2 beats; a bar in slow 3/4; the
       Audio Engineer's Clair de lune / Nocturne overrides), counted from the song's start so every screen agrees; each

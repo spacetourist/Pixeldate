@@ -4,7 +4,7 @@
 //   3 private table chat: only the two seated see it (filtered); everyone else gets GD's typing strip over the table
 //   4 the card: own answers, hidden until both answered, revealed together; 5-card meter per level (server-kept); level up
 //   5 crisp integer-scaled Char portraits + the 64 pt header photo
-//   6 Start call: locked until Level 3 · Crush, then both tap (decline / cancel / both) → app hand-off → video
+//   6 Start call: locked until Level 3 · Crush, then both tap (decline / cancel / both) → the call in the café + couple heart
 // shots → shots/world-cafe-v05/<state>-390.png / -1440.png      Run: node test/world-v05.mjs
 import puppeteer from 'puppeteer-core'
 process.env.WORLD_PORT = '18794'; process.env.WORLD_URL = 'ws://127.0.0.1:18794'; process.env.WORLD_STALE_MS = '3000'
@@ -207,18 +207,58 @@ await until(async () => !(await mia.$('[data-t=w-note]')) && !(await sam.$('[dat
 await sam.evaluate(() => document.querySelector('[data-t=w-callrow]')?.scrollIntoView({ block: 'end' })); await shot(mia, 'v05-06c-call-waiting'); await shot(sam, 'v05-06c-call-asked')
 await press(mia, '[data-t=w-call-cancel]'); ok(await until(async () => (await callSt(sam)) === 'open' && (await callSt(mia)) === 'open'), 'call mirrored: Mia cancels → back to Start call on both')
 await sleep(500)
-// both tap → hand-off to the app → video
+// both tap → the call starts IN the café (GD couple/README): both keep their seats; the room sees the couple heart
 await press(sam, '[data-t=w-call]'); await until(async () => (await callSt(mia)) === 'in'); await press(mia, '[data-t=w-call-yes]')
-const inApp = p => until(() => p.evaluate(() => !document.querySelector('[data-t=w-room]') && !!document.querySelector('[data-t=call-chip]')), 25000, 250)
-const [a, b] = await Promise.all([inApp(sam), inApp(mia)])
-ok(a && b, 'call: both tapped → both land in the app\'s video call')
-if (a && b) { await sleep(1500); await shot(sam, 'v05-06d-in-call'); await shot(mia, 'v05-06d-in-call') }
+const cp = p => p.evaluate(() => window.__world.couple())
+const onCall = p => until(() => p.evaluate(() => !!document.querySelector('[data-t=w-room]') && document.querySelector('[data-t=w-oncall]')?.dataset.up === '1'), 20000, 200)
+const [a, b] = await Promise.all([onCall(sam), onCall(mia)])
+ok(a && b, 'call: both tapped → the video call opens in the café, both still seated')
+{ const [x, y] = [await cp(sam), await cp(mia)]; ok(x.call?.up && y.call?.up && x.call.host !== y.call.host && x.call.lv === 3 && y.call.lv === 3, `call: one host, one guest, both pixelated at the pair's level 3 (${JSON.stringify([x.call, y.call])})`) }
+ok((await sam.evaluate(() => window.__gum)) >= 1 && (await mia.evaluate(() => window.__gum)) >= 1, 'call: the camera is opened only now')
+{ const t = await sam.$eval('[data-t=w-oncall]', e => e.textContent); ok(/On call \d\d:\d\d/.test(t) && /Only you two see and hear this/.test(t) && /Mia/.test(t) && /You/.test(t) && /Mute/.test(t) && /Camera/.test(t) && /End call/.test(t), `call panel: "${t.replace(/\s+/g, ' ').trim().slice(0, 120)}"`) }
+{ const v = await sam.$eval('[data-t=w-oc-remote]', e => ({ w: e.videoWidth, live: !!e.srcObject })); ok(v.live && v.w > 0, `call panel: the partner's (pixelated) video plays (${JSON.stringify(v)})`) }
+for (const p of [sam, mia]) { const sw = await p.$eval('[data-t=w-show-sw]', e => ({ on: e.getAttribute('aria-checked'), off: e.classList.contains('off'), t: e.closest('[data-t=w-show]').textContent }))
+  ok(sw.on === 'true' && !sw.off && /Show our heart in the café/.test(sw.t) && /Either of you can turn it off/.test(sw.t), `heart switch (${p.tag}): on by default`) }
+ok(!(await sam.$('[data-t=w-card]')) && !(await sam.$('[data-t=w-priv]')), 'call panel: the card and private chat give way to the call')
+const tb0 = (await cp(sam)).hearts
+const heartAt = async (p, want) => { await front(p); return !!(await until(async () => { const c = await cp(p); return want ? c.hearts.length === 1 && !!c.on[c.hearts[0]] : !c.hearts.length && !Object.keys(c.on).length }, 6000)) }
+ok(tb0.length === 1, `heart: the pair's table (${JSON.stringify(tb0)}) has a heart on Sam's screen`)
+for (const p of [mia, kit, ola]) ok(await heartAt(p, true), `heart: ${p.tag} sees the heart over the table (frames ${JSON.stringify((await cp(p)).on)})`)
+// a bystander sees only the heart: no names, no text near the table
+{ const t = await kit.evaluate(() => document.querySelector('.w-over')?.textContent ?? ''); ok(!/On call|Only you two|Show our heart/.test(t) && !(await kit.$('[data-t=w-oncall]')), 'heart: bystanders see no call text ("' + t.slice(0, 60) + '")') }
+await walkTo(kit, 4, 12, 15000)
+await sleep(700); await shot(sam, 'couple-call'); await shot(mia, 'couple-call'); await shot(kit, 'couple-cafe'); await shot(ola, 'couple-cafe')
+for (const [p, n] of [[sam, 'couple-call'], [mia, 'couple-call'], [kit, 'couple-cafe'], [ola, 'couple-cafe']]) await p.screenshot({ path: `/workspace/pixeldate/shots/world-piano-duet-v1/${n}-${p.sz}.png` })
+// either switch off hides it for everyone; on again shows it
+await press(mia, '[data-t=w-show-sw]')
+ok(await heartAt(kit, false) && await heartAt(sam, false), 'heart: Mia switches it off → gone for the room and for Sam')
+ok((await mia.$eval('[data-t=w-show-sw]', e => e.classList.contains('off') && e.getAttribute('aria-checked') === 'false')) && (await sam.$eval('[data-t=w-show-sw]', e => e.getAttribute('aria-checked'))) === 'true', 'heart switch: Mia\'s is off, Sam\'s stays his own')
+await shot(mia, 'couple-call-off'); await mia.screenshot({ path: '/workspace/pixeldate/shots/world-piano-duet-v1/couple-call-off-1440.png' })
+await press(mia, '[data-t=w-show-sw]'); ok(await heartAt(ola, true), 'heart: switched back on → shown again')
+// mute / camera
+await press(sam, '[data-t=w-oc-mute]'); ok((await cp(sam)).call.muted && (await sam.$eval('[data-t=w-oc-mute]', e => e.getAttribute('aria-pressed'))) === 'true', 'call: Mute')
+await press(sam, '[data-t=w-oc-mute]'); await press(sam, '[data-t=w-oc-cam]'); ok((await cp(sam)).call.camOff, 'call: Camera off'); await press(sam, '[data-t=w-oc-cam]')
+// End call → heart gone at once, both back at the table
+await press(sam, '[data-t=w-oc-end]')
+ok(await until(async () => !(await sam.$('[data-t=w-oncall]')) && !(await mia.$('[data-t=w-oncall]')), 6000), 'call: Sam ends it → the call closes on both')
+ok(await heartAt(kit, false) && await heartAt(mia, false), 'heart: gone when the call ends')
+ok(!!(await sam.$('[data-t=w-card]')) && !!(await mia.$('[data-t=w-card]')), 'call ended: both still seated, the card is back')
+// a new call; standing up ends it and the heart
+await sleep(500); await press(mia, '[data-t=w-call]'); await until(async () => (await callSt(sam)) === 'in'); await press(sam, '[data-t=w-call-yes]')
+ok(await onCall(sam) && await onCall(mia) && await heartAt(kit, true), 'call again: heart back on (the switch defaults on each call)')
+await front(mia); await mia.keyboard.press('Escape')
+ok(await heartAt(kit, false) && await until(async () => !(await sam.$('[data-t=w-oncall]')), 6000), 'heart: Mia stands up → call and heart end at once')
+// the app's own video call is unchanged (a saved hand-off still opens it); the chat's level set there carries into the café
+for (const p of [sam, mia]) await p.evaluate(m => sessionStorage.setItem('pd.handoff', JSON.stringify({ ...m, at: Date.now() })), { code: ('v05h' + Date.now().toString(36) + 'zzzzzzzz').slice(0, 12), host: p === sam, lv: 3 })
+for (const p of [sam, mia]) await p.goto(APP + '?loopback', { waitUntil: 'domcontentloaded' })
+const inApp = p => until(() => p.evaluate(() => !!document.querySelector('[data-t=call-chip]')), 25000, 250)
+const [a2, b2] = await Promise.all([inApp(sam), inApp(mia)])
+ok(a2 && b2, 'app: a hand-off still lands both in the app\'s video call')
 const chip = p => p.evaluate(() => [...document.querySelectorAll('.chip')].map(e => e.textContent).find(t => /LV \d/.test(t)) ?? '')
-if (a && b) {
+if (a2 && b2) {
   await sleep(1500); const [ca, cb] = [await chip(sam), await chip(mia)]
   ok(/LV 3/.test(ca) && /LV 3/.test(cb), `app chat: the pair is at the café's level in the app ("${ca.trim()}" / "${cb.trim()}")`)
   const [x, y] = await store2(); ok(x?.lv === 3 && y?.lv === 3, `app chat: after the chat's pair-level exchange both stores still read 3 (${JSON.stringify([x, y])})`)
-  // a level set in the app chat (here: Sam lowers to 2 with the real Lower level button) is what the café picks up next time
   await front(sam); const dropped = await sam.evaluate(() => { const b = document.querySelector('[data-t=drop]'); if (!b) return false; b.click(); return true })
   if (!dropped) { await sam.evaluate(() => document.querySelector('[data-t=hangup]')?.click()); await sleep(800); await sam.evaluate(() => document.querySelector('[data-t=drop]')?.click()) }
   const d = await until(async () => { const [x, y] = await store2(); return x?.lv === 2 && y?.lv === 2 && [x, y] }, 6000)

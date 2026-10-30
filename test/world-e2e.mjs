@@ -68,13 +68,13 @@ const walkTo = async (p, tx, ty, ms = 15000) => {
     const c = await p.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON()), [x, y] = await p.evaluate((a, b) => window.__world.tileCss(a, b), tx, ty)
     const m = 28, on = x > c.left + m && x < c.right - m && y > c.top + m && y < c.bottom - m
     // the emote tray sits over the bottom-left floor: a tile under it can't be tapped, so finish with the arrow keys
-    const covered = on && await p.evaluate((x, y) => !!document.elementFromPoint(x, y)?.closest('[data-t=w-emotes]'), x, y)
+    const covered = on && await p.evaluate((x, y) => !!document.elementFromPoint(x, y)?.closest('[data-t=w-emotes],[data-t=w-emote-toggle]'), x, y)
     if (covered) { const e = await meEnt(p), kx = tx + 0.5 - e.x, ky = ty + 0.5 - e.y, key = Math.abs(kx) > Math.abs(ky) ? (kx > 0 ? 'ArrowRight' : 'ArrowLeft') : (ky > 0 ? 'ArrowDown' : 'ArrowUp')
       await p.keyboard.down(key); await until(async () => { const e = await meEnt(p); return Math.abs((key.includes('Left') || key.includes('Right') ? e.x - tx : e.y - ty) - 0.5) < 0.3 }, 1500, 40); await p.keyboard.up(key); await sleep(100); continue }
     if (on) { await tapAt(p, x, y); return !!(await until(there, ms - (Date.now() - t0))) }
     const cx = (c.left + c.right) / 2, cy = (c.top + c.bottom) / 2, dx = x - cx, dy = y - cy, k = Math.min((c.width / 2 - m) / Math.abs(dx || 1e-9), (c.height / 2 - m) / Math.abs(dy || 1e-9))
     const ex = cx + dx * k, ey = cy + dy * k
-    if (await p.evaluate((x, y) => !!document.elementFromPoint(x, y)?.closest('[data-t=w-emotes]'), ex, ey)) { const e = await meEnt(p), kx = tx + 0.5 - e.x, ky = ty + 0.5 - e.y, key = Math.abs(kx) > Math.abs(ky) ? (kx > 0 ? 'ArrowRight' : 'ArrowLeft') : (ky > 0 ? 'ArrowDown' : 'ArrowUp')
+    if (await p.evaluate((x, y) => !!document.elementFromPoint(x, y)?.closest('[data-t=w-emotes],[data-t=w-emote-toggle]'), ex, ey)) { const e = await meEnt(p), kx = tx + 0.5 - e.x, ky = ty + 0.5 - e.y, key = Math.abs(kx) > Math.abs(ky) ? (kx > 0 ? 'ArrowRight' : 'ArrowLeft') : (ky > 0 ? 'ArrowDown' : 'ArrowUp')
       await p.keyboard.down(key); await sleep(900); await p.keyboard.up(key); await sleep(100); continue }
     await tapAt(p, ex, ey)
     let last = null; await until(async () => { const e = await meEnt(p); const still = last && Math.abs(e.x - last.x) < 0.01 && Math.abs(e.y - last.y) < 0.01; last = e; return still }, 4000, 250)

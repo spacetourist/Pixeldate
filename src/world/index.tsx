@@ -1,7 +1,7 @@
 /* Pixeldate World · café (phase 1). Lazy chunk: reached only through ?world=cafe, so none of this is in the initial JS. */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { savedProfile, saveProfile, loadPhoto, LB } from '../prefs'
+import { savedProfile, saveProfile, loadPhoto } from '../prefs'
 import { LEVELS } from '../config'
 import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
@@ -19,6 +19,8 @@ import { claimOf, getPairLv, setPairLv } from '../pairlv'
 import { startLook } from '../avatar/kit/defaults.ts'
 import { Renderer, MW, MH, type Layout } from './render.ts'
 import heartPng from './art/markers/heart.png'
+import coupleHeart3x from './art/couple/couple-heart@3x.png'
+import { CafeCall, type CallEnd } from './call.ts'
 import './world.css'
 const Char = lazy(() => import('../avatar/kit/Char'))
 
@@ -55,11 +57,13 @@ async function myPhotoAt(lv: number) {
   for (const q of [0.85, 0.7, 0.55, 0.4]) { const d = c.toDataURL('image/jpeg', q); if (d.length <= PHOTO_MAX) return d }
   return null
 }
-/** Start call hand-off to the app (src/handoff.ts reads it): this tab's sessionStorage, then the app with the same ?loopback */
-function handoff(m: { code: string; host: boolean; lv: number }) {
-  sessionStorage.setItem('pd.handoff', JSON.stringify({ code: m.code, host: m.host, lv: m.lv, at: Date.now() }))
-  location.href = './' + (LB ? '?loopback' : '')
-}
+/** GD couple/README: the café call stays in the café (the two keep their seats, the room can see their heart). The ended
+    notes, by why the call stopped. */
+const CALLEND: Record<CallEnd | 'server', string> = { hangup: 'Call ended.', remote: 'Call ended.', server: 'Call ended.', lost: 'The call dropped.', media: "Couldn't start your camera or mic, so the call didn't start." }
+/** couple hearts that arrive before the renderer exists (a late joiner) */
+const pendingHearts = new Set<number>()
+/** PLACEHOLDER glyphs for the emote effect over the emoter (GD's art to come) */
+const EMOTE_FX: Partial<Record<Emote, string>> = { giggle: 'hehe', sigh: 'haah', gasp: '!', aww: 'aww', groan: 'ugh' }
 const layoutOf = (): Layout => innerWidth >= 900 && innerWidth > innerHeight ? 'desk' : 'phone'
 
 function World() {
@@ -96,6 +100,11 @@ function World() {
   const [gone, setGone] = useState('')
   /** voice emotes: the last one per player (for the tray's pressed state + tests) */
   const emoteFx = useRef(new Map<number, { e: string; until: number }>())
+  /** phone: the emote tray folds behind one button so it doesn't cover the floor */
+  const [emoOpen, setEmoOpen] = useState(false)
+  /** the café call (both tapped Start call): the live call, my heart switch (on each call), a re-render tick */
+  const callRef = useRef<CafeCall | null>(null), [call, setCall] = useState<CafeCall | null>(null), [, setCallTick] = useState(0)
+  const [heartOn, setHeartOn] = useState(true)
 
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
@@ -146,7 +155,13 @@ function World() {
         if (m.k === 'sofa-full') { flash('That sofa is full. Try the other one.'); return }
         if (m.k === 'piano-busy') { flash('Someone is at the piano.'); return }
         flash(m.k === 'date-no' ? `${who} said not now. You can keep talking.` : m.k === 'call-declined' ? `${who} said not now to a call. You can keep talking.` : `${who} cancelled the call.`) }
-      else if (m.t === 'call') { flash('Starting your video call…'); setTimeout(() => { n.close(); handoff(m) }, 700) }
+      else if (m.t === 'call') { callRef.current?.end('hangup')
+        const c = new CafeCall(m.code, m.host, m.lv); callRef.current = c; setCall(c); setHeartOn(true); flash('Starting your video call…')
+        c.onUp = () => { n.send({ t: 'callup' } as any); setCallTick(x => x + 1) }; c.onChange = () => setCallTick(x => x + 1)
+        c.onEnd = why => { if (callRef.current === c) { callRef.current = null; setCall(null) } if (why !== 'remote') n.send({ t: 'calldown' } as any); flash(CALLEND[why]) }
+        void c.start().catch(() => c.end('media')) }
+      else if (m.t === 'callend') callRef.current?.end('remote')
+      else if (m.t === 'couple') { const h = ren.current?.hearts ?? pendingHearts; if (m.on) h.add(m.tb); else h.delete(m.tb) }
       else if (m.t === 'ack') { if (m.what === 'block') { setSel(null); setMenu(''); flash("Blocked. You won't see each other in the café again.") }
         if (m.what === 'report') { setMenu(''); flash('Thanks. Report sent to the Pixeldate team.') } if (m.what === 'heart') flash('Heart sent. If it is mutual you will both know.') }
       else if (m.t === 'mutual') flash(`It's mutual with ${n.pubs.get(m.id)?.name ?? 'them'}!`)
@@ -159,9 +174,10 @@ function World() {
   useEffect(() => {
     if (phase !== 'in' || !canvas.current) return
     const r = ren.current = new Renderer(canvas.current), n = net.current!
+    for (const tb of pendingHearts) r.hearts.add(tb); pendingHearts.clear()
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
     size(); const ro = new ResizeObserver(size); ro.observe(stage.current!)
-    const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0, lastN = 0
+    const els = new Map<number, HTMLDivElement>(), mels = new Map<number, HTMLDivElement>(), fels = new Map<number, HTMLDivElement>(), lay: { id: number; el: HTMLDivElement; left: number; top: number; w: number; H: number; tx: number }[] = []; let raf = 0, lastU = 0, lastN = 0
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
       const A = pa.current!, ps = A.state; r.piano = { by: ps.by, song: ps.song, at: ps.song ? A.perfAt(ps.at) : 0 }
@@ -208,6 +224,17 @@ function World() {
       }
       lay.length = 0
       for (const [id, el] of els) if (!bubbles.current.has(id)) { el.remove(); els.delete(id) }
+      // PLACEHOLDER emote effect over the one who emoted (until GD's art): a small pixel tag that rises and fades, 1.2 s
+      for (const [id, fx] of emoteFx.current) {
+        let el = fels.get(id); const tip = r.tip(id)
+        if (now > fx.until || !n.ents.get(id)) { emoteFx.current.delete(id); el?.remove(); fels.delete(id); continue }
+        if (!el) { el = document.createElement('div'); el.className = 'w-emofx'; el.dataset.t = 'w-emofx'; el.setAttribute('aria-hidden', 'true'); ov.append(el); fels.set(id, el) }
+        if (el.dataset.e !== fx.e || el.dataset.k !== String(fx.until)) { el.dataset.e = fx.e; el.dataset.k = String(fx.until); el.dataset.id = String(id); el.textContent = EMOTE_FX[fx.e as Emote] ?? '♪'
+          el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '' }
+        if (!tip) { el.style.visibility = 'hidden'; continue } el.style.visibility = ''
+        el.style.transform = `translate(${Math.round(tip[0])}px, ${Math.round(tip[1] - 2 * u)}px)`
+      }
+      for (const [id, el] of fels) if (!emoteFx.current.has(id)) { el.remove(); fels.delete(id) }
       for (const [tb, until] of murmurs.current) {
         let el = mels.get(tb); const t = TABLES[tb]
         if (now > until || !t) { murmurs.current.delete(tb); el?.remove(); mels.delete(tb); continue }
@@ -221,6 +248,8 @@ function World() {
       state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, art: r.art, layout: layoutOf(), bytes: n.bytes,
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
+      couple: () => ({ hearts: [...r.hearts], on: r.coupleOn, call: callRef.current ? { up: callRef.current.up, host: callRef.current.host, lv: callRef.current.lv, muted: callRef.current.muted, camOff: callRef.current.camOff } : null }),
+      emoteFx: () => [...emoteFx.current.entries()].map(([id, f]) => ({ id, e: f.e })),
       emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
         requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },
@@ -235,6 +264,10 @@ function World() {
   useEffect(() => { if (!tLv || !tWith) return; let live = true
     void myPhotoAt(tLv).then(d => { if (live && d && withRef.current === tWith) net.current?.send({ t: 'photo', lv: tLv, data: d }) }).catch(() => {})
     return () => { live = false } }, [tLv, tWith])
+  // the call's pixelation follows the pair's level; no table (stood up, the date ended) means no call
+  useEffect(() => { if (call && tLv) call.setLevel(tLv) }, [call, tLv])
+  useEffect(() => { if (call && !card?.q) call.end('hangup') }, [call, card?.q])
+  useEffect(() => () => callRef.current?.end('hangup'), [])
 
   // keyboard: arrows/WASD walk, Enter talks, Esc closes
   useEffect(() => {
@@ -328,7 +361,9 @@ function World() {
       <span className={'w-left' + (left < 10 ? ' low' : '')} aria-hidden="true">{left}</span>
       <button className={'w-btn sm' + (card?.q ? ' ghost' : '')} data-t="w-send" disabled={!text.trim()}>Say</button></form>)
   const seated = !!card?.q
-  const cardEl = card && card.q && <TablePanel card={card} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
+  const callEl = call && card?.q ? <CallPanel call={call} name={tname} heartOn={heartOn} desk={layout === 'desk'}
+    onHeart={v => { setHeartOn(v); net.current?.send({ t: 'cheart', on: v } as any) }} /> : null
+  const cardEl = card && card.q && <TablePanel card={card} callEl={callEl} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
     ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} say={bar} send={o => net.current?.send(o as any)} stand={stand} />
   const myPav = net.current?.p.pav
   const pianoEl = where === 'piano' && <PianoPanel mine={pianoS.by === net.current?.me} playing={pianoS.by === net.current?.me ? pianoS.song : null} near={near} sel={song}
@@ -348,9 +383,11 @@ function World() {
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
         {/* voice emote tray: PLACEHOLDER text buttons until GD's art (flagged) */}
-        <div className="w-emotes" data-t="w-emotes" role="group" aria-label="Voice emotes">{EMOTES.map(e =>
+        {layout === 'phone' && <button className={'w-emo w-emo-tg' + (emoOpen ? ' on' : '')} data-t="w-emote-toggle" aria-expanded={emoOpen} aria-label={emoOpen ? 'Close voice emotes' : 'Voice emotes'}
+          onPointerDown={ev => ev.stopPropagation()} onClick={() => setEmoOpen(o => !o)}>{emoOpen ? '×' : '♪'}</button>}
+        {(layout === 'desk' || emoOpen) && <div className={'w-emotes' + (layout === 'phone' ? ' folded' : '')} data-t="w-emotes" role="group" aria-label="Voice emotes">{EMOTES.map(e =>
           <button key={e} className="w-emo" data-t="w-emote" data-e={e} aria-label={EMOTE_LABEL[e]} onPointerDown={ev => ev.stopPropagation()}
-            onClick={() => { pa.current?.unlock(); net.current?.send({ t: 'emote', e } as any) }}>{EMOTE_LABEL[e as Emote]}</button>)}</div>
+            onClick={() => { pa.current?.unlock(); net.current?.send({ t: 'emote', e } as any); if (layout === 'phone') setEmoOpen(false) }}>{EMOTE_LABEL[e as Emote]}</button>)}</div>}
         {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}</div>
       <aside className="w-side" data-t="w-side">
         {person}
@@ -389,14 +426,14 @@ function Photo({ photo, name, pav, id }: { photo: { lv: number; data: string } |
 type Send = (o: { t: string; [k: string]: unknown }) => void
 /** GD's 1-bit pixel icons from the v05 table mocks (rows of '#'), drawn as crisp rects at n CSS px per pixel */
 const ICONS = { x: '##....##/###..###/.######./..####../..####../.######./###..###/##....##', lock: '..###../.#...#./.#...#./#######/###.###/###.###/#######',
-  cam: '#######.../#######..#/#######.##/##########/#######.##/#######..#/#######...', tick: '......##/.....##./##..##../.####.../..##....' }
+  cam: '#######.../#######..#/#######.##/##########/#######.##/#######..#/#######...', mic: '..##../.####./.####./.####./#.##.#/.#..#./..##../..##..', hang: '.######./##....##/#......#', tick: '......##/.....##./##..##../.####.../..##....' }
 function Px({ i, n = 2, c = 'currentColor' }: { i: keyof typeof ICONS; n?: number; c?: string }) {
   const rows = ICONS[i].split('/'), w = rows[0].length, h = rows.length
   return <svg className="i" width={w * n} height={h * n} viewBox={`0 0 ${w} ${h}`} fill={c} aria-hidden="true">
     {rows.flatMap((r, y) => [...r].map((ch, x) => ch === '#' ? <rect key={x + ',' + y} x={x} y={y} width={1} height={1} /> : null))}</svg>
 }
 /** GD v05 table-for-two sheet: who (photo + level meter), the question card, "Just you two" chat, Start call. */
-function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, say, send, stand }: { card: Tbl; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean
+function TablePanel({ card, callEl, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, say, send, stand }: { card: Tbl; callEl?: React.ReactNode; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean
   ans: string; setAns: (s: string) => void; ansErr: string; onAns: (e: React.FormEvent) => void; priv: { k: number; mine: boolean; text: string }[]; privEl: React.RefObject<HTMLOListElement | null>
   say: React.ReactNode; send: Send; stand: () => void }) {
   const L = LEVELS[card.lv - 1], nextL = LEVELS[card.lv], vL = LEVELS[card.video - 1], q = card.q!, qL = LEVELS[(q.lv || card.lv) - 1]
@@ -417,7 +454,8 @@ function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, 
     {ask === 'block' && <section className="w-panel w-ask" data-t="w-tblock-confirm"><p>Block {name}? You won't see each other in any café room again. They aren't told.</p>
       <div className="w-acts"><button className="w-btn sm danger" data-t="w-tblock-yes" onClick={() => { send({ t: 'block', id: card.with }); setAsk('') }}>Block</button>
         <button className="w-btn sm ghost" onClick={() => setAsk('')}>Cancel</button></div></section>}
-    <section className={'w-card' + (rev ? ' done' : '')} data-t="w-card" data-lv={card.lv} data-rev={rev ? '1' : undefined}>
+    {callEl}
+    {!callEl && <><section className={'w-card' + (rev ? ' done' : '')} data-t="w-card" data-lv={card.lv} data-rev={rev ? '1' : undefined}>
       {rev && <div className="w-stamp" data-t="w-done"><Px i="tick" />Ticked off</div>}
       <p className="w-kick"><span className="w-tag" data-t="w-tag">{qL?.name} · Q{q.i || card.n + 1}</span>Table for two</p>
       <p className="w-q" data-t="w-q">{q.text}</p>
@@ -457,8 +495,34 @@ function TablePanel({ card, name, pav, photo, desk, ans, setAns, ansErr, onAns, 
           <div className="w-both" data-t="w-call-in"><span>{name} tapped</span><span className="y">The call starts when you tap too.</span><button className="w-link" data-t="w-call-no" onClick={() => send({ t: 'callno' })}>Not now</button></div></>
         : <><button className="w-btn coral wide" data-t="w-call" onClick={() => send({ t: 'call' })}><Px i="cam" />Start call</button>
           <p className="w-why">The call starts when you both tap.</p></>}
-    </section>
+    </section></>}
     {desk && <p className="w-deskhint" data-t="w-deskhint">Seated at table {card.tb + 1} · <b>Esc</b> or <b>X</b> to stand up</p>}
   </>)
+}
+/** GD couple-call-390: "On call mm:ss", only-you-two line, the partner's video (pixelated on their phone) with a butter name
+    tag, my self view with the mint ring, Mute / Camera / End call; then "Show our heart in the café" (on each call). */
+function CallPanel({ call, name, heartOn, onHeart, desk }: { call: CafeCall; name: string; heartOn: boolean; onHeart: (v: boolean) => void; desk: boolean }) {
+  const rv = useRef<HTMLVideoElement>(null), sv = useRef<HTMLVideoElement>(null), [t0] = useState(() => Date.now()), [, tick] = useState(0)
+  useEffect(() => { const i = setInterval(() => tick(x => x + 1), 1000); return () => clearInterval(i) }, [])
+  useEffect(() => { if (rv.current && rv.current.srcObject !== call.remote) { rv.current.srcObject = call.remote; void rv.current.play().catch(() => {}) } })
+  useEffect(() => { if (sv.current && sv.current.srcObject !== call.raw) { sv.current.srcObject = call.raw; void sv.current.play().catch(() => {}) } })
+  const s = Math.floor((Date.now() - t0) / 1000), mmss = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+  return <>
+    <section className={'w-panel w-oncall' + (desk ? ' desk' : '')} data-t="w-oncall" data-up={call.up ? '1' : undefined}>
+      <div className="w-oc-hd"><span className="w-pulse" />{call.up ? <>On call <b data-t="w-oc-time">{mmss}</b></> : <>Connecting…</>}
+        <span className="w-oc-sub"><Px i="lock" n={1.5} c="#A49CC2" />Only you two see and hear this</span></div>
+      <div className="w-vid"><video ref={rv} data-t="w-oc-remote" autoPlay playsInline />
+        <span className="w-vid-nm" data-t="w-oc-name">{name}</span>
+        <div className="w-vid-self"><video ref={sv} data-t="w-oc-self" autoPlay playsInline muted hidden={call.camOff} /><span>You</span></div></div>
+      <div className="w-oc-ctl">
+        <button className={'w-btn ghost' + (call.muted ? ' on' : '')} data-t="w-oc-mute" aria-pressed={call.muted} onClick={() => call.setMuted(!call.muted)}><Px i="mic" c="#FFF1C1" />{call.muted ? 'Unmute' : 'Mute'}</button>
+        <button className={'w-btn ghost' + (call.camOff ? ' on' : '')} data-t="w-oc-cam" aria-pressed={call.camOff} onClick={() => call.setCamOff(!call.camOff)}><Px i="cam" c="#FFF1C1" />Camera</button>
+        <button className="w-btn w-oc-end" data-t="w-oc-end" onClick={() => call.end('hangup')}><Px i="hang" c="#05020F" />End call</button></div>
+    </section>
+    <section className="w-panel w-show" data-t="w-show">
+      <span className="w-show-hi" style={{ backgroundImage: `url(${coupleHeart3x})` }} aria-hidden="true" />
+      <div><b>Show our heart in the café</b><span className="s">Everyone here sees a heart over your table during the call. Either of you can turn it off.</span></div>
+      <button className={'w-sw' + (heartOn ? '' : ' off')} data-t="w-show-sw" role="switch" aria-checked={heartOn} aria-label="Show our heart in the café" onClick={() => onHeart(!heartOn)} />
+    </section></>
 }
 export function mount(el: HTMLElement) { createRoot(el).render(<World />) }

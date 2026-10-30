@@ -1,5 +1,5 @@
-/* World café → app hand-off for "Start call". The café writes it (src/world/index.tsx) only after the server saw both
-   people tap Start call; it lives in this tab's sessionStorage (not the URL, so a crafted link can't start a call),
+/* World café → app hand-off for a video call. Since the couple heart (push 2b) the café runs its call itself, in the café
+   (src/world/call.ts), so the café no longer writes this; the app still honours one, as before; it lives in this tab's sessionStorage (not the URL, so a crafted link can't start a call),
    is read once, and is ignored after 30 s. */
 export interface Handoff { code: string; host: boolean; lv: number; at: number }
 export const HANDOFF_KEY = 'pd.handoff', HANDOFF_MS = 30000

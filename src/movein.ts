@@ -27,11 +27,18 @@ const putPhoto = (photo: string) => new Promise<void>(ok => {
       g.onerror = () => { db.close(); ok() } } catch { db.close(); ok() } }
     r.onerror = () => ok() } catch { ok() }
 })
+// GD movein-v1: 8px under the screen's top bar (header), centred; #281D52 fill, 2px #05020F edge, a mint 2px left rim
+// (success, not coral which reads as an error); holds 4 s, then fades. The app renders after this runs, so it waits
+// (briefly) for a header to measure; screens without one (the café join) get the top inset.
 function toast() {
-  const show = () => { const t = document.createElement('div'); t.dataset.t = 'moved-toast'; t.setAttribute('role', 'status')
+  const show = () => { const t = document.createElement('div'); t.dataset.t = 'moved-toast'; t.dataset.at = String(Math.round(performance.now())); t.setAttribute('role', 'status')
     t.textContent = 'Your profile moved here'
-    t.style.cssText = 'position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);z-index:2147483647;padding:10px 16px;background:#1B1240;color:#FFF3E6;border:2px solid #FF8FA3;font:600 14px/1.2 system-ui,sans-serif;box-shadow:0 4px 0 #08041A;pointer-events:none;white-space:nowrap'
-    document.body.append(t); setTimeout(() => t.remove(), 6000) }
+    t.style.cssText = 'position:fixed;left:50%;top:max(8px,env(safe-area-inset-top));transform:translateX(-50%);z-index:2147483647;padding:10px 16px 10px 14px;background:#281D52;color:#FFF3E6;border:2px solid #05020F;box-shadow:inset 2px 0 0 #48E5C2,0 3px 0 #05020F;font:600 14px/1.2 system-ui,sans-serif;pointer-events:none;white-space:nowrap;opacity:1;transition:opacity .35s ease'
+    const place = () => { const h = [...document.querySelectorAll('header')].find(e => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < 40 })
+      if (h) t.style.top = Math.round(h.getBoundingClientRect().bottom + 8) + 'px'; return !!h }
+    document.body.append(t)
+    let n = 0; const seek = () => { if (!place() && ++n < 90) requestAnimationFrame(seek) }; seek()   // ~1.5 s for the first screen to render
+    setTimeout(() => { place(); t.style.opacity = '0'; setTimeout(() => t.remove(), 400) }, 4000) }
   if (document.body) show(); else addEventListener('DOMContentLoaded', show, { once: true })
 }
 /** resolves once anything moved in has been written (the photo is in IndexedDB, so it's async) */

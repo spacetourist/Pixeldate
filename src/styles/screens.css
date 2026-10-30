@@ -418,12 +418,7 @@ h1.px,h2.px{font-weight:400}
 .shell .stop{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:3px solid var(--edge);background:var(--panel)}
 .shell .stop .logo{margin-right:auto}
 .shell .smain{position:relative;z-index:1;padding:18px 16px 28px;display:flex;flex-direction:column;gap:18px;min-width:0}
-.shell .bgart{position:absolute;inset:0;overflow:hidden;z-index:0}
-.shell .bgart picture{display:contents}
-.shell .bgart img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;opacity:.55}
-.shell .bgart::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgb(12 7 34 / .35),var(--bg) 85%),var(--scanlines-stage)}
-.shell--lobby .bgart img{opacity:.9}
-.shell--lobby .bgart::after{background:linear-gradient(180deg,rgb(12 7 34 / .15),rgb(12 7 34 / .55) 55%,var(--bg) 95%),var(--scanlines-stage)}
+.shell .bgart{position:absolute;inset:0;overflow:hidden;z-index:0}   /* holds the café backdrop (backdrop.css) */
 .lobbycard{--s:var(--step-lg);--fill:var(--panel-stage-raised);padding:calc(var(--edge-w) + 22px);display:flex;flex-direction:column;gap:16px;width:100%;max-width:520px;margin:0 auto}
 .lobbycard h1{font-size:44px;line-height:.9}
 .lobbycard .who{display:flex;align-items:center;gap:14px}
@@ -514,6 +509,11 @@ button.tmain{cursor:pointer}
 .hud .theirchar .label{display:flex;flex-direction:column;gap:6px;min-width:0;font:600 15px/1.25 var(--font-ui);text-transform:none;letter-spacing:0;color:var(--text,#F4F0FF);overflow-wrap:anywhere}
 .hud .theirchar small{color:var(--text-muted);font:400 13px/1.35 var(--font-ui);text-transform:none;letter-spacing:0}
 .app[data-view=compact][data-tab=chat] .hud .theirchar{display:none}
-/* 'Enter the café' (src/ui/cafe-button.tsx holds the specs as CSS vars): GD interim, full-width secondary under Find someone */
-.lobbycard .cafe-btn{--edge-w:var(--cafe-edge-w,2px);--edge:var(--cafe-edge,#05020F);--fill:var(--cafe-fill,#281D52);color:var(--cafe-text,var(--text));font:var(--t-btn);margin-top:-4px}
-.lobbycard .cafe-btn:hover,.lobbycard .cafe-btn.is-hover{--fill:var(--cafe-hover,#33276A)}
+/* Enter the café (GD final, README §6): values come from CAFE_BTN in ui/cafe-button.tsx */
+.btn.cafe{--edge-w:var(--cafe-edge-w,2px);--edge:var(--cafe-edge,#05020F);--fill:var(--cafe-fill,#281D52);--bev:var(--bevel-dark-hi),var(--bevel-dark-lo);
+  color:var(--cafe-text,#FFF1C1);font:var(--t-btn);min-height:var(--cafe-min-h,54px);justify-content:center;gap:12px}
+.btn.cafe:hover,.btn.cafe.is-hover{--fill:var(--cafe-hover,#33276A)}
+.btn.cafe .ic{width:20px;height:20px;flex:none;shape-rendering:crispEdges}
+.btn.cafe .in{display:inline-flex;align-items:center;gap:6px;font:var(--t-label);color:var(--cafe-inside,#48E5C2);margin-left:2px}
+.btn.cafe .dot{width:8px;height:8px;background:var(--cafe-inside,#48E5C2);box-shadow:0 0 0 2px var(--cafe-edge,#05020F)}
+.lobbycard .cafe{margin-top:-4px}

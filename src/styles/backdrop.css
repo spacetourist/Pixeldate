@@ -1,0 +1,21 @@
+/* The café backdrop (design world/landing README §5, src/backdrop.ts) behind the landing hero (.ld-hero) and the home
+   lobby (.bgart). Unlayered on purpose, like the mocks (capture.mjs), so it wins over the layered .fx rules. */
+.pd-bd{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;background:#0C0722}
+.pd-bd img,.pd-bd video{position:absolute;left:0;top:0;max-width:none;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:pixelated}
+.pd-bd video{opacity:0;transition:opacity .6s ease-out}
+.pd-bd video.is-on{opacity:1}
+.pd-bd::after{content:"";position:absolute;inset:0}
+.pd-bd--landing::after{background-color:rgba(12,7,34,.20);background-image:
+  linear-gradient(180deg,#0C0722 0%,rgba(12,7,34,0) 14%,rgba(12,7,34,0) 30%,rgba(12,7,34,.70) 56%,rgba(12,7,34,.92) 80%,#0C0722 100%),
+  radial-gradient(120% 90% at 50% 35%,rgba(12,7,34,0) 55%,rgba(12,7,34,.55) 100%)}
+@media (min-width:900px){.pd-bd--landing::after{background-color:rgba(12,7,34,.18);background-image:
+  linear-gradient(180deg,#0C0722 0%,rgba(12,7,34,0) 10%,rgba(12,7,34,0) 86%,#0C0722 100%),
+  linear-gradient(90deg,rgba(12,7,34,.88) 0%,rgba(12,7,34,.70) 38%,rgba(12,7,34,0) 66%)}}
+.pd-bd--home::after{background-color:rgba(12,7,34,.30);background-image:
+  linear-gradient(180deg,rgba(12,7,34,.60) 0%,rgba(12,7,34,0) 18%,rgba(12,7,34,0) 58%,#0C0722 100%)}
+@media (prefers-reduced-motion:reduce){.pd-bd video{display:none}}
+[data-motion=reduce] .pd-bd video{display:none}
+.ld-hero .in{z-index:2}
+/* translucent lobby card over the backdrop: #161033 @ 88 % with the #05020F edge */
+.lobbycard{background:transparent}
+.lobbycard::before{inset:0;background:rgba(22,16,51,.88);box-shadow:inset 0 0 0 var(--edge-w) #05020F,inset 0 calc(var(--edge-w) + 2px) 0 -0px rgba(255,241,193,.06)}

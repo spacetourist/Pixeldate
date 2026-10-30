@@ -1,6 +1,7 @@
-/* Landing (SPEC 01, design screens/src/landing.html): tokens + components + the design's .ld-* rules. Static, no JS. */
+/* Landing (SPEC 01, design screens/src/landing.html): tokens + components + the design's .ld-* rules. Static; the only JS is the café backdrop (src/landing.ts). */
 @import './tokens.css';
 @import './components.css';
+@import './backdrop.css';
 @layer screens{
 .app{container:app/inline-size;position:relative;min-height:100dvh;background:var(--bg)}
 html,body{height:auto;overflow:visible}
@@ -11,15 +12,12 @@ html{scroll-behavior:smooth;scroll-padding-top:80px}
 .ld img{height:auto}
 .ld-nav .lk a:hover{color:var(--text)}
 .ld-nav .lk a:focus-visible,.ld-nav .logo:focus-visible{outline:3px solid var(--focus);outline-offset:4px}
-.ld-hero>picture{display:contents}
 .muted{color:var(--text-muted)}
 .ld{position:relative}
 .ld-nav{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:20px;padding:14px 18px;background:rgb(12 7 34 / .92);border-bottom:3px solid var(--edge)}
 .ld-nav .lk{display:none;gap:24px;font:var(--t-ui);color:var(--text-muted);margin-left:auto}
 .ld-nav .acts{display:flex;gap:8px;margin-left:auto}
 .ld-hero{position:relative;overflow:hidden;min-height:640px;display:grid;align-items:end}
-.ld-hero>picture>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
-.ld-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgb(12 7 34 / .1) 20%,rgb(12 7 34 / .7) 60%,var(--bg)),var(--scanlines-stage)}
 .ld-hero .in{position:relative;z-index:2;padding:0 18px 40px;display:flex;flex-direction:column;gap:16px;max-width:720px}
 .ld-hero h1{font-family:var(--font-px);font-size:clamp(64px,13cqi,148px);line-height:.85;text-shadow:0 5px 0 var(--edge)}
 .ld-hero h1 em{font-style:normal;color:var(--c-coral)}

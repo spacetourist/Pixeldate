@@ -6,6 +6,7 @@ import { bracketLabel, bracketOf, type Profile } from '../net'
 import { Icon, Av, LV_DESC, LV_COLOR, AV_BLOCKS, coarse } from './parts'
 import { Toasts } from './toast'
 import { CafeButton, cafeInvite } from './cafe-button'
+import { HomeBackdrop } from './home-backdrop'
 
 const B = import.meta.env.BASE_URL
 /** "k7q2px" -> "K7Q·2PX" (display only; joining accepts either form). */
@@ -57,7 +58,7 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
     <header className="stop"><span className="logo" style={{ ['--logo' as any]: '28px' }}><Icon n="heart" c="var(--c-coral)" s={3} /><span>pixel<b>date</b></span></span>
       <button className="btn btn--ghost btn--icon btn--sm fx" aria-label="You" data-t="top-profile" onClick={() => onNav('profile')}><Icon n="user" c="var(--text)" s={2} /></button>
       <button className="btn btn--ghost btn--icon btn--sm fx" aria-label="Settings" data-t="top-settings" onClick={() => onNav('settings')}><Icon n="gear" c="var(--text)" s={2} /></button></header>
-    <div className="bgart" aria-hidden="true"><picture><source media="(min-width: 768px)" srcSet={`${B}art/landing-hero-wide.webp`} /><img src={`${B}art/lobby-bg-640.webp`} width={1280} height={720} alt="" /></picture></div>
+    <div className="bgart" aria-hidden="true"><HomeBackdrop /></div>
     <main className="smain">
       <Toasts where="page" />
       {finding

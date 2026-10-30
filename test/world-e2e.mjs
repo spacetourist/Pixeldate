@@ -2,7 +2,8 @@
 //   phone  390x844 @3x, touch: tap-to-walk, tap a person, chat bar, simulated on-screen keyboard
 //   desktop 1440x900 @1x, mouse + keys: click-to-walk, arrows/WASD, Enter to talk, Esc to close, camera follows
 //   cross-device: both players in one room see each other move and swap a bubble
-//   shots of every state at both sizes → shots/world-cafe-v01/     Run: node test/world-e2e.mjs   (FPS=1 adds the 40-player FPS run)
+//   phone camera: 2 CSS px per art px, eased follow, clamped at the walls (no empty bands), coral arrows to off-screen hearts
+//   shots of every state at both sizes → shots/world-cafe-v02/     Run: node test/world-e2e.mjs   (FPS=1 adds the 40-player FPS run)
 import puppeteer from 'puppeteer-core'
 process.env.WORLD_PORT = '18793'; process.env.WORLD_URL = 'ws://127.0.0.1:18793'
 const dev = await import('../world/dev/server.ts')
@@ -12,7 +13,8 @@ const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
 const { F_HEART, F_BROKEN, F_SIT } = await import('../world/shared/proto.ts')
 const APP = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const Q = '?world=cafe&ws=ws://127.0.0.1:18793'
-const OUT = '/workspace/pixeldate/shots/world-cafe-v01/'
+const OUT = '/workspace/pixeldate/shots/world-cafe-v02/'
+const { mkdirSync: mk } = await import('node:fs'); mk(OUT, { recursive: true })
 let bad = 0, n = 0
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
 const until = async (f, ms = 6000, step = 60) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await f(); if (v) return v; await sleep(step) } return null }
@@ -27,7 +29,7 @@ const cast = {
 }
 for (const b of Object.values(cast)) await b.connect()
 // spread out from the door one by one (the doorway crowd would otherwise block itself); the marker trio stands near both players
-const place = { sol: [17, 3], rae: [12, 4], una: [7, 4], kit: [6, 6], zed: [16, 6], ava: [8, 7], mia: [14, 10], noor: [9, 11], jo: [11, 9], lea: [15, 14] }
+const place = { sol: [20, 4], rae: [14, 5], una: [11, 6], kit: [16, 7], zed: [22, 6], ava: [9, 11], mia: [17, 11], noor: [13, 12], jo: [20, 12], lea: [26, 12] }
 const at = (b, [x, y]) => { const e = b.self(); return e && Math.abs(e.x - x - 0.5) < 0.6 && Math.abs(e.y - y - 0.5) < 0.6 }
 for (const [k, t] of Object.entries(place)) { cast[k].send({ t: 'go', x: t[0], y: t[1] }); await sleep(350) }
 for (let i = 0; i < 3; i++) { const late = Object.entries(place).filter(([k, t]) => !at(cast[k], t)); if (!late.length) break; for (const [k, t] of late) cast[k].send({ t: 'go', x: t[0], y: t[1] }); await sleep(2500) }
@@ -35,7 +37,7 @@ for (let i = 0; i < 3; i++) { const late = Object.entries(place).filter(([k, t])
 const idOf = (bot, name) => [...bot.pubs.values()].find(p => p.name === name)?.id
 
 // ── browser
-const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 90000, args: ['--no-sandbox', '--disable-features=CalculateNativeWinOcclusion', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
+const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 90000, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-features=CalculateNativeWinOcclusion', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
 const PHONE = { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true }, DESK = { width: 1440, height: 900, deviceScaleFactor: 1 }
 async function player(tag, vp, name, sample, extra = {}) {
   const ctx = await browser.createBrowserContext(), p = await ctx.newPage(); await p.setViewport(vp)
@@ -51,7 +53,22 @@ const entBy = async (p, name) => (await st(p))?.ents.find(e => e.name === name)
 const tapAt = (p, x, y) => p.touch ? p.touchscreen.tap(x, y) : p.mouse.click(x, y)
 const tapTile = async (p, tx, ty) => { const [x, y] = await p.evaluate((a, b) => window.__world.tileCss(a, b), tx, ty); await tapAt(p, x, y) }
 const tapPerson = async (p, name) => { const e = await entBy(p, name); const [x, y] = await p.evaluate(id => window.__world.css(id), e.id); const c = await p.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON()); if (x < c.left || x > c.right || y < c.top || y > c.bottom) console.log(`  ${p.tag}: ${name} is off camera at ${x | 0},${y | 0}`); await tapAt(p, x, y) }
-const walkTo = async (p, tx, ty, ms = 12000) => { await tapTile(p, tx, ty); return until(async () => { const m = await meEnt(p); return m && Math.abs(m.x - tx - 0.5) < 0.6 && Math.abs(m.y - ty - 0.5) < 0.6 }, ms) }
+// tap-to-walk the way a person would: tap the tile if it is on screen, otherwise tap toward it at the screen edge and go again
+// (the phone shows ~12 tiles across, so far tiles take a couple of hops)
+const walkTo = async (p, tx, ty, ms = 15000) => {
+  const there = async () => { const m = await meEnt(p); return m && Math.abs(m.x - tx - 0.5) < 0.6 && Math.abs(m.y - ty - 0.5) < 0.6 }
+  const t0 = Date.now()
+  while (Date.now() - t0 < ms) {
+    if (await there()) return true
+    const c = await p.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON()), [x, y] = await p.evaluate((a, b) => window.__world.tileCss(a, b), tx, ty)
+    const m = 28, on = x > c.left + m && x < c.right - m && y > c.top + m && y < c.bottom - m
+    if (on) { await tapAt(p, x, y); return !!(await until(there, ms - (Date.now() - t0))) }
+    const cx = (c.left + c.right) / 2, cy = (c.top + c.bottom) / 2, dx = x - cx, dy = y - cy, k = Math.min((c.width / 2 - m) / Math.abs(dx || 1e-9), (c.height / 2 - m) / Math.abs(dy || 1e-9))
+    await tapAt(p, cx + dx * k, cy + dy * k)
+    let last = null; await until(async () => { const e = await meEnt(p); const still = last && Math.abs(e.x - last.x) < 0.01 && Math.abs(e.y - last.y) < 0.01; last = e; return still }, 4000, 250)
+  }
+  return there()
+}
 const press = (p, sel) => p.touch ? p.tap(sel) : p.click(sel)
 const said = new Map() // per player: say timestamps, to stay inside 3 per 15 s
 async function sayUI(p, text, viaEnter) {
@@ -73,19 +90,26 @@ async function flow(p, o) {
   await p.type('[data-t=w-invite]', 'dev-invite-1'); await press(p, '[data-t=w-enter]')
   ok(await until(() => p.$('[data-t=w-room]'), 6000), `${L}: joined with invite + 18+`)
   ok(await p.evaluate(() => JSON.parse(localStorage.getItem('pd.profile')).adult === true), `${L}: 18+ saved on the profile`)
-  await until(async () => (await st(p))?.ents.length >= 11, 5000)
+  await until(async () => { const s = await st(p); return s?.ents.length >= 11 && s.gl }, 8000)  // renderer init is async (Pixi picks a backend)
   const s0 = await st(p)
   ok(s0.layout === o.layout && (await p.$eval('[data-t=w-room]', e => e.dataset.layout)) === o.layout, `${L}: layout ${s0.layout}`)
   ok(Number.isInteger(s0.k) && s0.k >= 1, `${L}: integer pixel scale k=${s0.k} (dpr ${o.dpr})`)
   const cv = await p.$eval('[data-t=w-canvas]', c => ({ w: c.width, h: c.height, cw: c.getBoundingClientRect().width, ch: c.getBoundingClientRect().height }))
   ok(Math.abs(cv.cw * o.dpr - cv.w) < 1.01 && Math.abs(cv.ch * o.dpr - cv.h) < 1.01, `${L}: canvas backing store = css x dpr (${cv.w}x${cv.h}), no browser resampling`)
-  if (o.layout === 'phone') ok(384 * s0.k / o.dpr <= 390 && 384 * s0.k / o.dpr >= 300, `${L}: café fits the width (${(384 * s0.k / o.dpr).toFixed(0)} css px of 390)`)
-  else { const side = await p.$eval('.w-side, [data-t=w-say]', e => e.getBoundingClientRect().left); ok(side > 1000, `${L}: chat bar down the side (x=${side})`); ok(s0.vw < 384 || s0.vh < 288, `${L}: camera view ${s0.vw}x${s0.vh} smaller than the map, so it follows`) }
+  ok(s0.gl === 'webgl', `${L}: PixiJS v8 renderer (${s0.gl})`)
+  const [MW, MH] = s0.map
+  ok(MW === 640 && MH === 384, `${L}: one shared 40x24 café (${MW}x${MH} art px)`)
+  ok(s0.vw <= MW + 1e-6 && s0.vh <= MH + 1e-6, `${L}: view ${s0.vw.toFixed(1)}x${s0.vh.toFixed(1)} art px never bigger than the room (no empty bands)`)
+  if (o.layout === 'phone') ok(s0.k / o.dpr === 2 && Math.abs(s0.vw / 16 - 12.2) < 0.3, `${L}: 2x scale, ${(s0.vw / 16).toFixed(1)} tiles across at 390`)
+  else { const side = await p.$eval('.w-side, [data-t=w-say]', e => e.getBoundingClientRect().left); ok(side > 1000, `${L}: chat bar down the side (x=${side})`); ok(s0.vw < MW && s0.vh < MH, `${L}: camera view ${s0.vw.toFixed(0)}x${s0.vh.toFixed(0)} smaller than the map, so it follows`) }
   const sb = await p.$eval('[data-t=w-say]', e => e.getBoundingClientRect().toJSON()); ok(sb.bottom <= o.h + 0.5, `${L}: chat bar on screen (bottom ${sb.bottom.toFixed(0)})`)
 
   // walk: phone taps, desktop clicks; then desktop keys
   const before = await st(p)
+  let lag = 0; const lagT = setInterval(async () => { const s = await st(p).catch(() => null); if (s) lag = Math.max(lag, Math.hypot(s.cam[0] - s.camT[0], s.cam[1] - s.camT[1])) }, 50)
   ok(await walkTo(p, o.stand[0], o.stand[1]), `${L}: ${p.touch ? 'tap' : 'click'}-to-walk reached tile ${o.stand}`)
+  clearInterval(lagT); await sleep(900)
+  { const s = await st(p); ok(lag > 0.5 && Math.hypot(s.cam[0] - s.camT[0], s.cam[1] - s.camT[1]) < 0.1, `${L}: camera eases after me (lagged up to ${lag.toFixed(1)} px, settled on target)`) }
   if (o.layout === 'desk') {
     const camA = (await st(p)).cam
     const m0 = await meEnt(p); await p.keyboard.down('ArrowLeft'); await sleep(900); await p.keyboard.up('ArrowLeft'); await sleep(300); const m1 = await meEnt(p)
@@ -103,6 +127,20 @@ async function flow(p, o) {
   ok(await until(async () => ((await entBy(p, 'Noor'))?.f & F_BROKEN), 4000), `${L}: broken heart over Noor (passed on me)`)
   const jo = await entBy(p, 'Jo'); ok(jo && !(jo.f & (F_HEART | F_BROKEN)), `${L}: nothing over Jo (not compatible)`)
   const noorSees = cast.noor.ents.get(idOf(cast.noor, p.prof.name)); ok(noorSees && !(noorSees.f & (F_HEART | F_BROKEN)), `${L}: Noor sees no marker over me (she passed)`)
+  if (o.layout === 'phone') {
+    // off-screen heart: walk to the left wall, Mia (heart) is out of view to the right → an arrow on the right edge
+    await walkTo(p, ...o.arrowAt); await sleep(900)
+    const mia = await entBy(p, 'Mia'), s = await st(p), a = s.arrows.find(x => x.id === mia.id)
+    ok(a && a.oct === 0 && a.x > s.css[0] - 30, `${L}: coral arrow at the right edge points to Mia off screen (${a ? `${a.x.toFixed(0)},${a.y.toFixed(0)} oct ${a.oct}` : 'none'})`)
+    ok(s.arrows.every(x => s.ents.find(e => e.id === x.id)?.f & F_HEART), `${L}: arrows only for people with a heart (${s.arrows.length})`)
+    await shot(p, '13-arrow')
+    // walls: bottom-left corner, the camera stops at the room edge and shows nothing outside it
+    await walkTo(p, ...o.wallAt); await sleep(1000)
+    const w = await st(p)
+    ok(w.cam[0] === 0 && Math.abs(w.cam[1] - (MH - w.vh)) < 0.01, `${L}: camera clamped at the walls (cam ${w.cam.map(v => v.toFixed(1))}, view ${w.vw.toFixed(0)}x${w.vh.toFixed(0)} of ${MW}x${MH})`)
+    await shot(p, '14-wall')
+    await walkTo(p, o.stand[0], o.stand[1], 15000); await sleep(900)
+  }
   await shot(p, '03-cafe')
   console.log('  cast on screen:', JSON.stringify(await p.evaluate(() => window.__world.state().ents.map(e => [e.name, e.f, ...(window.__world.css(e.id) || []).map(Math.round)]))))
 
@@ -160,7 +198,7 @@ async function flow(p, o) {
 const phone = await player('phone', PHONE, 'Sam', 10); phone.touch = true
 const desk = await player('desk', DESK, 'Alex', 11)
 const T0 = Date.now()
-const phoneId = await flow(phone, { layout: 'phone', dpr: 3, h: 844, stand: [11, 11], reportee: 'Kit', table: [[3, 9], [5, 9]], partner: 'ava', blockee: 'Zed' })
+const phoneId = await flow(phone, { layout: 'phone', dpr: 3, h: 844, stand: [15, 10], arrowAt: [1, 12], wallAt: [2, 22], reportee: 'Kit', table: [[2, 9], [5, 9]], partner: 'ava', blockee: 'Una' })
 // phone keyboard: headless Chrome has no soft keyboard, so shrink the viewport the way one would and check the bar stays put
 await press(phone, '[data-t=w-input]'); await phone.setViewport({ ...PHONE, height: 844 - 336 }); await sleep(600)
 { const b = await phone.$eval('[data-t=w-say]', e => e.getBoundingClientRect().toJSON()), c = await phone.$eval('[data-t=w-canvas]', e => e.getBoundingClientRect().toJSON())
@@ -168,13 +206,13 @@ await press(phone, '[data-t=w-input]'); await phone.setViewport({ ...PHONE, heig
   await phone.type('[data-t=w-input]', 'typing with the keyboard up'); await shot(phone, '11-keyboard') }
 await phone.$eval('[data-t=w-input]', e => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(e, ''); e.dispatchEvent(new Event('input', { bubbles: true })); e.blur() })
 await phone.setViewport(PHONE); await sleep(400)
-const deskId = await flow(desk, { layout: 'desk', dpr: 1, h: 900, stand: [12, 8], reportee: 'Zed', table: [[19, 9], [21, 9]], partner: 'lea', blockee: 'Sol' })
+const deskId = await flow(desk, { layout: 'desk', dpr: 1, h: 900, stand: [20, 10], reportee: 'Zed', table: [[18, 15], [21, 15]], partner: 'lea', blockee: 'Kit' })
 
 // ── cross-device: same room, each sees the other move, bubbles both ways
 ok((await st(phone)).inst === (await st(desk)).inst, `cross: phone and desktop in the same room (${(await st(phone)).inst})`)
 const seen = async (p, id) => (await st(p)).ents.find(e => e.id === id)
 ok(await seen(phone, deskId) && await seen(desk, phoneId), 'cross: each sees the other')
-for (const p of [phone, desk]) { await walkTo(p, ...(p === phone ? [10, 12] : [13, 12])); await sleep(200) }
+for (const p of [phone, desk]) { ok(await walkTo(p, ...(p === phone ? [10, 12] : [12, 13])), `cross: ${p.tag} walks over`); await sleep(200) }
 { const a = await seen(desk, phoneId); await phone.touchscreen.tap(...await phone.evaluate(() => window.__world.tileCss(8, 13)))
   ok(await until(async () => { const b = await seen(desk, phoneId); return b && Math.hypot(b.x - a.x, b.y - a.y) > 1 }, 6000), 'cross: desktop sees the phone player walk (touch)') }
 { const a = await seen(phone, deskId); await desk.keyboard.down('ArrowRight'); await sleep(700); await desk.keyboard.up('ArrowRight')

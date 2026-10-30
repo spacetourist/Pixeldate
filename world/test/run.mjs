@@ -1,9 +1,12 @@
 // Pixeldate World integration tests. Default: starts the Node dev server in-process on :18791.
-// Against wrangler dev instead:  WORLD_URL=ws://127.0.0.1:8787 node world/test/run.mjs  (report check is skipped there)
+// Against wrangler dev instead:  WORLD_URL=ws://127.0.0.1:8787 node world/test/run.mjs  (reports are read from the DEV-only /dev/reports)
 import assert from 'node:assert/strict'
 let dev = null
 if (!process.env.WORLD_URL) { process.env.WORLD_PORT = '18791'; process.env.WORLD_URL = 'ws://127.0.0.1:18791'; dev = await import('../dev/server.ts'); await new Promise(r => setTimeout(r, 300)) }
+else await import('../src/profanity.ts') // the filter unit test runs in this process; wrangler has its own copy
 const { Bot, profile, sleep } = await import('./lib.mjs')
+const HTTP = process.env.WORLD_URL.replace(/^ws/, 'http')
+const getReports = async () => dev ? dev.reports : (await (await fetch(HTTP + '/dev/reports')).json()).sort((a, b) => a.at - b.at)
 const { SPEED, F_HEART, F_BROKEN, F_ME } = await import('../shared/proto.ts')
 const results = []; let failed = 0
 async function test(name, fn) {
@@ -18,6 +21,14 @@ const mark = (v, o) => (v.ents.get(o.me)?.f ?? -1) & 3
 const done = () => { for (const b of all.splice(0)) b.close(); return sleep(150) }
 const textOf = b => b.text.join('\n')
 
+await test("map: GD's 40x24 landscape café, every floor tile and all 12 table seats reachable from the door", async () => {
+  const M = await import('../shared/map.ts'); assert.equal(M.MAP_ID, 'cafe-landscape'); assert.equal(M.W, 40); assert.equal(M.H, 24)
+  assert.equal(M.TABLES.length, 12); for (const t of M.TABLES) for (const [x, y] of t.seats) assert.ok(M.isSeat(x, y) && M.at(x + (x < t.x ? 1 : -1), y) === 'T')
+  const seen = new Set(), q = [M.SPAWNS[0]]; seen.add(q[0].join())
+  while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = [x + dx, y + dy]; if (M.walkable(...k) && !seen.has(k.join())) { seen.add(k.join()); q.push(k) } } }
+  for (let y = 0; y < M.H; y++) for (let x = 0; x < M.W; x++) if (M.walkable(x, y)) assert.ok(seen.has(x + ',' + y), `unreachable ${x},${y}`)
+  for (let x = 0; x < M.W; x++) assert.ok(!M.walkable(x, 0) && !M.walkable(x, 2) && !M.walkable(x, M.H - 1)); for (let y = 0; y < M.H; y++) assert.ok(!M.walkable(0, y) && !M.walkable(M.W - 1, y))
+})
 await test('join refused without a valid invite', async () => {
   const [b, r] = await join({}, { invite: 'nope' }); assert.equal(r.t, 'no'); assert.equal(r.why, 'invite'); await sleep(50); assert.equal(b.closed, 4001)
 })
@@ -109,15 +120,14 @@ await test('block hides both people, in this instance and every other one', asyn
 })
 
 await test('report is stored with a time stamp and context, and the reported person is not told', async () => {
-  if (!dev) return
   const A = await J({ name: 'Rita' }), B = await J({ name: 'Rude' }); await sleep(250)
   B.send({ t: 'say', text: 'hey you' }); await A.wait(() => A.last('say'))
-  const n0 = dev.reports.length, t0 = Date.now()
+  const n0 = (await getReports()).length, t0 = Date.now()
   A.send({ t: 'report', id: B.me, why: 'rude' }); await A.wait(() => A.last('ack'))
-  await sleep(100); assert.equal(dev.reports.length, n0 + 1); const r = dev.reports.at(-1)
+  await sleep(300); let rs = await getReports(); assert.equal(rs.length, n0 + 1); const r = rs.at(-1)
   assert.ok(r.at >= t0 - 5 && r.at <= Date.now()); assert.equal(r.inst, 'cafe-1'); assert.equal(r.by, A.p.uid); assert.equal(r.who, B.p.uid); assert.equal(r.why, 'rude')
   assert.deepEqual(r.ctx.said.map(x => x.text ?? x), ['hey you']); assert.ok(r.ctx.heard.some(x => (x.text ?? x) === 'hey you')); assert.ok(r.ctx.where && Number.isInteger(r.ctx.tick))
-  A.send({ t: 'report', id: B.me, why: '<script>' }); await sleep(200); assert.equal(dev.reports.at(-1).why, 'other')
+  A.send({ t: 'report', id: B.me, why: '<script>' }); await sleep(300); rs = await getReports(); assert.equal(rs.at(-1).why, 'other')
   assert.ok(!textOf(B).includes('report'))
   await done()
 })
@@ -170,5 +180,6 @@ await test('snapshot: one binary frame per tick per client, only people in your 
   await done()
 })
 
+console.log(`server: ${dev ? 'Node dev server, filter ' + dev.filterKind : 'wrangler dev ' + process.env.WORLD_URL + ' (Worker code, obscenity)'}`)
 console.log(failed ? `\n${failed} FAILED` : `\nworld: ALL ${results.length} OK`)
 process.exit(failed ? 1 : 0)

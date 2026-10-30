@@ -7,7 +7,7 @@ import { BRACKETS, BUBBLE_MS, MAX_SAY, bracketLabel, type Pub, type ServerMsg } 
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
 import { walkable } from '../../world/shared/map.ts'
 import { WorldNet } from './net.ts'
-import { Renderer, type Layout } from './render.ts'
+import { Renderer, MW, MH, type Layout } from './render.ts'
 import './world.css'
 
 /** Dev server URL. A ?ws= override is honoured only for this machine, so a crafted link can't send your profile elsewhere. */
@@ -91,11 +91,11 @@ function World() {
     }
     raf = requestAnimationFrame(loop)
     ;(window as any).__world = { net: n, r, bubbles: bubbles.current,
-      state: () => ({ me: n.me, inst: n.inst, k: r.k, vw: r.vw, vh: r.vh, cam: [r.camX, r.camY], fps: r.fps, layout: layoutOf(), bytes: n.bytes,
+      state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, layout: layoutOf(), bytes: n.bytes,
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
-    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); r.destroy() }
   }, [phase])
 
   // keyboard: arrows/WASD walk, Enter talks, Esc closes

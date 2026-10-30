@@ -6,3 +6,4 @@ shots
 public/avatar/wasm/
 public/avatar/models/
 world/test/.out/
+.wrangler

@@ -57,7 +57,17 @@ const meEnt = async p => { const s = await st(p); return s?.ents.find(e => e.id 
 const entBy = async (p, name) => (await st(p))?.ents.find(e => e.name === name)
 const tapAt = (p, x, y) => p.touch ? p.touchscreen.tap(x, y) : p.mouse.click(x, y)
 const tapTile = async (p, tx, ty) => { const [x, y] = await p.evaluate((a, b) => window.__world.tileCss(a, b), tx, ty); await tapAt(p, x, y) }
-const tapPerson = async (p, name) => { const e = await entBy(p, name); const [x, y] = await p.evaluate(id => window.__world.css(id), e.id); const c = await p.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON()); if (x < c.left || x > c.right || y < c.top || y > c.bottom) console.log(`  ${p.tag}: ${name} is off camera at ${x | 0},${y | 0}`); await tapAt(p, x, y) }
+const tapPerson = async (p, name) => {
+  // the camera can still be easing (after standing up, a seat change): wait up to 3 s for them to be on camera
+  let x, y, c, e
+  for (let k = 0; k < 15; k++) {
+    e = await entBy(p, name); [x, y] = await p.evaluate(id => window.__world.css(id), e.id); c = await p.$eval('[data-t=w-canvas]', c => c.getBoundingClientRect().toJSON())
+    if (!(x < c.left || x > c.right || y < c.top || y > c.bottom)) break
+    await sleep(200)
+  }
+  if (x < c.left || x > c.right || y < c.top || y > c.bottom) console.log(`  ${p.tag}: ${name} is off camera at ${x | 0},${y | 0} (tile ${e.x.toFixed(1)},${e.y.toFixed(1)}; me ${JSON.stringify(await meEnt(p).then(m => m && [m.x.toFixed(1), m.y.toFixed(1)]))}; canvas ${c.top | 0}-${c.bottom | 0})`)
+  await tapAt(p, x, y)
+}
 // tap-to-walk the way a person would: tap the tile if it is on screen, otherwise tap toward it at the screen edge and go again
 // (the phone shows ~12 tiles across, so far tiles take a couple of hops)
 const walkTo = async (p, tx, ty, ms = 15000) => {

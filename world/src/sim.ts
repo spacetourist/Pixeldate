@@ -2,7 +2,7 @@
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
 import { TABLES, SPAWNS, walkable, isSeat, type Table } from '../shared/map.ts'
 import { findPath, nearestWalkable, type P } from '../shared/path.ts'
-import { CAP, ENT_BYTES, FIX, F_BROKEN, F_HEART, F_ME, F_MOVING, F_SIT, HEAD_BYTES, LV_MAX, MAX_ANS, PHOTO_MAX, SAY_MAX, SAY_WINDOW_MS, SNAP, SPEED, STALE_MS, VIDEO_LEVEL, type Pub, type Table as TableView } from '../shared/proto.ts'
+import { CAP, ENT_BYTES, FIX, F_BROKEN, F_HEART, F_ME, F_MOVING, F_SIT, HEAD_BYTES, LV_MAX, LV_SEG, MAX_ANS, PHOTO_MAX, SAY_MAX, SAY_WINDOW_MS, SNAP, SPEED, STALE_MS, VIDEO_LEVEL, type Pub, type Table as TableView } from '../shared/proto.ts'
 import { compatible, okBracket, type Prefs } from '../shared/compat.ts'
 import { check, cleanName } from './filter.ts'
 import { localDeck, type Question } from '../../src/deck.ts'
@@ -15,8 +15,9 @@ export const emptyRec = (): Rec => ({ met: [], hearted: [], passed: [], refusedB
 /** Per-user memory (UserDO in production, a Map in tests). add() is fire-and-forget from the Room's point of view. */
 export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Field, other: string): void; report(r: Report): void }
 export interface Report { at: number; inst: string; by: string; who: string; why: string; ctx: { said: { at: number; text: string }[]; heard: { at: number; text: string }[]; where: [number, number][]; tick: number } }
-/** v05: what a pair keeps for the session (Area DO storage in production): their level and who said yes to a date. */
-export interface PairRec { lv: number; date: string[] }
+/** v05: what a pair keeps for the session (Area DO storage in production): their level, how many cards
+    into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
+export interface PairRec { lv: number; seg?: number; date: string[] }
 export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => number; next?: string
   /** a socket that sends nothing (not even the keepalive) for this long is dropped (default STALE_MS) */ staleMs?: number
   /** pair records loaded at start, and the hook that persists one when it changes (both optional: tests keep them in memory) */
@@ -37,7 +38,7 @@ class Player {
   }
   pub(): Pub { return { id: this.id, name: this.name, br: this.br, pav: this.pav } }
 }
-interface Pair { tb: number; key: string; a: Player; b: Player; level: number; used: Set<string>; q: Question | null
+interface Pair { tb: number; key: string; a: Player; b: Player; level: number; seg: number; up: boolean; used: Set<string>; q: Question | null
   ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null }
 const pairKey = (a: Player, b: Player) => [a.uid, b.uid].sort().join('|')
 /** Only the two people at a table ever receive anything from these maps. */
@@ -210,7 +211,7 @@ export class Room {
       if (cur && (!ok || cur.a !== a || cur.b !== b)) this.endPair(t.id)
       if (ok && a && b && !this.pairs.has(t.id)) {
         const key = pairKey(a, b), rec = this.mem.get(key)
-        const pr: Pair = { tb: t.id, key, a, b, level: Math.min(LV_MAX, Math.max(1, rec?.lv ?? 1)), used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
+        const pr: Pair = { tb: t.id, key, a, b, level: Math.min(LV_MAX, Math.max(1, rec?.lv ?? 1)), seg: Math.min(LV_SEG, Math.max(0, rec?.seg ?? 0)), up: false, used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
           date: new Set([a, b].filter(x => rec?.date.includes(x.uid))), call: null }
         this.pairs.set(t.id, pr); a.table = b.table = t
         for (const [x, y] of [[a, b], [b, a]]) if (!x.sets.met.has(y.uid)) { x.sets.met.add(y.uid); this.store.add(x.uid, 'met', y.uid) }
@@ -224,20 +225,20 @@ export class Room {
     for (let l = pr.level; l >= 1 && !q; l--) q = localDeck.next(l, pr.used)
     if (!q) { pr.used.clear(); q = localDeck.next(pr.level, pr.used) }
     pr.q = q; if (q) pr.used.add(q.id)
-    pr.ans.clear(); pr.rev = false
+    pr.ans.clear(); pr.rev = false; pr.up = false
     this.sendCard(pr)
   }
   /** Each of the two gets their own view: their answer, whether the other has answered, and the other's answer only
       after both are in. Nobody else is ever sent any of it. */
   view(pr: Pair, v: Player): TableView & { t: 'card'; q: { id: string; text: string } | null; with: number } {
     const o = other(pr, v), mine = pr.ans.get(v) ?? null
-    return { t: 'card', q: pr.q && { id: pr.q.id, text: pr.q.text }, with: o.id, tb: pr.tb, lv: pr.level, n: pr.n, mine, them: pr.ans.has(o),
+    return { t: 'card', q: pr.q && { id: pr.q.id, text: pr.q.text }, with: o.id, tb: pr.tb, lv: pr.level, seg: pr.seg, up: pr.up, n: pr.n, mine, them: pr.ans.has(o),
       rev: pr.rev ? { mine: mine ?? '', theirs: pr.ans.get(o) ?? '' } : null, date: { me: pr.date.has(v), them: pr.date.has(o) },
       call: pr.call ? (pr.call === v ? 'out' : 'in') : null, video: VIDEO_LEVEL }
   }
   private sendCard(pr: Pair) { for (const v of [pr.a, pr.b]) v.sock.send(JSON.stringify(this.view(pr, v))) }
   private persist(pr: Pair) {
-    const r: PairRec = { lv: pr.level, date: [...pr.date].map(x => x.uid) }; this.mem.set(pr.key, r)
+    const r: PairRec = { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid) }; this.mem.set(pr.key, r)
     if (this.mem.size > 20000) this.mem.delete(this.mem.keys().next().value!)
     this.opts.savePair?.(pr.key, r)
   }
@@ -248,7 +249,11 @@ export class Room {
     if (!v.ok) return p.sock.send(JSON.stringify({ t: 'ansno', why: v.why, text: raw }))
     pr.ans.set(p, v.text); p.recent.push({ at: this.now(), text: v.text, to: other(pr, p).uid }); if (p.recent.length > 8) p.recent.shift()
     if (pr.ans.size === 2) {
-      pr.rev = true; pr.n++; pr.level = Math.min(LV_MAX, pr.level + 1); this.persist(pr)
+      pr.rev = true; pr.n++
+      // one meter segment per card you both answered; a full meter is the next level (the last level just stays full)
+      if (pr.level >= LV_MAX) pr.seg = Math.min(LV_SEG, pr.seg + 1)
+      else if (++pr.seg >= LV_SEG) { pr.level++; pr.seg = 0; pr.up = true }
+      this.persist(pr)
       for (const x of [pr.a, pr.b]) { const o = other(pr, x); x.heard.push({ at: this.now(), text: pr.ans.get(o)! }); if (x.heard.length > 8) x.heard.shift() }
     }
     this.sendCard(pr)
@@ -260,15 +265,16 @@ export class Room {
     else { const asked = pr.date.has(o) && !pr.date.has(p); pr.date.clear(); pr.call = null; if (asked) o.sock.send(JSON.stringify({ t: 'note', k: 'date-no' })) }
     this.persist(pr); this.sendCard(pr)
   }
-  /** Start call: only a dating pair at the video level. Nobody goes on camera until BOTH tapped: the asker's tap, then the
-      other's accept. Only then are the two sent the one-time code their app's PeerJS video date uses. */
+  /** Start call: only at the video level (GD: Level 3 · Crush). Nobody goes on camera until BOTH tapped Start call (the
+      second tap is 'callyes', or a 'call' while the other's is waiting); either can cancel or decline. Only then are the two sent the one-time code their app's PeerJS video date uses. */
   private callMsg(p: Player, what: 'call' | 'callyes' | 'callno') {
     const pr = this.pairOf(p); if (!pr) return
     const o = other(pr, p)
-    if (what === 'call') { if (pr.call || pr.date.size < 2 || pr.level < VIDEO_LEVEL) return; pr.call = p }
+    if (what === 'call' && pr.call && pr.call !== p) what = 'callyes'
+    if (what === 'call') { if (pr.call || pr.level < VIDEO_LEVEL) return; pr.call = p }
     else if (what === 'callno') { if (!pr.call) return; o.sock.send(JSON.stringify({ t: 'note', k: pr.call === p ? 'call-cancelled' : 'call-declined' })); pr.call = null }
     else {
-      if (!pr.call || pr.call === p || pr.date.size < 2) return
+      if (!pr.call || pr.call === p || pr.level < VIDEO_LEVEL) return
       const host = pr.call, r = crypto.getRandomValues(new Uint8Array(12)), code = [...r].map(x => (x % 36).toString(36)).join('')
       pr.call = null
       for (const x of [pr.a, pr.b]) x.sock.send(JSON.stringify({ t: 'call', code, host: x === host, lv: pr.level }))

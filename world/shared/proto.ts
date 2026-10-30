@@ -4,9 +4,9 @@
 export const SNAP = 1, ENT_BYTES = 7, HEAD_BYTES = 6, FIX = 64
 export const F_HEART = 1, F_BROKEN = 2, F_MOVING = 4, F_SIT = 8, F_ME = 16
 /** v05: keepalive. The client pings every KA (the server tells it in 'hi'); a socket silent for STALE_MS is dropped.
-    MAX_ANS: a table answer. LV_MAX: the pair level tops out where the main app's photo is clear. VIDEO_LEVEL: the main app
-    gates video calls on no level (the camera is pixelated to the level instead), so Start call needs level 1 + a date. */
-export const STALE_MS = 15000, MAX_ANS = 140, LV_MAX = 5, VIDEO_LEVEL = 1, PHOTO_MAX = 200000
+    MAX_ANS: a table answer. LV_MAX: the pair level tops out where the main app's photo is clear. VIDEO_LEVEL: GD's v05
+    table mocks unlock Start call at Level 3 · Crush. LV_SEG: cards both answered per level (the 5-segment meter). */
+export const STALE_MS = 15000, MAX_ANS = 140, LV_MAX = 5, VIDEO_LEVEL = 3, LV_SEG = 5, PHOTO_MAX = 200000
 export const MAX_SAY = 80, SAY_WINDOW_MS = 15000, SAY_MAX = 3, BUBBLE_MS = 5000, CAP = 40, TICK_MS = 100, SPEED = 0.4
 export interface Ent { id: number; x: number; y: number; f: number }
 export function decodeSnap(buf: ArrayBuffer): { tick: number; ents: Ent[] } | null {
@@ -45,5 +45,5 @@ export type ClientMsg =
   | { t: 'photo'; lv: number; data: string }
 /** What one of the two at a table sees (sent only to them): level, the card, the answers (theirs only once both are in),
     the date opt-ins, and a pending call request ('out' = I asked, 'in' = they asked). */
-export interface Table { tb: number; lv: number; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null
+export interface Table { tb: number; lv: number; seg: number; up: boolean; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null
   date: { me: boolean; them: boolean }; call: 'out' | 'in' | null; video: number }

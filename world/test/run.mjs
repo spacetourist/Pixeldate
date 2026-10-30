@@ -157,6 +157,15 @@ const png = (w, h) => {
   const raw = Buffer.alloc(h * (1 + w * 3)); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set([200, 80, 90], y * (1 + w * 3) + 1 + x * 3)
   return 'data:image/png;base64,' + Buffer.concat([Buffer.from([0x89, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ih), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]).toString('base64')
 }
+/** both answer k cards (Next card between them); resolves with A's view after the last reveal */
+async function play(A, B, k) {
+  for (let i = 0; i < k; i++) {
+    if (A.last('card').rev) { const n = A.last('card').n; A.send({ t: 'next' }); await A.wait(() => A.last('card').rev === null && A.last('card').n === n); await B.wait(() => B.last('card').rev === null) }
+    const n = A.last('card').n; A.send({ t: 'ans', text: 'answer ' + i }); B.send({ t: 'ans', text: 'reply ' + i })
+    await A.wait(() => A.last('card').rev && A.last('card').n === n + 1); await B.wait(() => B.last('card').rev && B.last('card').n === n + 1)
+  }
+  return A.last('card')
+}
 /** two people sat at table i; resolves with their first card views */
 const seat = async (A, B, i = 3) => {
   const tb = TABLES[i]; await Promise.all([goTo(A, ...tb.seats[0], 12000), goTo(B, ...tb.seats[1], 12000)])
@@ -193,7 +202,7 @@ await test('table for two: both get the same card from the deck; Next only after
   await done()
 })
 
-await test('v05 answers: own field each, hidden until both are in, filtered, then revealed together and the pair goes up a level', async () => {
+await test('v05 answers: own field each, hidden until both are in, filtered, then revealed together; 5 cards fill the meter and the pair goes up a level', async () => {
   const { cardById } = await import('../../src/deck.ts')
   const A = await J({ name: 'Ana' }), B = await J({ name: 'Ben' }), C = await J({ name: 'Cat' }); await sleep(200)
   await seat(A, B, 2)
@@ -207,10 +216,13 @@ await test('v05 answers: own field each, hidden until both are in, filtered, the
   B.send({ t: 'ans', text: 'Just coffee' }); await A.wait(() => A.last('card').rev); await B.wait(() => B.last('card').rev)
   const a = A.last('card'), b = B.last('card')
   assert.deepEqual(a.rev, { mine: 'Pancakes with lemon', theirs: 'Just coffee' }); assert.deepEqual(b.rev, { mine: 'Just coffee', theirs: 'Pancakes with lemon' })
-  assert.equal(a.lv, 2); assert.equal(b.lv, 2); assert.equal(a.n, 1)
+  assert.equal(a.lv, 1); assert.equal(a.seg, 1, 'one card both answered = one meter segment'); assert.equal(a.up, false); assert.equal(a.n, 1)
   assert.ok(!textOf(C).includes('Just coffee') && !textOf(C).includes('Pancakes'))
+  // the meter is kept for the pair: stand up, sit again, still 1/5
+  await goTo(A, 3, 11); await A.wait(() => A.last('card').q === null); await seat(A, B, 2); assert.equal(A.last('card').seg, 1, 'pair meter lost')
+  const up = await play(A, B, 4); assert.equal(up.lv, 2, 'a full meter is not a level-up'); assert.equal(up.seg, 0); assert.equal(up.up, true)
   A.send({ t: 'next' }); await A.wait(() => A.last('card').rev === null); assert.equal(cardById(A.last('card').q.id).level, 2, 'next card not from the level-2 pool')
-  // the level is kept for the pair: stand up, sit again, still level 2
+  assert.equal(A.last('card').up, false)
   await goTo(A, 3, 11); await A.wait(() => A.last('card').q === null); await seat(A, B, 2); assert.equal(A.last('card').lv, 2, 'pair level lost')
   await done()
 })
@@ -236,19 +248,18 @@ await test('v05 private table chat: the partner gets the words, everyone else a 
   await done()
 })
 
-await test('v05 date + Start call: only a dating pair can ask; decline, cancel; both taps -> one shared code, nobody else told', async () => {
+await test('v05 Start call: locked below Level 3 · Crush; decline, cancel; both taps -> one shared code, nobody else told', async () => {
   const A = await J({ name: 'Dee' }), B = await J({ name: 'Dan' }), C = await J({ name: 'Cyd' }); await sleep(200)
   await seat(A, B, 4)
-  A.send({ t: 'call' }); await sleep(250); assert.equal(B.last('card').call, null, 'call before a date')
-  A.send({ t: 'date', yes: true }); await B.wait(() => B.last('card').date.them); assert.deepEqual(B.last('card').date, { me: false, them: true })
-  B.send({ t: 'date', yes: false }); await A.wait(() => A.last('note')?.k === 'date-no'); assert.deepEqual(A.last('card').date, { me: false, them: false })
-  A.send({ t: 'date', yes: true }); B.send({ t: 'date', yes: true }); await A.wait(() => A.last('card').date.them && A.last('card').date.me)
-  assert.equal(A.last('card').video, 1)
+  assert.equal(A.last('card').video, 3)
+  A.send({ t: 'call' }); await sleep(250); assert.equal(B.last('card').call, null, 'call before the video level')
+  const l2 = await play(A, B, 5); assert.equal(l2.lv, 2); A.send({ t: 'call' }); await sleep(250); assert.equal(B.last('card').call, null, 'call at level 2')
+  const l3 = await play(A, B, 5); assert.equal(l3.lv, 3)
   A.send({ t: 'call' }); await B.wait(() => B.last('card').call === 'in'); assert.equal((await A.wait(() => A.last('card').call)), 'out')
   B.send({ t: 'callno' }); await A.wait(() => A.last('note')?.k === 'call-declined'); assert.equal(A.last('card').call, null)
   A.send({ t: 'call' }); await B.wait(() => B.last('card').call === 'in'); A.send({ t: 'callno' }); await B.wait(() => B.last('note')?.k === 'call-cancelled')
   A.send({ t: 'callyes' }); await sleep(200); assert.ok(!A.last('call'), 'the asker accepted their own call')
-  B.send({ t: 'call' }); await A.wait(() => A.last('card').call === 'in'); A.send({ t: 'callyes' })
+  B.send({ t: 'call' }); await A.wait(() => A.last('card').call === 'in'); A.send({ t: 'call' }) // both tapped Start call
   const ca = await A.wait(() => A.last('call')), cb = await B.wait(() => B.last('call'))
   assert.ok(ca && cb && ca.code === cb.code && /^[a-z0-9]{12}$/.test(ca.code)); assert.equal(cb.host, true); assert.equal(ca.host, false)
   assert.ok(!textOf(C).includes(ca.code) && !C.events.some(e => e.t === 'call' || e.t === 'note'))

@@ -132,10 +132,11 @@ export class Net {
   onStatus?: (s: 'retrying' | 'up') => void
   me: Profile
   constructor(me: Profile) { this.me = me }
-  async start() {
+  /** `fixed`: a code agreed elsewhere (the World café's Start call hand-off); tried a few times, then a random one */
+  async start(fixed?: string) {
     await loadIce()
-    for (;;) {
-      this.code = Math.random().toString(36).slice(2, 8)
+    for (let i = 0; ; i++) {
+      this.code = fixed && i < 6 ? fixed : Math.random().toString(36).slice(2, 8)
       try { this.peer = await openPeer('pd-' + this.code); break } catch { this.onStatus?.('retrying'); await sleep(500) }
     }
     this.onStatus?.('up')

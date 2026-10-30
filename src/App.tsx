@@ -25,6 +25,8 @@ type Media = { stream: MediaStream; out: MediaStream; setLevel(l: number): void;
 import { Net, bracketLabel, type Profile, type Match } from './net'
 import { toast, dismiss, clearToasts, Toast, Toasts } from './ui/toast'
 import { Lobby } from './ui/lobby'
+import { takeHandoff, type Handoff, HANDOFF_MS } from './handoff'
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const deck: QuestionSource = localDeck
 /** Block button hidden for now (Callum); logic (block(), doSkip(true)) stays. */
@@ -126,11 +128,16 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const slow = useRef(0)
   const netStatus = (s: 'retrying' | 'up') => { clearTimeout(slow.current); if (s === 'up') { dismiss('conn'); return }
     slow.current = window.setTimeout(() => toast({ id: 'conn', where: st.current.m ? 'match' : 'page', role: 'error', icon: 'plug', t: 'notice-noconn', title: "Couldn't connect", body: "Check your connection. We'll keep trying." }), 1500) }
+  // World café "Start call" hand-off: both people tapped there, so the match + video call start straight away (see takeHandoff)
+  const hand = useRef<Handoff | null>(null)
   const start = async (p: Profile, ph: string) => {
     setMe(p); setPhoto(await loadImage(ph)); setScreen('lobby')
     const n = new Net(p); net.current = n
     n.onStatus = netStatus
-    await n.start(); setCode(n.code)
+    const h = hand.current = takeHandoff()
+    await n.start(h?.host ? h.code : undefined); setCode(n.code)
+    if (h) setTimeout(() => { if (hand.current === h) hand.current = null }, HANDOFF_MS)
+    if (h && !h.host) void (async () => { for (let i = 0; i < 12 && !st.current.m && hand.current === h; i++) { try { beginMatch(await n.joinCode(h.code)); return } catch { await sleep(1000) } } hand.current = null })()
     n.onIncomingByCode = mm => beginMatch(mm)
     n.peer.on('call', async mc => {
       if (mc.peer !== st.current.m?.peer) { mc.close(); return }
@@ -172,6 +179,9 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   const toggleCam = () => { const v = !camOff; call?.cam.out.getVideoTracks().forEach(t => t.enabled = !v); setCamOff(v) }
   const endCall = (tell = true) => { setRing(null); const r = ready.current; ready.current = null; r?.cam.stop(); const c = st.current.call; if (!c) return; c.cam.stop(); c.mc.close(); setCall(null); setCamErr(''); setEnded({ kind: c.kind, secs: callSecs.current }); if (tell) send({ t: 'endcall' }) }
   useEffect(() => { call?.cam.setLevel(level) }, [level, call])
+  // hand-off: the host rings once the match is up; the guest's app accepts that one ring (both already said yes in the café)
+  useEffect(() => { const h = hand.current; if (h?.host && m) { hand.current = null; setTimeout(() => { if (st.current.m === m) requestCall('video') }, 400) } }, [m])
+  useEffect(() => { const h = hand.current; if (h && !h.host && m && ring?.dir === 'in' && ring.kind === 'video') { hand.current = null; void acceptCall() } }, [ring, m])
   const callSecs = useRef(0)
   useEffect(() => { if (!call?.remote) return; const t0 = Date.now(); callSecs.current = 0; setCallT(0); const i = setInterval(() => { callSecs.current = Math.floor((Date.now() - t0) / 1000); setCallT(callSecs.current) }, 1000); return () => clearInterval(i) }, [call?.remote])
   useEffect(() => { if (camErr !== 'mic') return; setCamErr('')
@@ -198,7 +208,8 @@ export default function App({ initial }: { initial?: { p: Profile; photo: string
   }
   const beginMatch = (mm: Match) => {
     theirImgs.current = {}; shown.current = null
-    setLevel(1); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); setEnded(null); setCamErr(''); prevLv.current = 1; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
+    const h = hand.current, lv0 = h ? h.lv : 1
+    setLevel(lv0); setPct(0); setTaps({ me: false, them: false }); setAns({}); setThemSeason(null); seasonSent.current = false; setCredited([]); setMsgs([]); setTab('profile'); setAnswering(null); setSkip(null); setEvt(null); setReadyOpen(false); setLvup(null); setEnded(null); setCamErr(''); prevLv.current = lv0; setUnread(0); matchedAt.current = new Date().toTimeString().slice(0, 5)
     setM(mm); setScreen('match'); setPage(null); clearToasts('page'); clearToasts('match')
     hist.current = { id: mm.them.uid + '-' + Date.now(), uid: mm.them.uid, name: mm.them.name, br: mm.them.br, lv: 1, pct: 0, at: Date.now() }; saveHist(hist.current)
     mm.conn.on('data', onData); const x = mm.conn as any; if (x.qf) { mm.conn.off('data', x.qf); x.q.forEach(onData) } mm.conn.on('close', () => leave('left', true))

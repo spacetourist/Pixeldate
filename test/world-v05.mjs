@@ -168,7 +168,15 @@ await play(4)
 { const r = await sam.evaluate(() => ({ plus: document.querySelector('[data-t=w-plus]')?.textContent, lv: document.querySelector('[data-t=w-lv]')?.textContent }))
   ok(r.plus === 'Level up!' && /^Level 2 Spark\s*·\s*0\/5 to Crush/.test(r.lv.trim()), `level up: "${r.plus}", "${r.lv.trim()}"`) }
 await shot(sam, 'v05-07-level-up'); await shot(mia, 'v05-07-level-up')
-await play(5)
+// the mirror: Mia (desktop) answers first, so the answered/hidden + thinking states are shot at 1440 and the "has answered" one at 390
+await press(sam, '[data-t=w-next]'); await until(async () => !(await sam.$('[data-t=w-done]')) && !!(await mia.$('[data-t=w-ans-input]')), 6000)
+await typeIn(mia, '[data-t=w-ans-input]', 'Getting the window seat on the bus'); await mia.keyboard.press('Enter')
+ok(await until(() => mia.$('[data-t=w-hid]')), 'card a (desk): Mia\'s answer shows with "Hidden from Sam"')
+{ const h = await mia.$eval('[data-t=w-hid]', e => e.textContent), th = await mia.$eval('[data-t=w-them]', e => e.textContent), st = await until(() => sam.$eval('[data-t=w-them]', e => e.textContent).catch(() => ''))
+  ok(/Hidden from Sam/.test(h) && /Sam is thinking/.test(th) && /Mia has answered/.test(st) && !(await sam.evaluate(() => document.body.innerText.includes('window seat'))), `card a/b mirrored: "${h.trim()}", "${th.trim()}" / Sam sees "${st.trim()}"`) }
+await shot(mia, 'v05-05a-answered'); await shot(sam, 'v05-05b-they-answered')
+await typeIn(sam, '[data-t=w-ans-input]', 'A dog noticing me on the street'); await press(sam, '[data-t=w-ans-send]'); await until(() => sam.$('[data-t=w-done]'), 6000)
+await play(4)
 ok(/^Level 3 Crush/.test((await sam.$eval('[data-t=w-lv]', e => e.textContent)).trim()), 'level 3: Crush after 10 cards')
 // 6 ── Start call
 for (const p of [sam, mia]) { const c = await p.evaluate(() => ({ s: document.querySelector('[data-t=w-callrow]')?.dataset.call, bg: getComputedStyle(document.querySelector('[data-t=w-call]')).backgroundColor, t: document.querySelector('[data-t=w-callrow]')?.textContent }))
@@ -185,6 +193,12 @@ await sleep(500); await press(sam, '[data-t=w-call]'); const re = await until(as
 await press(sam, '[data-t=w-call-cancel]')
 ok(await until(async () => (await callSt(sam)) === 'open' && (await callSt(mia)) === 'open'), 'call: Sam cancels → Mia\'s request goes away')
 ok((await sam.evaluate(() => window.__gum)) === 0 && (await mia.evaluate(() => window.__gum)) === 0, 'call: nobody has touched the camera yet')
+// the mirror: Mia (desktop) taps first → her waiting state at 1440, Sam's request at 390; she cancels
+await until(async () => !(await mia.$('[data-t=w-note]')) && !(await sam.$('[data-t=w-note]')), 6000); await press(mia, '[data-t=w-call]'); ok(await until(async () => (await callSt(mia)) === 'out' && (await callSt(sam)) === 'in'), 'call mirrored: Mia taps → waiting for Sam; Sam sees the request')
+{ const t = await mia.$eval('[data-t=w-callrow]', e => e.textContent); ok(/Waiting for Sam/.test(t) && /You tapped/.test(t) && /Sam hasn.t yet/.test(t), `call waiting (desk): "${t.replace(/\s+/g, ' ').trim().slice(0, 90)}"`) }
+await sam.evaluate(() => document.querySelector('[data-t=w-callrow]')?.scrollIntoView({ block: 'end' })); await shot(mia, 'v05-06c-call-waiting'); await shot(sam, 'v05-06c-call-asked')
+await press(mia, '[data-t=w-call-cancel]'); ok(await until(async () => (await callSt(sam)) === 'open' && (await callSt(mia)) === 'open'), 'call mirrored: Mia cancels → back to Start call on both')
+await sleep(500)
 // both tap → hand-off to the app → video
 await press(sam, '[data-t=w-call]'); await until(async () => (await callSt(mia)) === 'in'); await press(mia, '[data-t=w-call-yes]')
 const inApp = p => until(() => p.evaluate(() => !document.querySelector('[data-t=w-room]') && !!document.querySelector('[data-t=call-chip]')), 25000, 250)

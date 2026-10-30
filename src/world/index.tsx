@@ -1,7 +1,7 @@
 /* Pixeldate World · café (phase 1). Lazy chunk: reached only through ?world=cafe, so none of this is in the initial JS. */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { savedProfile, saveProfile, loadPhoto } from '../prefs'
+import { savedProfile, saveProfile, loadPhoto, LB } from '../prefs'
 import { LEVELS } from '../config'
 import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
@@ -22,7 +22,7 @@ import { startLook } from '../avatar/kit/defaults.ts'
 import { Renderer, MW, MH, type Layout } from './render.ts'
 import heartPng from './art/markers/heart.png'
 import coupleHeart3x from './art/couple/couple-heart@3x.png'
-import { CafeCall, type CallEnd } from './call.ts'
+import { CafeCall, turnUrl, type CallEnd } from './call.ts'
 import './world.css'
 const Char = lazy(() => import('../avatar/kit/Char'))
 
@@ -37,7 +37,7 @@ const WHY: Record<string, string> = {
   long: `Not sent: ${MAX_SAY} characters max.`, slow: 'Slow down a little: 3 bubbles per 15 seconds.', empty: '',
 }
 const REFUSED: Record<string, string> = { invite: "That invite code isn't on the list.", adult: 'The café is 18+ only.', profile: 'Your profile needs a refresh: make it again in the app.',
-  timeout: 'Took too long to join. Try again.', closed: 'Lost the connection to the café.', replaced: 'You joined from another tab.' }
+  busy: "Café's busy, try later.", timeout: 'Took too long to join. Try again.', closed: 'Lost the connection to the café.', replaced: 'You joined from another tab.' }
 const REASONS: [string, string][] = [['rude', 'Rude or abusive'], ['sexual', 'Sexual content'], ['spam', 'Spam or selling'], ['underage', 'Might be under 18'], ['fake', 'Fake profile'], ['other', 'Something else']]
 /** GD v04: gap between stacked bubbles, in art px; desktop chat log length */
 const STACK_GAP = 2, LOG_MAX = 40
@@ -173,9 +173,9 @@ function World() {
         if (m.k === 'duet-cant') { flash(`${n.pubs.get(m.id)?.name ?? 'They'} can't play right now`); return }
         flash(m.k === 'date-no' ? `${who} said not now. You can keep talking.` : m.k === 'call-declined' ? `${who} said not now to a call. You can keep talking.` : `${who} cancelled the call.`) }
       else if (m.t === 'call') { callRef.current?.end('hangup')
-        const c = new CafeCall(m.code, m.host, m.lv); callRef.current = c; setCall(c); setHeartOn(true); flash('Starting your video call…')
+        const c = new CafeCall(m.code, m.host, m.lv, { url: turnUrl(serverUrl()), invite: invite.trim(), uid: prof!.uid }); callRef.current = c; setCall(c); setHeartOn(true); flash('Starting your video call…')
         c.onUp = () => { n.send({ t: 'callup' } as any); setCallTick(x => x + 1) }; c.onChange = () => setCallTick(x => x + 1)
-        c.onEnd = why => { if (callRef.current === c) { callRef.current = null; setCall(null) } if (why !== 'remote') n.send({ t: 'calldown' } as any); flash(CALLEND[why]) }
+        c.onEnd = why => { if (callRef.current === c) { callRef.current = null; setCall(null) } if (why !== 'remote') n.send({ t: 'calldown' } as any); flash(why === 'lost' && !c.up && !c.relay && !LB ? "The call couldn't connect on this network right now." : CALLEND[why]) }
         void c.start().catch(() => c.end('media')) }
       else if (m.t === 'callend') callRef.current?.end('remote')
       else if (m.t === 'couple') { const h = ren.current?.hearts ?? pendingHearts; if (m.on) h.add(m.tb); else h.delete(m.tb) }

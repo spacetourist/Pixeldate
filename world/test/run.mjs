@@ -522,6 +522,68 @@ await test('snapshot: one binary frame per tick per client, only people in your 
   await done()
 })
 
+// ---- free-plan blocks: /turn (TURN credentials), the TURN budget, the daily soft cap ----
+const INV = process.env.WORLD_INVITE ?? 'dev-invite-1'
+const setB = async o => dev ? (await dev.budget.setForTest(o), dev.budget.status()) : fetch(HTTP + '/dev/budget', { method: 'POST', body: JSON.stringify(o) }).then(r => r.json())
+const turn = (p, inv = INV, method = 'GET') => fetch(`${HTTP}/turn?p=${encodeURIComponent(p)}`, { method, headers: inv == null ? {} : { 'x-pd-invite': inv } })
+const uid = () => 'turn-' + Math.random().toString(36).slice(2, 10)
+await test('/turn: invite-gated, needs a player, answers TURN servers (shape, CORS, no port 53)', async () => {
+  await setB({ estGB: 0, actualBytes: null, requests: 0, clearRate: true })
+  assert.equal((await turn(uid(), null)).status, 403); assert.equal((await turn(uid(), 'nope')).status, 403)
+  assert.equal((await (await turn(uid(), 'nope')).json()).why, 'invite')
+  assert.equal((await turn('x')).status, 400)
+  const o = await turn(uid(), null, 'OPTIONS'); assert.equal(o.status, 204); assert.match(o.headers.get('access-control-allow-headers') ?? '', /x-pd-invite/)
+  const r = await turn(uid()); assert.equal(r.status, 200); assert.equal(r.headers.get('access-control-allow-origin'), '*'); assert.match(r.headers.get('cache-control') ?? '', /no-store/)
+  const j = await r.json(); assert.equal(j.turn, true); assert.equal(j.ttl, 3600); assert.ok(Array.isArray(j.iceServers) && j.iceServers.length)
+  const t = j.iceServers.find(s => s.urls.some(u => u.startsWith('turn'))); assert.ok(t && t.username && t.credential, 'a TURN entry with credentials')
+  assert.ok(!j.iceServers.some(s => s.urls.some(u => /:53(\?|$)/.test(u))), 'port 53 dropped')
+  assert.equal((await setB({})).estGB, 2, 'one credential-hour counted as 2 GB')
+})
+await test('/turn: rate-limited per player (4 per 10 min) and per IP', async () => {
+  await setB({ clearRate: true }); const p = uid()
+  for (let i = 0; i < 4; i++) assert.equal((await turn(p)).status, 200, 'call ' + i)
+  const r = await turn(p); assert.equal(r.status, 429); assert.equal((await r.json()).why, 'rate')
+  assert.equal((await turn(uid())).status, 200, 'another player is fine')
+  for (let i = 0; i < 7; i++) await turn(uid()); assert.equal((await turn(uid())).status, 429, 'the 13th from one IP in 10 min')
+  await setB({ clearRate: true })
+})
+await test('TURN budget: 600 GB estimated / 700 GB actual per UTC month, then STUN only (no TURN servers)', async () => {
+  await setB({ estGB: 598, actualBytes: null, clearRate: true })
+  let j = await (await turn(uid())).json(); assert.equal(j.turn, true, 'the last 2 GB fit (600)')
+  j = await (await turn(uid())).json(); assert.equal(j.turn, false); assert.equal(j.why, 'budget'); assert.deepEqual(j.iceServers, [])
+  await setB({ estGB: 0, actualBytes: 700e9 }); j = await (await turn(uid())).json(); assert.equal(j.why, 'actual'); assert.deepEqual(j.iceServers, [])
+  await setB({ actualBytes: 699e9 }); j = await (await turn(uid())).json(); assert.equal(j.turn, true, 'under 700 GB actual')
+  if (dev) { // mocked clock: next month starts fresh
+    await setB({ estGB: 600, clearRate: true }); assert.equal((await (await turn(uid())).json()).why, 'budget')
+    const now = Date.now(), d = new Date(now), next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 5); dev.clock.off = next - now
+    try { assert.equal((await (await turn(uid())).json()).turn, true, 'new month: TURN again') } finally { dev.clock.off = 0 }
+  }
+  await setB({ estGB: 0, actualBytes: null, clearRate: true })
+})
+await test('TURN budget (unit, mocked clock + usage): 10-min usage cache, month rollover, GraphQL failures keep the last value', async () => {
+  const { Budget, memKV, LIMITS } = await import('../src/budget.ts')
+  let t = Date.UTC(2026, 9, 31, 23, 0), calls = 0, bytes = 100e9, fail = false
+  const b = new Budget(memKV(), () => t, async () => { calls++; if (fail) throw new Error('down'); return bytes })
+  assert.equal((await b.turn('p1', 'ip')).ok, true); assert.equal(calls, 1)
+  bytes = 800e9; t += 5 * 60_000; assert.equal((await b.turn('p2', 'ip')).ok, true, 'cached for 10 min'); assert.equal(calls, 1)
+  t += 6 * 60_000; const g = await b.turn('p3', 'ip'); assert.deepEqual(g, { ok: false, why: 'actual' }); assert.equal(calls, 2, 'refreshed after 10 min')
+  fail = true; t += 61 * 60_000; assert.equal((await b.turn('p4', 'ip')).ok, true, 'November: fresh month, usage unknown → estimate only')
+  fail = false; bytes = 0; const s = await b.status(); assert.equal(s.month, '2026-11'); assert.equal(s.estGB, LIMITS.EST_GB_PER_HOUR)
+  // estimate cap: 300 credential-hours a month
+  const c = new Budget(memKV(), () => t); let n = 0; for (let i = 0; i < 400; i++) { if ((await c.turn('u' + i, 'ip' + i)).ok) n++ } assert.equal(n, LIMITS.EST_CAP_GB / LIMITS.EST_GB_PER_HOUR)
+})
+await test('daily soft cap: new joins get "busy" at 80% of 100k requests (UTC day); people inside stay; resets at 00:00 UTC', async () => {
+  const In = await J({ name: 'Inside' }); await setB({ requests: 79_999 })
+  const [, r] = await join({ name: 'Late' }); assert.equal(r.t, 'no'); assert.equal(r.why, 'busy')
+  await sleep(300); assert.ok(In.ws.readyState === 1, 'already inside: still connected')
+  if (dev) { const now = Date.now(), d = new Date(now); dev.clock.off = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 5) - now
+    try { const [b2, r2] = await join({ name: 'Tomorrow' }); assert.equal(r2.t, 'hi', 'next UTC day: open again'); b2.close() } finally { dev.clock.off = 0 } }
+  await setB({ requests: 0 }); const [b3, r3] = await join({ name: 'Ok' }); assert.equal(r3.t, 'hi'); b3.close()
+  const { Budget, memKV } = await import('../src/budget.ts'); let t = Date.UTC(2026, 9, 30, 23, 59, 59); const b = new Budget(memKV(), () => t)
+  await b.hit(79_999); assert.equal((await b.join(1)).busy, true); t += 2000; assert.equal((await b.join(1)).busy, false, 'new UTC day')
+  await done()
+})
+
 console.log(`server: ${dev ? 'Node dev server, filter ' + dev.filterKind : 'wrangler dev ' + process.env.WORLD_URL + ' (Worker code, obscenity)'}`)
 console.log(failed ? `\n${failed} FAILED` : `\nworld: ALL ${results.length} OK`)
 process.exit(failed ? 1 : 0)

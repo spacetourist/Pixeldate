@@ -2,26 +2,41 @@
    After both tap Start call the server gives the pair one code; the host's phone opens peer pdw-<code>-h and the guest's
    calls it from pdw-<code>-g. Same media rules as the app (src/App.tsx, src/video.ts): the only video track sent is
    PixelCam's canvas, pixelated ON THIS PHONE to the pair's level; the raw camera is shown only here, as the self view.
-   ICE: the app's STUN, plus Metered TURN when the build has VITE_METERED_KEY (unchanged; the TURN question is open).
+   ICE: the app's STUN, plus Cloudflare TURN from the world server's GET /turn (invite-gated, rate-limited, capped to the
+   free plan; world/src/turn.ts). If that fetch fails or the month's TURN budget is spent, the call uses STUN only.
    ?loopback uses the app's FakePeer (tabs in one browser; it echoes your own pixelated stream back as the "partner"). */
 import { LB } from '../prefs'
 const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }]
-let ice: Promise<RTCIceServer[]> | null = null
-const iceServers = () => ice ||= (async () => {
-  const key = import.meta.env.VITE_METERED_KEY as string | undefined
-  try { if (!key || LB) throw 0
-    const r = await fetch('https://pixeldate.metered.live/api/v1/turn/credentials?apiKey=' + key, { signal: AbortSignal.timeout(4000) })
-    const t: RTCIceServer[] = await r.json(); if (!Array.isArray(t)) throw 0; return [...STUN, ...t] } catch { return STUN as RTCIceServer[] }
-})()
+export type TurnFrom = { url: string; invite: string; uid: string }
+type Ice = { servers: RTCIceServer[]; turn: boolean }
+/** /turn on the same host as the café socket (wss://h → https://h/turn) */
+export const turnUrl = (ws: string) => ws.replace(/^ws/, 'http').replace(/\/+$/, '') + '/turn'
+/** TURN credentials last an hour; reuse them for 50 min (each fetch counts against the month's budget). Failures aren't kept. */
+const REUSE_MS = 50 * 60_000
+let ice: { at: number; p: Promise<Ice> } | null = null
+const isTurn = (s: RTCIceServer) => ([] as string[]).concat(s.urls as any).some(u => /^turns?:/.test(u))
+export function iceServers(from?: TurnFrom): Promise<Ice> {
+  if (ice && Date.now() - ice.at < REUSE_MS) return ice.p
+  const p = (async (): Promise<Ice> => {
+    try { if (!from || LB) throw 0
+      const r = await fetch(from.url + '?p=' + encodeURIComponent(from.uid), { headers: { 'x-pd-invite': from.invite }, signal: AbortSignal.timeout(4000) })
+      const j = await r.json(), t: RTCIceServer[] = Array.isArray(j?.iceServers) ? j.iceServers.filter(isTurn) : []
+      return t.length ? { servers: [...STUN, ...t], turn: true } : { servers: STUN, turn: false } } catch { return { servers: STUN, turn: false } }
+  })()
+  const e = ice = { at: Date.now(), p }; void p.then(x => { if (!x.turn && ice === e) ice = null })
+  return p
+}
 /** how long the guest keeps dialling while the host's peer comes up */
 const DIAL_MS = 30000, RETRY_MS = 900, DIAL_AFTER_MS = 1000
 export type CallEnd = 'hangup' | 'lost' | 'media' | 'remote'
 export class CafeCall {
   raw: MediaStream | null = null; out: MediaStream | null = null; remote: MediaStream | null = null
   up = false; ended = false; muted = false; camOff = false
+  /** false when this call had no TURN relay (fetch failed or budget spent): a failed call then shows a quiet note */
+  relay = true
   private cam: { setLevel(l: number): void; stop(): void } | null = null; private peer: any = null; private mc: any = null; private t0 = Date.now()
   onUp: () => void = () => {}; onEnd: (why: CallEnd) => void = () => {}; onChange: () => void = () => {}
-  constructor(public code: string, public host: boolean, public lv: number) {}
+  constructor(public code: string, public host: boolean, public lv: number, public from?: TurnFrom) {}
   async start() {
     const md = navigator.mediaDevices
     this.raw = await md?.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: true }).catch(() => md.getUserMedia({ audio: true })).catch(() => null) ?? null
@@ -30,7 +45,7 @@ export class CafeCall {
     if (this.raw.getVideoTracks().length) { const { PixelCam } = await import('../video'); const c = new PixelCam(this.raw); c.setLevel(this.lv); this.cam = c
       this.out = new MediaStream([...c.out.getVideoTracks(), ...this.raw.getAudioTracks()]) } else this.out = this.raw
     const Peer = LB ? (await import('../fakepeer')).FakePeer : (await import('peerjs')).default
-    const servers = await iceServers(); if (this.ended) return this.stopMedia()
+    const ic = await iceServers(this.from); this.relay = ic.turn; const servers = ic.servers; if (this.ended) return this.stopMedia()
     const me = `pdw-${this.code}-${this.host ? 'h' : 'g'}`, them = `pdw-${this.code}-${this.host ? 'g' : 'h'}`
     const p = this.peer = new (Peer as any)(me, { config: { iceServers: servers } })
     p.on('error', (e: any) => { if (this.ended) return

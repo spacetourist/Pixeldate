@@ -29,6 +29,10 @@ class_name = "Mod"
 name = "Pair"
 class_name = "Pair"
 
+[[durable_objects.bindings]]
+name = "Budget"
+class_name = "Budget"
+
 # SQLite-backed Durable Objects (the kind available on the Workers Free plan)
 [[migrations]]
 tag = "v1"
@@ -38,3 +42,13 @@ new_sqlite_classes = ["Area", "User", "Mod"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Pair"]
+
+# free-plan blocks: TURN budget and the daily request count (one object)
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Budget"]
+
+[vars]
+# for the TURN usage check (GraphQL). TURN_KEY_ID, TURN_KEY_API_TOKEN and CF_ANALYTICS_TOKEN (Account Analytics Read only)
+# are encrypted secrets, never vars.
+CF_ACCOUNT_ID = "e47f2e7fa2db3b4feaffc27fdd91308c"

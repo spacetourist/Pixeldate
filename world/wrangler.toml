@@ -19,6 +19,10 @@ class_name = "Mod"
 name = "Pair"
 class_name = "Pair"
 
+[[durable_objects.bindings]]
+name = "Budget"
+class_name = "Budget"
+
 # SQLite-backed Durable Objects (the kind available on the Workers Free plan)
 [[migrations]]
 tag = "v1"
@@ -29,9 +33,16 @@ new_sqlite_classes = ["Area", "User", "Mod"]
 tag = "v2"
 new_sqlite_classes = ["Pair"]
 
+# free-plan blocks: TURN budget and the daily request count (one object)
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Budget"]
+
 [vars]
 # dev-only invite list. For production, move INVITES to an encrypted secret and remove DEV.
 INVITES = "dev-invite-1,dev-invite-2,dev-invite-3"
 DEV = "1"
 # dev only: drop a silent socket after 3 s so tests see a hard disconnect quickly (production default: 15 s)
 STALE_MS = "3000"
+# dev only: /turn hands out a fake TURN entry (no Cloudflare key locally)
+TURN_MOCK = "1"

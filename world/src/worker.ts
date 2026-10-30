@@ -7,7 +7,7 @@ import './profanity.ts'
 import { Room, emptyRec, type Field, type Rec, type Report, type Sock, type Store } from './sim.ts'
 import { TICK_MS } from '../shared/proto.ts'
 
-interface Env { Area: DurableObjectNamespace<Area>; User: DurableObjectNamespace<User>; Mod: DurableObjectNamespace<Mod>; INVITES: string; DEV?: string }
+interface Env { Area: DurableObjectNamespace<Area>; User: DurableObjectNamespace<User>; Mod: DurableObjectNamespace<Mod>; INVITES?: string; DEV?: string }
 
 export class User extends DurableObject<Env> {
   async load(): Promise<Rec> { return { ...emptyRec(), ...(await this.ctx.storage.get<Rec>('rec')) } }
@@ -30,7 +30,7 @@ export class Mod extends DurableObject<Env> {
 export class Area extends Server<Env> {
   static options = { hibernate: false }
   room!: Room; timer: ReturnType<typeof setInterval> | null = null; joinTimers = new Map<Connection, ReturnType<typeof setTimeout>>()
-  onStart() { this.room = new Room(this.name, store(this.env), { invites: new Set(this.env.INVITES.split(',').map(s => s.trim()).filter(Boolean)) }) }
+  onStart() { this.room = new Room(this.name, store(this.env), { invites: new Set((this.env.INVITES ?? "").split(',').map(s => s.trim()).filter(Boolean)) }) }
   onConnect(c: Connection) {
     const s = c as unknown as Sock
     this.room.connect(s)

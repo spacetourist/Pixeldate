@@ -7,3 +7,6 @@ public/avatar/wasm/
 public/avatar/models/
 world/test/.out/
 .wrangler
+# live deploy: built client + secrets (never commit)
+deploy/
+.secrets/

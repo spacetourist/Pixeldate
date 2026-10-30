@@ -1,0 +1,31 @@
+# Pixeldate World · live on workers.dev (deploy: `npx wrangler deploy -c wrangler.live.toml` from world/).
+# One worker serves both: the realtime café (Durable Objects, /parties/area/cafe-N) and the client as Workers static
+# assets under /Pixeldate/ (built with VITE_WORLD_URL=wss://pixeldate-world.pixeldate.workers.dev into ../deploy/site/Pixeldate/).
+# Anything that isn't a file (/parties/*, /health) falls through to the worker. Play: /Pixeldate/app/?world=cafe&invite=…
+# INVITES is an encrypted secret (`wrangler secret put INVITES -c wrangler.live.toml`, via stdin), never a [var] here.
+# No DEV var, so /dev/reports is off. Local dev keeps using wrangler.toml (dev invites, DEV=1).
+name = "pixeldate-world"
+main = "src/worker.ts"
+compatibility_date = "2025-09-01"
+workers_dev = true
+preview_urls = false
+
+[assets]
+directory = "../deploy/site"
+
+[[durable_objects.bindings]]
+name = "Area"
+class_name = "Area"
+
+[[durable_objects.bindings]]
+name = "User"
+class_name = "User"
+
+[[durable_objects.bindings]]
+name = "Mod"
+class_name = "Mod"
+
+# SQLite-backed Durable Objects (the kind available on the Workers Free plan)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Area", "User", "Mod"]

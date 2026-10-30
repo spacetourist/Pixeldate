@@ -5,6 +5,7 @@ import { AGE_TOP } from '../signup/shared'
 import { bracketLabel, bracketOf, type Profile } from '../net'
 import { Icon, Av, LV_DESC, LV_COLOR, AV_BLOCKS, coarse } from './parts'
 import { Toasts } from './toast'
+import { CafeButton, cafeInvite } from './cafe-button'
 
 const B = import.meta.env.BASE_URL
 /** "k7q2px" -> "K7Q·2PX" (display only; joining accepts either form). */
@@ -41,6 +42,7 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
   onFind(): void; onCancel(): void; onJoin(): void; joining: boolean; onNav(p: 'matches' | 'profile' | 'settings'): void; onCall(): void
 }) {
   // small avatars follow the spec 4 coarse rule (<= 64px); the side panel shows your own photo at each level
+  const cafe = useMemo(() => !!cafeInvite(), [])   // café entry only on a device that holds an invite
   const avs = useMemo(() => AV_BLOCKS.map(b => coarse(photo ?? undefined, b)), [photo])
   const chip = <span className="chip chip--edge"><Icon n="heart" c="var(--c-coral)" />{seekLabel(me)}</span>
   return <div className="app"><div className="shell shell--lobby" data-t="lobby" data-screen={finding ? 'finding' : 'lobby'}>
@@ -72,6 +74,7 @@ export function Lobby({ me, photo, code, finding, joinCode, setJoinCode, onFind,
           <h1 className="px" id="pd-hi">Hi {me.name}, ready to meet?</h1>
           <div className="chips">{chip}<span className="chip chip--edge">You · {bracketLabel(bracketOf(Math.min(me.age, 70)))}</span></div>
           <button className="btn fx btn--lg btn--block" data-t="find" disabled={!code} onClick={onFind}><Icon n="search" c="var(--edge)" s={3} />{code ? 'Find someone' : 'Connecting…'}</button>
+          {cafe && <CafeButton />}
           <div className="hr" />
           <form onSubmit={e => { e.preventDefault(); onJoin() }}>
             <label className="fl" htmlFor="pd-code">Meeting a friend?</label>

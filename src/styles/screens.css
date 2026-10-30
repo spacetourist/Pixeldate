@@ -514,3 +514,6 @@ button.tmain{cursor:pointer}
 .hud .theirchar .label{display:flex;flex-direction:column;gap:6px;min-width:0;font:600 15px/1.25 var(--font-ui);text-transform:none;letter-spacing:0;color:var(--text,#F4F0FF);overflow-wrap:anywhere}
 .hud .theirchar small{color:var(--text-muted);font:400 13px/1.35 var(--font-ui);text-transform:none;letter-spacing:0}
 .app[data-view=compact][data-tab=chat] .hud .theirchar{display:none}
+/* 'Enter the café' (src/ui/cafe-button.tsx holds the specs as CSS vars): GD interim, full-width secondary under Find someone */
+.lobbycard .cafe-btn{--edge-w:var(--cafe-edge-w,2px);--edge:var(--cafe-edge,#05020F);--fill:var(--cafe-fill,#281D52);color:var(--cafe-text,var(--text));font:var(--t-btn);margin-top:-4px}
+.lobbycard .cafe-btn:hover,.lobbycard .cafe-btn.is-hover{--fill:var(--cafe-hover,#33276A)}

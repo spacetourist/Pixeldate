@@ -399,6 +399,22 @@ await test('one pianist at a time: a second player can not take the bench (told 
   await sleep(1500); assert.equal(b.last('piano')?.by, a.me); assert.ok(!(Math.floor(b.self().x) === PIANO_SEAT[0] && Math.floor(b.self().y) === PIANO_SEAT[1]))
   await done()
 })
+await test('voice emotes: set by "I am", takes rotate (never the same twice in a row), 1.5 s server cooldown, heard by the room', async () => {
+  const { EMOTE_COOLDOWN_MS, setOf, DEFAULT_SET } = await import('../shared/emote.ts')
+  assert.equal(setOf(undefined), DEFAULT_SET); assert.equal(setOf('woman'), 'female'); assert.equal(setOf('man'), 'male')
+  const w = await J({ name: 'Emw', iam: 'woman' }), m = await J({ name: 'Emm', iam: 'man' }), o = await J({ name: 'Emo' }); await sleep(200)
+  const got = (b, id) => b.events.filter(e => e.t === 'emote' && e.id === id)
+  w.send({ t: 'emote', e: 'nope' }); w.send({ t: 'emote', e: 'giggle' })
+  assert.ok(await o.wait(() => got(o, w.me).length === 1), 'the room hears her giggle'); assert.match(got(o, w.me)[0].take, /^giggle_f[12]$/)
+  assert.ok(await w.wait(() => got(w, w.me).length === 1), 'she hears her own'); assert.equal(got(m, w.me).length, 1)
+  w.send({ t: 'emote', e: 'giggle' }); const slow = await w.wait(() => w.events.find(e => e.t === 'emote' && e.ok === false), 1000)
+  assert.ok(slow && slow.wait > 0 && slow.wait <= EMOTE_COOLDOWN_MS, 'second one inside 1.5 s refused with a wait'); await sleep(300); assert.equal(got(o, w.me).length, 1, 'and never relayed')
+  const takes = [got(o, w.me)[0].take]
+  for (let i = 0; i < 4; i++) { await sleep(EMOTE_COOLDOWN_MS + 80); w.send({ t: 'emote', e: 'giggle' }); assert.ok(await o.wait(() => got(o, w.me).length === takes.length + 1)); takes.push(got(o, w.me).at(-1).take) }
+  for (let i = 1; i < takes.length; i++) assert.notEqual(takes[i], takes[i - 1], 'same take twice in a row: ' + takes.join(','))
+  m.send({ t: 'emote', e: 'gasp' }); assert.ok(await o.wait(() => got(o, m.me).length === 1)); assert.match(got(o, m.me)[0].take, /^gasp_m[12]$/, 'his set is the male one')
+  await done()
+})
 await test('40-person cap: the 41st is sent to cafe-2 and sees nobody from cafe-1', async () => {
   const bots = []; for (let i = 0; i < 40; i++) bots.push(J({ name: 'Cap' + i }))
   const forty = await Promise.all(bots); assert.ok(forty.every(b => b.inst === 'cafe-1'))

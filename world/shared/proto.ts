@@ -40,6 +40,8 @@ export type ServerMsg =
   | { t: 'piano'; by: number; song: string | null; at: number; now: number; why?: 'end' | 'stop' }
   /** clock sync reply: c = the client's send time echoed, s = server time */
   | { t: 'tm'; c: number; s: number }
+  /** a voice emote (shared/emote.ts) from player id: the take the server picked; to the sender only, ok:false + wait when on cooldown */
+  | { t: 'emote'; id: number; e: string; take: string } | { t: 'emote'; ok: false; why: 'slow'; wait: number }
 export type ClientMsg =
   | { t: 'join'; invite: string; p: { name: string; br: [number, number]; min: number; max: number; iam: string; seek: string; uid: string; pav?: string; adult?: boolean } }
   | { t: 'go'; x: number; y: number } | { t: 'dir'; dx: number; dy: number }
@@ -52,6 +54,7 @@ export type ClientMsg =
   | { t: 'pairlv'; lv: number; drop?: boolean }
   /** at the piano (only the one on the bench): play a manifest piece / stop it. tm: clock sync ping. */
   | { t: 'piano'; id: string } | { t: 'pstop' } | { t: 'tm'; c: number }
+  | { t: 'emote'; e: string }
 /** What one of the two at a table sees (sent only to them): level, the card, the answers (theirs only once both are in),
     the date opt-ins, and a pending call request ('out' = I asked, 'in' = they asked). */
 export interface Table { tb: number; lv: number; seg: number; up: boolean; n: number; mine: string | null; them: boolean; rev: { mine: string; theirs: string } | null

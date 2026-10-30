@@ -67,6 +67,20 @@ export class PianoAudio {
       .then(a => { const c = this.ctx ?? new OfflineAudioContext(1, 1, 48000); return c.decodeAudioData(a) }).catch(() => { this.buffers.delete(id); return null })
     this.buffers.set(id, b); return b
   }
+  /** one-shots (voice emotes, duet pick stingers): small, kept decoded once heard; through the piano's mute (master) */
+  private clips = new Map<string, Promise<AudioBuffer | null>>()
+  played: { path: string; gain: number; pan: number }[] = []
+  clipUrl(path: string) { return import.meta.env.BASE_URL + 'audio/' + path + '.' + this.fmt }
+  oneShot(path: string, gain = 1, pan = 0) {
+    const c = this.ctx; if (!c || !this.master || gain <= 0.001) return false
+    const u = this.clipUrl(path); let b = this.clips.get(u)
+    if (!b) { this.requests.push(u); b = fetch(u).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))).then(a => c.decodeAudioData(a)).catch(() => { this.clips.delete(u); return null }); this.clips.set(u, b) }
+    this.played.push({ path, gain, pan }); if (this.played.length > 20) this.played.shift()
+    void b.then(buf => { if (!buf || c.state !== 'running') return
+      const src = c.createBufferSource(), g = c.createGain(), pn = c.createStereoPanner(); src.buffer = buf; g.gain.value = gain; pn.pan.value = pan
+      src.connect(g).connect(pn).connect(this.master!); src.start() })
+    return true
+  }
   /** the server's piano message */
   set(s: PianoState & { why?: string }) {
     const prev = this.state; this.state = { by: s.by, song: s.song, at: s.at }

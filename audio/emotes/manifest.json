@@ -1,0 +1,1126 @@
+{
+ "version": "pd_emotes_v02",
+ "sampleRate": 48000,
+ "channels": 1,
+ "formats": {
+  "ogg": "Opus 64 kbps VBR in Ogg (primary)",
+  "m4a": "AAC-LC 96 kbps in MP4 (Safari/iOS fallback)"
+ },
+ "loudness": {
+  "method": "max momentary loudness (BS.1770 K-weighted, 400 ms window, 10 ms hop; clips zero-padded) matched per take",
+  "targetMaxMomentaryLufs": -18.0,
+  "truePeakCeilingDbtp": -2.0,
+  "pianoReferenceIntegratedLufs": -16.0
+ },
+ "rotation": "pick the set matching the character gender; within an emote pick a take at random, avoid repeating the previous one",
+ "emotes": {
+  "female": {
+   "giggle": [
+    {
+     "id": "giggle_f1",
+     "take": 1,
+     "durationSec": 0.75,
+     "samples": 36000,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -4.37,
+     "description": "bright, high three-pulse \"hehe-he\" giggle that trails off (v01 giggle_1)",
+     "files": {
+      "ogg": {
+       "path": "dist/giggle_f1.ogg",
+       "bytes": 7178,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -4.37,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/giggle_f1.m4a",
+       "bytes": 10376,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.04,
+       "decodedTruePeakDb": -4.43,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 235165,
+      "url": "https://freesound.org/people/Reitanna/sounds/235165/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female, girl",
+      "title": "giggle4.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/235/235165_950925-hq.ogg",
+      "window": [
+       0.05,
+       0.86
+      ]
+     }
+    },
+    {
+     "id": "giggle_f2",
+     "take": 2,
+     "durationSec": 0.37,
+     "samples": 17760,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -3.21,
+     "description": "tiny, quick \"he-he-he!\" - three crisp high pulses, pitch stepping up on the last",
+     "files": {
+      "ogg": {
+       "path": "dist/giggle_f2.ogg",
+       "bytes": 4292,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.03,
+       "decodedTruePeakDb": -3.14,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/giggle_f2.m4a",
+       "bytes": 5788,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.1,
+       "decodedTruePeakDb": -3.04,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 343984,
+      "url": "https://freesound.org/people/Reitanna/sounds/343984/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female, cute",
+      "title": "giggle10.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/343/343984_950925-hq.ogg",
+      "window": [
+       0.04,
+       0.41
+      ]
+     }
+    }
+   ],
+   "sigh": [
+    {
+     "id": "sigh_f1",
+     "take": 1,
+     "durationSec": 0.765,
+     "samples": 36720,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -5.12,
+     "description": "soft, light \"haah~\" sigh, gently voiced and drifting down - dreamy and quiet",
+     "files": {
+      "ogg": {
+       "path": "dist/sigh_f1.ogg",
+       "bytes": 6692,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -4.93,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/sigh_f1.m4a",
+       "bytes": 10450,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.24,
+       "decodedTruePeakDb": -5.45,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 621773,
+      "url": "https://freesound.org/people/DarkNightPrincess/sounds/621773/",
+      "uploader": "DarkNightPrincess",
+      "genderEvidence": "title: \"Female *Sigh*\"",
+      "title": "Female *Sigh* Sound Effect [Voiced By DarkNightPrincess] by DarkNightPrincess",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/621/621773_13567167-hq.ogg",
+      "window": [
+       0.28,
+       1.05
+      ],
+      "creditNote": "uploader asks for credit in the description (licence is still CC0)"
+     }
+    },
+    {
+     "id": "sigh_f2",
+     "take": 2,
+     "durationSec": 0.98,
+     "samples": 47040,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -8.95,
+     "description": "warm, voiced, slowly falling \"haaah\" sigh, long and melting",
+     "files": {
+      "ogg": {
+       "path": "dist/sigh_f2.ogg",
+       "bytes": 10054,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -9.06,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/sigh_f2.m4a",
+       "bytes": 13133,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.1,
+       "decodedTruePeakDb": -9.07,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 242690,
+      "url": "https://freesound.org/people/Reitanna/sounds/242690/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female, woman",
+      "title": "long sigh.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/242/242690_950925-hq.ogg",
+      "window": [
+       0.07,
+       1.05
+      ]
+     }
+    }
+   ],
+   "groan": [
+    {
+     "id": "groan_f1",
+     "take": 1,
+     "durationSec": 0.96,
+     "samples": 46080,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -8.4,
+     "description": "pouty, whiny complaint \"muu~\" - a sulky held note that drops at the end",
+     "files": {
+      "ogg": {
+       "path": "dist/groan_f1.ogg",
+       "bytes": 9935,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.03,
+       "decodedTruePeakDb": -8.32,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/groan_f1.m4a",
+       "bytes": 12927,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.21,
+       "decodedTruePeakDb": -8.49,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 323190,
+      "url": "https://freesound.org/people/Alivvie/sounds/323190/",
+      "uploader": "Alivvie",
+      "genderEvidence": "description: \"When things don't go her way, she complains.\"",
+      "title": "complain1 by Alivvie",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/323/323190_4347097-hq.ogg",
+      "window": [
+       0.12,
+       1.08
+      ]
+     }
+    },
+    {
+     "id": "groan_f2",
+     "take": 2,
+     "durationSec": 0.795,
+     "samples": 38160,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -7.58,
+     "description": "mid-high sulky \"uurgh\" - frustrated whine, no growl",
+     "files": {
+      "ogg": {
+       "path": "dist/groan_f2.ogg",
+       "bytes": 8431,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -7.55,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/groan_f2.m4a",
+       "bytes": 10848,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.04,
+       "decodedTruePeakDb": -7.63,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 241559,
+      "url": "https://freesound.org/people/Reitanna/sounds/241559/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female",
+      "title": "aurgh!.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/241/241559_950925-hq.ogg",
+      "window": [
+       0.14,
+       0.94
+      ]
+     }
+    }
+   ],
+   "aww": [
+    {
+     "id": "aww_f1",
+     "take": 1,
+     "durationSec": 0.775,
+     "samples": 37200,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -7.92,
+     "description": "warm, genuine \"aww\" at something sweet, high start, falling (v01 aww_1)",
+     "files": {
+      "ogg": {
+       "path": "dist/aww_f1.ogg",
+       "bytes": 7579,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.02,
+       "decodedTruePeakDb": -8.07,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/aww_f1.m4a",
+       "bytes": 10547,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -8.01,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 241474,
+      "url": "https://freesound.org/people/Reitanna/sounds/241474/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female",
+      "title": "aw.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/241/241474_950925-hq.ogg",
+      "window": [
+       0.05,
+       0.86
+      ]
+     }
+    },
+    {
+     "id": "aww_f2",
+     "take": 2,
+     "durationSec": 0.95,
+     "samples": 45600,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -9.14,
+     "description": "cooing, sing-song baby-talk \"awww\" (v01 aww_3)",
+     "files": {
+      "ogg": {
+       "path": "dist/aww_f2.ogg",
+       "bytes": 9471,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -9.26,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/aww_f2.m4a",
+       "bytes": 12775,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.05,
+       "decodedTruePeakDb": -9.29,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 235059,
+      "url": "https://freesound.org/people/Reitanna/sounds/235059/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female",
+      "title": "baby talk- aw3.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/235/235059_950925-hq.ogg",
+      "window": [
+       0.0,
+       0.95
+      ]
+     }
+    }
+   ],
+   "gasp": [
+    {
+     "id": "gasp_f1",
+     "take": 1,
+     "durationSec": 0.32,
+     "samples": 15360,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -5.7,
+     "description": "delighted little \"ooh!\", pitch arcs up and down, very short (v01 gasp_1)",
+     "files": {
+      "ogg": {
+       "path": "dist/gasp_f1.ogg",
+       "bytes": 3406,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -5.86,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/gasp_f1.m4a",
+       "bytes": 5138,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.06,
+       "decodedTruePeakDb": -6.03,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 323707,
+      "url": "https://freesound.org/people/Reitanna/sounds/323707/",
+      "uploader": "Reitanna",
+      "genderEvidence": "tags: female",
+      "title": "ooh!.wav by Reitanna",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/323/323707_950925-hq.ogg",
+      "window": [
+       0.0,
+       0.33
+      ]
+     }
+    },
+    {
+     "id": "gasp_f2",
+     "take": 2,
+     "durationSec": 0.92,
+     "samples": 44160,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -5.61,
+     "description": "cute anime-girl \"woah!\" - high, bright, rising then bouncing down",
+     "files": {
+      "ogg": {
+       "path": "dist/gasp_f2.ogg",
+       "bytes": 9191,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -5.52,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/gasp_f2.m4a",
+       "bytes": 12432,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.08,
+       "decodedTruePeakDb": -5.71,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 621774,
+      "url": "https://freesound.org/people/DarkNightPrincess/sounds/621774/",
+      "uploader": "DarkNightPrincess",
+      "genderEvidence": "title: \"Cute Anime Girl Voice\"",
+      "title": "\"Woah!\" Cute Anime Girl Voice Sound Effect [Voiced By DarkNightPrincess] by DarkNightPrincess",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/621/621774_13567167-hq.ogg",
+      "window": [
+       0.19,
+       1.11
+      ],
+      "creditNote": "uploader asks for credit in the description (licence is still CC0)"
+     }
+    }
+   ]
+  },
+  "male": {
+   "giggle": [
+    {
+     "id": "giggle_m1",
+     "take": 1,
+     "durationSec": 0.965,
+     "samples": 46320,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -3.19,
+     "description": "low, chesty \"heh-heh-heh\" chuckle (median F0 ~131 Hz)",
+     "files": {
+      "ogg": {
+       "path": "dist/giggle_m1.ogg",
+       "bytes": 10423,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -3.19,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/giggle_m1.m4a",
+       "bytes": 13005,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.11,
+       "decodedTruePeakDb": -3.25,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 790713,
+      "url": "https://freesound.org/people/WalliumVA/sounds/790713/",
+      "uploader": "WalliumVA",
+      "genderEvidence": "tags: male",
+      "title": "Low chuckle by WalliumVA",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/790/790713_13530059-hq.ogg",
+      "window": [
+       1.9,
+       2.88
+      ]
+     }
+    },
+    {
+     "id": "giggle_m2",
+     "take": 2,
+     "durationSec": 0.905,
+     "samples": 43440,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -2.11,
+     "description": "easy, deep four-pulse \"huh-huh-huh-huh\" chuckle (median F0 ~114 Hz)",
+     "files": {
+      "ogg": {
+       "path": "dist/giggle_m2.ogg",
+       "bytes": 7856,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -17.95,
+       "decodedTruePeakDb": -1.92,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/giggle_m2.m4a",
+       "bytes": 12203,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.13,
+       "decodedTruePeakDb": -2.19,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 643665,
+      "url": "https://freesound.org/people/SnowFightStudios/sounds/643665/",
+      "uploader": "SnowFightStudios",
+      "genderEvidence": "title: \"Various Chuckles_Male\"",
+      "title": "Various Chuckles_Male.mp3 by SnowFightStudios",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/643/643665_12064174-hq.ogg",
+      "window": [
+       4.34,
+       5.26
+      ]
+     }
+    }
+   ],
+   "sigh": [
+    {
+     "id": "sigh_m1",
+     "take": 1,
+     "durationSec": 0.92,
+     "samples": 44160,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -4.82,
+     "description": "deep, satisfied \"aaahh\" exhale, pitch sinking (v01 sigh_2)",
+     "files": {
+      "ogg": {
+       "path": "dist/sigh_m1.ogg",
+       "bytes": 7990,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.02,
+       "decodedTruePeakDb": -5.3,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/sigh_m1.m4a",
+       "bytes": 12438,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.13,
+       "decodedTruePeakDb": -4.79,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 334061,
+      "url": "https://freesound.org/people/garynoden/sounds/334061/",
+      "uploader": "garynoden",
+      "genderEvidence": "description: man, age 30-45",
+      "title": "satisfiedSigh.wav by garynoden",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/334/334061_4226759-hq.ogg",
+      "window": [
+       0.1,
+       1.02
+      ]
+     }
+    },
+    {
+     "id": "sigh_m2",
+     "take": 2,
+     "durationSec": 0.73,
+     "samples": 35040,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -2.11,
+     "description": "low relieved \"ahhh\" - deep voiced start into a breathy release",
+     "files": {
+      "ogg": {
+       "path": "dist/sigh_m2.ogg",
+       "bytes": 6287,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -1.91,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/sigh_m2.m4a",
+       "bytes": 10047,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.2,
+       "decodedTruePeakDb": -2.09,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 801137,
+      "url": "https://freesound.org/people/Sadiquecat/sounds/801137/",
+      "uploader": "Sadiquecat",
+      "genderEvidence": "description: \"mid-20s male\" + tag Male",
+      "title": "Relief - Ahhh by Sadiquecat",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/801/801137_5287430-hq.ogg",
+      "window": [
+       0.02,
+       0.75
+      ]
+     }
+    }
+   ],
+   "groan": [
+    {
+     "id": "groan_m1",
+     "take": 1,
+     "durationSec": 0.7,
+     "samples": 33600,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -5.53,
+     "description": "gruff, low mock-frustrated \"aahhh\" (v01 groan_2)",
+     "files": {
+      "ogg": {
+       "path": "dist/groan_m1.ogg",
+       "bytes": 6971,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -5.46,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/groan_m1.m4a",
+       "bytes": 9571,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.12,
+       "decodedTruePeakDb": -6.24,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 812302,
+      "url": "https://freesound.org/people/Sadiquecat/sounds/812302/",
+      "uploader": "Sadiquecat",
+      "genderEvidence": "description: \"mid-20s male\" + tag Male",
+      "title": "Frustrated Ahhh 1 by Sadiquecat",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/812/812302_5287430-hq.ogg",
+      "window": [
+       0.0,
+       0.7
+      ]
+     }
+    },
+    {
+     "id": "groan_m2",
+     "take": 2,
+     "durationSec": 0.5,
+     "samples": 24000,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -2.2,
+     "description": "short, gruff annoyed \"ughh\", low and falling",
+     "files": {
+      "ogg": {
+       "path": "dist/groan_m2.ogg",
+       "bytes": 4311,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -2.2,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/groan_m2.m4a",
+       "bytes": 7185,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.05,
+       "decodedTruePeakDb": -2.22,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 801012,
+      "url": "https://freesound.org/people/Sadiquecat/sounds/801012/",
+      "uploader": "Sadiquecat",
+      "genderEvidence": "description: \"mid-20s male\" + tag Male",
+      "title": "Annoyed - Ughh by Sadiquecat",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/801/801012_5287430-hq.ogg",
+      "window": [
+       0.0,
+       0.5
+      ]
+     }
+    }
+   ],
+   "aww": [
+    {
+     "id": "aww_m1",
+     "take": 1,
+     "durationSec": 0.5,
+     "samples": 24000,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -5.1,
+     "description": "warm, low affectionate \"awwn\" (v01 aww_2)",
+     "files": {
+      "ogg": {
+       "path": "dist/aww_m1.ogg",
+       "bytes": 5178,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -5.07,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/aww_m1.m4a",
+       "bytes": 7295,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.06,
+       "decodedTruePeakDb": -4.86,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 801425,
+      "url": "https://freesound.org/people/Sadiquecat/sounds/801425/",
+      "uploader": "Sadiquecat",
+      "genderEvidence": "description: \"mid-20s male\" + tag Male",
+      "title": "Affectionate Reactions - Awwwn by Sadiquecat",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/801/801425_5287430-hq.ogg",
+      "window": [
+       0.0,
+       0.55
+      ]
+     }
+    },
+    {
+     "id": "aww_m2",
+     "take": 2,
+     "durationSec": 0.51,
+     "samples": 24480,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -7.26,
+     "description": "breathy-start, warm \"h-awwn\" - soft and low, lifting slightly at the end",
+     "files": {
+      "ogg": {
+       "path": "dist/aww_m2.ogg",
+       "bytes": 5135,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.03,
+       "decodedTruePeakDb": -7.19,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/aww_m2.m4a",
+       "bytes": 7412,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.04,
+       "decodedTruePeakDb": -7.35,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 801431,
+      "url": "https://freesound.org/people/Sadiquecat/sounds/801431/",
+      "uploader": "Sadiquecat",
+      "genderEvidence": "description: \"mid-20s male\" + tag Male",
+      "title": "Affectionate Reactions - hawwn by Sadiquecat",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/801/801431_5287430-hq.ogg",
+      "window": [
+       0.0,
+       0.52
+      ]
+     }
+    }
+   ],
+   "gasp": [
+    {
+     "id": "gasp_m1",
+     "take": 1,
+     "durationSec": 0.74,
+     "samples": 35520,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -7.19,
+     "description": "low, impressed \"whoa-ahh\", chesty and full",
+     "files": {
+      "ogg": {
+       "path": "dist/gasp_m1.ogg",
+       "bytes": 7226,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.03,
+       "decodedTruePeakDb": -7.18,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/gasp_m1.m4a",
+       "bytes": 10106,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -7.29,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 801213,
+      "url": "https://freesound.org/people/Sadiquecat/sounds/801213/",
+      "uploader": "Sadiquecat",
+      "genderEvidence": "description: \"mid-20s male\" + tag Male",
+      "title": "Surprised - Wowahh by Sadiquecat",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/801/801213_5287430-hq.ogg",
+      "window": [
+       0.0,
+       0.75
+      ]
+     }
+    },
+    {
+     "id": "gasp_m2",
+     "take": 2,
+     "durationSec": 0.78,
+     "samples": 37440,
+     "maxMomentaryLufs": -18.0,
+     "truePeakDb": -7.52,
+     "description": "deep, intrigued \"oh!\" that lifts in pitch - interest piqued",
+     "files": {
+      "ogg": {
+       "path": "dist/gasp_m2.ogg",
+       "bytes": 6509,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -18.0,
+       "decodedTruePeakDb": -7.71,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/gasp_m2.m4a",
+       "bytes": 10794,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.1,
+       "decodedTruePeakDb": -7.77,
+       "chromeDecodeOk": true
+      }
+     },
+     "source": {
+      "site": "Freesound",
+      "id": 436108,
+      "url": "https://freesound.org/people/DrFortyseven/sounds/436108/",
+      "uploader": "DrFortyseven",
+      "genderEvidence": "title: \"Oh! (Male)\"",
+      "title": "Oh! (Male) by DrFortyseven",
+      "license": "CC0 1.0",
+      "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+      "usedFile": "HQ preview (OGG)",
+      "previewUrl": "https://cdn.freesound.org/previews/436/436108_729251-hq.ogg",
+      "window": [
+       0.0,
+       0.78
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "duetPick": {
+  "duetMatch": {
+   "takes": [
+    {
+     "id": "duetMatch_1",
+     "take": 1,
+     "durationSec": 1.35,
+     "samples": 64800,
+     "maxMomentaryLufs": -18.0,
+     "integratedLufs": -20.74,
+     "truePeakDb": -8.47,
+     "description": "Warm \"in tune!\" flourish: a quick rising F-major arpeggio (five notes in about a quarter second) that lands on a soft, sweet F-major add-9 chord over a low F, then two quiet high twinkles (C6, F6) on top; rings briefly and fades.",
+     "notes": [
+      {
+       "t": 0.004,
+       "midi": 53,
+       "vel": 58
+      },
+      {
+       "t": 0.059,
+       "midi": 57,
+       "vel": 62
+      },
+      {
+       "t": 0.114,
+       "midi": 60,
+       "vel": 66
+      },
+      {
+       "t": 0.169,
+       "midi": 65,
+       "vel": 70
+      },
+      {
+       "t": 0.224,
+       "midi": 69,
+       "vel": 74
+      },
+      {
+       "t": 0.304,
+       "midi": 41,
+       "vel": 52
+      },
+      {
+       "t": 0.304,
+       "midi": 65,
+       "vel": 62
+      },
+      {
+       "t": 0.309,
+       "midi": 69,
+       "vel": 64
+      },
+      {
+       "t": 0.314,
+       "midi": 72,
+       "vel": 66
+      },
+      {
+       "t": 0.319,
+       "midi": 79,
+       "vel": 60
+      },
+      {
+       "t": 0.464,
+       "midi": 84,
+       "vel": 52
+      },
+      {
+       "t": 0.584,
+       "midi": 89,
+       "vel": 50
+      }
+     ],
+     "files": {
+      "ogg": {
+       "path": "dist/duetMatch_1.ogg",
+       "bytes": 11575,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -17.97,
+       "decodedTruePeakDb": -8.38,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/duetMatch_1.m4a",
+       "bytes": 17521,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -8.5,
+       "chromeDecodeOk": true
+      }
+     },
+     "copiedFrom": "../dist/duetMatch_1.* (byte-identical to v01)",
+     "source": {
+      "kind": "rendered",
+      "samples": "VSCO-2 CE Upright Piano (same sampler + room chain as the piano)",
+      "license": "CC0 1.0"
+     }
+    }
+   ]
+  },
+  "duetMiss": {
+   "takes": [
+    {
+     "id": "duetMiss_1",
+     "take": 1,
+     "durationSec": 0.85,
+     "samples": 40800,
+     "maxMomentaryLufs": -18.0,
+     "integratedLufs": -20.02,
+     "truePeakDb": -7.77,
+     "description": "Soft \"aw, shucks\" shrug: two gentle notes stepping down (G4 then E4, a falling minor third like \"uh-oh\"), the second a touch softer, with a quiet low C and G underneath so it settles on a warm major colour rather than a sad one.",
+     "notes": [
+      {
+       "t": 0.004,
+       "midi": 67,
+       "vel": 58
+      },
+      {
+       "t": 0.214,
+       "midi": 64,
+       "vel": 50
+      },
+      {
+       "t": 0.219,
+       "midi": 48,
+       "vel": 38
+      },
+      {
+       "t": 0.224,
+       "midi": 55,
+       "vel": 34
+      }
+     ],
+     "files": {
+      "ogg": {
+       "path": "dist/duetMiss_1.ogg",
+       "bytes": 7063,
+       "codec": "opus",
+       "kbps": 64,
+       "decodedMaxMomentaryLufs": -17.98,
+       "decodedTruePeakDb": -7.64,
+       "chromeDecodeOk": true
+      },
+      "m4a": {
+       "path": "dist/duetMiss_1.m4a",
+       "bytes": 11282,
+       "codec": "aac-lc",
+       "kbps": 96,
+       "decodedMaxMomentaryLufs": -18.01,
+       "decodedTruePeakDb": -7.65,
+       "chromeDecodeOk": true
+      }
+     },
+     "copiedFrom": "../dist/duetMiss_1.* (byte-identical to v01)",
+     "source": {
+      "kind": "rendered",
+      "samples": "VSCO-2 CE Upright Piano (same sampler + room chain as the piano)",
+      "license": "CC0 1.0"
+     }
+    }
+   ]
+  }
+ },
+ "totals": {
+  "opusBytesAll": 162753,
+  "opusBytesEmotes": 144115,
+  "opusBytesDuetPick": 18638,
+  "aacBytesAll": 233273
+ },
+ "chrome": {
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+  "canPlayType": {
+   "opus": "probably",
+   "aac": "probably"
+  },
+  "decodedOk": 44,
+  "total": 44
+ },
+ "preview": "previews/pd_emotes_v02_preview.mp4"
+}

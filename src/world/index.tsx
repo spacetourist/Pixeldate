@@ -8,7 +8,8 @@ import type { Profile } from '../net'
 import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
 import { walkable, isSeat, isPianoSeat, at, TABLES } from '../../world/shared/map.ts'
-import { PIECE, PIANO_SEAT, hears } from '../../world/shared/piano.ts'
+import { PIECE, PIANO_SEAT, hears, gainAt, panAt } from '../../world/shared/piano.ts'
+import { EMOTES, EMOTE_LABEL, EMOTE_CREDIT, type Emote } from '../../world/shared/emote.ts'
 import { SOFAS, sofaAt } from '../../world/shared/sofa.ts'
 import { parseOptions } from '../avatar/kit/map.ts'
 import { SAMPLES } from '../avatar/kit/kit.gen.ts'
@@ -93,6 +94,8 @@ function World() {
   const [near, setNear] = useState(0), [muted, setMuted] = useState(localStorage.getItem('pd.pianoMute') === '1'), [song, setSong] = usePianoSel()
   /** "Not for me": the kind card the other person gets ("<name> has moved on") */
   const [gone, setGone] = useState('')
+  /** voice emotes: the last one per player (for the tray's pressed state + tests) */
+  const emoteFx = useRef(new Map<number, { e: string; until: number }>())
 
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
@@ -105,6 +108,13 @@ function World() {
       if (m.t === 'hi') { setInst(m.inst); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
       else if (m.t === 'tm') A.onTm(m)
       else if (m.t === 'piano') { if (m.now) A.hint(m.now); A.set(m); setPianoS({ by: m.by, song: m.song, at: m.at }) }
+      else if (m.t === 'emote') {
+        if (m.ok === false) flash('One at a time: wait a moment.')
+        else { const e = n.ents.get(m.id), me = n.ents.get(n.me), t = performance.now()
+          // from the character: the piano's distance falloff and pan, relative to where I stand
+          const d = e && me ? Math.hypot(n.lerpX(e, t) - n.lerpX(me, t), n.lerpY(e, t) - n.lerpY(me, t)) : 0, dx = e && me ? n.lerpX(e, t) - n.lerpX(me, t) : 0
+          A.oneShot('emotes/' + m.take, m.id === n.me ? 1 : gainAt(d), m.id === n.me ? 0 : panAt(dx))
+          emoteFx.current.set(m.id, { e: m.e, until: t + 1200 }) } }
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
       else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
       else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS })
@@ -211,6 +221,7 @@ function World() {
       state: () => ({ me: n.me, inst: n.inst, k: r.k, dpr: r.dpr, css: [r.cssW, r.cssH], vw: r.vw, vh: r.vh, map: [MW, MH], cam: [r.camX, r.camY], camT: r.camT, fps: r.fps, gl: r.kind, arrows: r.arrows, art: r.art, layout: layoutOf(), bytes: n.bytes,
         ents: [...n.ents.values()].map(e => ({ id: e.id, x: e.x, y: e.y, f: e.f, name: n.pubs.get(e.id)?.name })) }),
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
+      emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
         requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
@@ -336,6 +347,10 @@ function World() {
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
+        {/* voice emote tray: PLACEHOLDER text buttons until GD's art (flagged) */}
+        <div className="w-emotes" data-t="w-emotes" role="group" aria-label="Voice emotes">{EMOTES.map(e =>
+          <button key={e} className="w-emo" data-t="w-emote" data-e={e} aria-label={EMOTE_LABEL[e]} onPointerDown={ev => ev.stopPropagation()}
+            onClick={() => { pa.current?.unlock(); net.current?.send({ t: 'emote', e } as any) }}>{EMOTE_LABEL[e as Emote]}</button>)}</div>
         {playing && pianoS.by > 0 && <NowPlaying piece={playing} by={pianist} muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}</div>
       <aside className="w-side" data-t="w-side">
         {person}
@@ -352,7 +367,7 @@ function World() {
             : <li className="w-log-empty">What people say shows up here.</li>}</ol></section>}
         {!seated && bar}
         {!seated && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card · tap the piano to play</p>}
-        {!seated && layout === 'desk' && <p className="w-help w-credit" data-t="w-credit-help">{PIANO_CREDIT}</p>}
+        {!seated && layout === 'desk' && <p className="w-help w-credit" data-t="w-credit-help">{PIANO_CREDIT} · {EMOTE_CREDIT}</p>}
       </aside>
     </main>)
 }

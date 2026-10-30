@@ -2,6 +2,7 @@
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
 import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, type Table } from '../shared/map.ts'
 import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
+import { EMOTE_COOLDOWN_MS, isEmote, nextTake, setOf } from '../shared/emote.ts'
 import { SOFAS, SEAT_ORDER, SOFA_FRONT_Y } from '../shared/sofa.ts'
 import { findPath, nearestWalkable, type P } from '../shared/path.ts'
 import { CAP, ENT_BYTES, FIX, F_BROKEN, F_HEART, F_ME, F_MOVING, F_SIT, HEAD_BYTES, LV_MAX, LV_SEG, MAX_ANS, PHOTO_MAX, SAY_MAX, SAY_WINDOW_MS, SNAP, SPEED, STALE_MS, VIDEO_LEVEL, type Pub, type Table as TableView } from '../shared/proto.ts'
@@ -50,6 +51,8 @@ class Player {
   /** on a sofa: [sofa index, slot]; sitAt = the tick the player last sat down (who sat second at a table) */
   sofa: [number, number] | null = null; sofaWant: [number, number] | null = null; sitAt = 0
   sets: Record<Field, Set<string>>
+  /** voice emotes: when the last one went out, and the last take per emote (never the same take twice in a row) */
+  emoteAt = -Infinity; takes: Record<string, string> = {}
   constructor(id: number, uid: string, name: string, p: Prefs & { pav?: string }, sock: Sock, rec: Rec, spawn: P) {
     this.id = id; this.uid = uid; this.name = name; this.br = p.br; this.min = p.min; this.max = p.max; this.iam = p.iam; this.seek = p.seek; this.pav = p.pav; this.sock = sock
     this.x = spawn[0] + .5; this.y = spawn[1] + .5
@@ -118,6 +121,7 @@ export class Room {
       case 'pstop': return this.pianoStop(p)
       case 'nfm': return this.notForMe(p)
       case 'sofa': return this.sofaGo(p, m.i)
+      case 'emote': return this.emote(p, m.e)
     }
   }
   close(s: Sock) {
@@ -470,6 +474,15 @@ export class Room {
     }
   }
 
+  /** A voice emote: public, from the character; the set follows the profile's "I am"; ~1.5 s cooldown per player. */
+  private emote(p: Player, e: unknown) {
+    if (!isEmote(e)) return
+    const t = this.now(), wait = p.emoteAt + EMOTE_COOLDOWN_MS - t
+    if (wait > 0) return p.sock.send(JSON.stringify({ t: 'emote', ok: false, why: 'slow', wait }))
+    p.emoteAt = t; const take = nextTake(setOf(p.iam), e, p.takes[e]); p.takes[e] = take
+    const msg = JSON.stringify({ t: 'emote', id: p.id, e, take })
+    for (const v of this.players.values()) if (v === p || !this.hidden(v, p)) v.sock.send(msg)
+  }
   private say(p: Player, text: unknown) {
     const t = this.now(); p.says = p.says.filter(s => s > t - SAY_WINDOW_MS)
     const raw = typeof text === 'string' ? text.slice(0, 200) : ''

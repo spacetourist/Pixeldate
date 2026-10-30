@@ -10,3 +10,4 @@ world/test/.out/
 # live deploy: built client + secrets (never commit)
 deploy/
 .secrets/
+dist-handoff

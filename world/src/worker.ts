@@ -103,11 +103,23 @@ export class Area extends Server<Env> {
   flush() { this.flushAt = Date.now(); const n = Math.floor(this.msgs / 20); if (!n) return; this.msgs -= n * 20; budget(this.env).hit(n).catch(() => {}) }
 }
 
+/** WebSocket Origin check: a browser page on another site can't open the café as you. Allowed: this worker's own host,
+    and localhost / 127.0.0.1 (dev server, vite preview, tests). No Origin header (not a browser: bots, tests) passes. */
+export function originOk(req: Request, u: URL) {
+  const o = req.headers.get('Origin'); if (!o) return true
+  let h: URL; try { h = new URL(o) } catch { return false }
+  return h.host === u.host || h.hostname === 'localhost' || h.hostname === '127.0.0.1' || h.hostname === '[::1]'
+}
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const u = new URL(req.url); pendingReq++
+    // the one site: the bare host and /Pixeldate (no slash) open the app, query kept (wrangler.live.toml runs the
+    // worker first for exactly these two paths; every real file is served by the assets layer)
+    if (u.pathname === '/' || u.pathname === '/Pixeldate') return new Response(null, { status: 302, headers: { Location: '/Pixeldate/app/' + u.search, 'Cache-Control': 'no-store' } })
     if (u.pathname.startsWith('/parties/')) {
       if (!/^\/parties\/area\/cafe-\d{1,3}$/.test(u.pathname)) return new Response('no such room', { status: 404 })
+      if (!originOk(req, u)) return new Response('forbidden origin', { status: 403 })
       if (req.headers.get('Upgrade') === 'websocket') {
         const n = pendingReq; pendingReq = 0
         const day = await budget(env).join(n).catch(() => ({ busy: false }))

@@ -1,3 +1,5 @@
+// first: the one-site move fills storage from the old github.io site before anything below reads it
+import { movedIn } from './movein'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import Signup from './signup/Signup'
@@ -33,7 +35,7 @@ function Root() {
   // 18+ confirmation; it never reaches the app (or the network) as it is
   const [resume, setResume] = useState<{ p: Profile; photo: string } | null>(null)
   useEffect(() => { if (!saved) return
-    loadPhoto().then(ph => { if (!ph) return void logOut()
+    movedIn.then(loadPhoto).then(ph => { if (!ph) return void logOut()
       const age = adultAge(saved.by, saved.bm)
       if (age) { const [min, max] = snapRange(saved.min, saved.max); setDone({ p: { ...saved, age, min, max }, photo: ph }) } else setResume({ p: saved, photo: ph }) }).finally(() => setRestoring(false)) }, [])
   if (done || mock) { const A = AppC ?? App; return <Suspense fallback={null}><A initial={done ?? undefined} /></Suspense> }

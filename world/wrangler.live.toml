@@ -1,4 +1,5 @@
 # Pixeldate World · live on workers.dev (deploy: `npx wrangler deploy -c wrangler.live.toml` from world/).
+# The one Pixeldate site. Deployed by .github/workflows/deploy.yml on push to main (tools/deploy.sh from the box).
 # One worker serves both: the realtime café (Durable Objects, /parties/area/cafe-N) and the client as Workers static
 # assets under /Pixeldate/ (built with VITE_WORLD_URL=wss://pixeldate-world.pixeldate.workers.dev into ../deploy/site/Pixeldate/).
 # Anything that isn't a file (/parties/*, /health) falls through to the worker. Play: /Pixeldate/app/?world=cafe&invite=…
@@ -12,6 +13,9 @@ preview_urls = false
 
 [assets]
 directory = "../deploy/site"
+# "/" and "/Pixeldate" redirect to /Pixeldate/app/ in the worker (otherwise the assets layer would answer /Pixeldate with
+# its own trailing-slash redirect to the landing). No SPA not_found_handling: /parties/*, /turn and /health must reach the worker.
+run_worker_first = ["/", "/Pixeldate"]
 
 [[durable_objects.bindings]]
 name = "Area"

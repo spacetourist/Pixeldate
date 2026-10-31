@@ -4,7 +4,7 @@
 const B = import.meta.env.BASE_URL
 export const CAFE_BTN = {
   label: 'Enter the café',
-  fill: '#281D52', hover: '#33276A', edge: '#05020F', edgeW: '2px', minH: '54px',
+  fill: '#281D52', hover: '#33276A', edge: '#05020F', edgeW: '3px', minH: '54px',
   text: '#FFF1C1',   // cream label (Bricolage, --t-btn)
   inside: '#48E5C2', // mint "N inside" + 8 px dot with a 2 px #05020F ring
   // 10x10-grid pixel cup drawn at 20x20 (2 px per art px): cream cup + saucer, coral sleeve band, butter steam at 85 %

@@ -1,5 +1,5 @@
 // Pixeldate World · 2c duets e2e: Start duet, invite sheet + card, seat pill, secret pick with previews, In tune / offer / Level up /
-// coin flip, count-in, playing (players, listeners, tags), both seated, Play solo instead. Shots → shots/games-room-v1/ at 390 + 1440.
+// coin flip, count-in, playing (players, listeners, tags), both seated, Play solo instead. Shots → shots/games-lounge-v1/ at 390 + 1440.
 import puppeteer from 'puppeteer-core'
 process.env.WORLD_PORT = '18799'; process.env.WORLD_URL = 'ws://127.0.0.1:18799'; process.env.WORLD_STALE_MS = '3000'
 await import('../world/dev/server.ts')
@@ -7,7 +7,8 @@ const { Bot, profile, sleep } = await import('../world/test/lib.mjs')
 const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
 const APP = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const WQ0 = '?world=cafe&loopback&ws=ws://127.0.0.1:18799&invite=dev-invite-1&auto=1'
-const OUT = '/workspace/pixeldate/shots/games-room-v1/'
+const OUT = '/workspace/pixeldate/shots/games-lounge-v1/'
+(await import('node:fs')).mkdirSync(OUT, { recursive: true })
 let bad = 0, n = 0
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
 const { createHash } = await import('node:crypto')

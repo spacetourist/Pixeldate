@@ -41,7 +41,7 @@ export default function GamesPanel({ game, games, name, send, stand, desk, chips
     addEventListener('keydown', k); return () => removeEventListener('keydown', k)
   }, [snapLive, send])
   if (!game) return <section className="w-panel g-panel" data-t="g-panel" aria-label="Games Lounge table">
-    <h2 className="g-h">Games Lounge · play money only</h2>
+    <h2 className="g-h">Games Lounge · coins only</h2>
     <ul className="g-list">{games.map(g => <li key={g.id}><div><b>{g.title}</b>{g.id === 'blackjack' && <span className="g-tag">Co-op</span>}<small>{g.id === 'blackjack' ? `You two share one hand vs the House · ${CHIPS_NAME}, never cash` : g.ready ? 'For two at this table' : g.id === 'blackjack' ? `Coming soon · you two vs the house · ${CHIPS_NAME}, never cash` : 'Coming soon'}</small></div>
       <button className="w-btn sm" data-t={'g-start-' + g.id} disabled={!g.ready} onClick={() => send({ t: 'gstart', g: g.id })}>{g.ready ? 'Start' : 'Soon'}</button></li>)}</ul>
     {chips !== null && <Chips bal={chips} />}
@@ -53,7 +53,7 @@ export default function GamesPanel({ game, games, name, send, stand, desk, chips
   const lastTxt = game.last.k === 'snap' ? `${name(game.last.who)} snapped ${game.last.n} cards!` : game.last.k === 'false' ? `${name(game.last.who)} snapped too soon` : game.last.k === 'auto' ? `Time: flipped for ${name(game.last.who)}`
     : game.last.k === 'out' ? `${name(game.last.who)} is out` : game.last.k === 'start' ? 'Shuffled and dealt' : ''
   return <section className={'w-panel g-panel g-snap' + (pair && live ? ' g-pair' : '')} data-t="g-snap" data-seq={game.seq} data-turn={mine ? 'me' : 'them'} data-over={game.winner !== null ? '1' : undefined} aria-label="Snap">
-    <h2 className="g-h">Snap <small>play money only</small></h2>
+    <h2 className="g-h">Snap <small>coins only</small></h2>
     <ol className="g-players">{game.ps.map(p => <li key={p.id} className={(p.id === game.turn && live ? 'turn ' : '') + (p.id === game.me ? 'me ' : '') + (p.out ? 'out' : '')} data-t="g-player" data-n={p.n}>
       <b>{name(p.id)}</b><span data-t={p.id === game.me ? 'g-mine' : 'g-theirs'}>{p.n} cards</span>{p.away && <em>reconnecting…</em>}</li>)}</ol>
     <div className="g-felt"><Deck n={me?.n ?? 0} k="g-mydeck" />

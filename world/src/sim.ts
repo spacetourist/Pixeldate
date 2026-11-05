@@ -833,7 +833,7 @@ export class Room {
     })()
   }
   private gameQuit(p: Player) {
-    const g = this.gameOf(p); if (!g) return
+    const g = this.gameOf(p); if (!g) { p.sock.send(JSON.stringify({ t: 'game', on: false })); return }   // already out of it (left mid-game): just clear their panel
     if (g.s.winner !== null) { g.s.ps = g.s.ps.filter(x => x.uid !== p.uid); p.sock.send(JSON.stringify({ t: 'game', on: false })); if (!g.s.ps.length) this.games.delete(g.tb); return }
     mod(g).leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd }); this.gameCheck(g)
   }

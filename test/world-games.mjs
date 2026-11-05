@@ -1,5 +1,5 @@
 // Pixeldate World · 2c duets e2e: Start duet, invite sheet + card, seat pill, secret pick with previews, In tune / offer / Level up /
-// coin flip, count-in, playing (players, listeners, tags), both seated, Play solo instead. Shots → shots/games-lounge-v1/ at 390 + 1440.
+// coin flip, count-in, playing (players, listeners, tags), both seated, Play solo instead. Shots → shots/games-lounge-v2/ at 390 + 1440.
 import puppeteer from 'puppeteer-core'
 process.env.WORLD_PORT = '18799'; process.env.WORLD_URL = 'ws://127.0.0.1:18799'; process.env.WORLD_STALE_MS = '3000'
 await import('../world/dev/server.ts')
@@ -7,8 +7,8 @@ const { Bot, profile, sleep } = await import('../world/test/lib.mjs')
 const { SAMPLES } = await import('../src/avatar/kit/kit.gen.ts')
 const APP = process.env.URL || 'http://localhost:4173/Pixeldate/app/'
 const WQ0 = '?world=cafe&loopback&ws=ws://127.0.0.1:18799&invite=dev-invite-1&auto=1'
-const OUT = '/workspace/pixeldate/shots/games-lounge-v1/'
-(await import('node:fs')).mkdirSync(OUT, { recursive: true })
+const OUT = '/workspace/pixeldate/shots/games-lounge-v2/'
+;(await import('node:fs')).mkdirSync(OUT, { recursive: true })
 let bad = 0, n = 0
 const ok = (c, m) => { n++; if (c) console.log('✔', m); else { bad++; console.log('✘ FAIL', m) } }
 const { createHash } = await import('node:crypto')
@@ -83,7 +83,7 @@ const [sa, sb] = TABLES[0].seats
 ok(await walkTo(A, sa[0], sa[1], 25000), 'Avery sits at table 0'); ok(await walkTo(B, sb[0], sb[1], 25000), 'Blair sits at table 0')
 for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-start-snap]'), 8000), p.tag + ' sees the games list at the table')
 ok(gameJs.get('a') >= 1 && gameJs.get('b') >= 1, 'games chunk lazy-loaded at the table')
-ok(await until(async () => (await txt(B, '[data-t=g-panel]')).includes('vs the house'), 3000), 'Blackjack: coming soon, co-op vs the house')
+ok(await until(async () => (await txt(B, '[data-t=g-panel]')).includes('vs the House'), 3000), 'Blackjack listed: co-op vs the House')
 await shot(A, '03-table'); await shot(B, '03-table')
 await tap(A, '[data-t=g-start-snap]')
 for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-snap]'), 6000), p.tag + ' sees Snap start')
@@ -110,6 +110,7 @@ const tot = async () => (await mineN(A)) + (await mineN(B)) + +(await attr(A, '[
 ok((await tot()) === 52, 'cards conserved (hands + pile = 52)')
 console.log('  snaps tried', snaps)
 await shot(A, '06-mid'); await shot(B, '06-mid')
+{ const e = await txt(A, '[data-t=g-empty]'); ok(!e || !snaps || !e.includes('flip to start the pile'), 'pile state after snaps isn\'t "flip to start the pile" (' + (e || 'pile showing') + ')') }
 ok(/^\d+ coins$/.test((await txt(A, '[data-t=w-chips]')).trim()), 'coins wallet shown (CHIPS_NAME)')
 // reconnect: Blair reloads mid-game → back in her seat with the game
 const before = await mineN(B)
@@ -123,6 +124,43 @@ await tap(A, '[data-t=g-stand]')
 ok(await until(async () => (await txt(B, '[data-t=g-status]')).includes('You win'), 10000), 'Avery leaves → Blair wins')
 await shot(B, '08-win'); await shot(A, '08-left')
 ok(!!(await B.$('[data-t=g-again]')), 'play again / done offered')
+// co-op Blackjack: both back at the table, shared hand vs the House, antes through the wallet
+await tap(B, '[data-t=g-done]'); if (await A.$('[data-t=g-done]')) await tap(A, '[data-t=g-done]'); await until(() => B.$('[data-t=g-start-blackjack]'), 6000)
+ok(await walkTo(A, sa[0], sa[1], 25000), 'Avery sits again')
+if (await until(() => A.$('[data-t=g-done]'), 2500)) await tap(A, '[data-t=g-done]')
+ok(await until(() => A.$('[data-t=g-start-blackjack]'), 8000), 'Blackjack start offered')
+await tap(A, '[data-t=g-start-blackjack]')
+for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-bj]'), 6000), p.tag + ' sees the Blackjack table')
+ok((await txt(A, '[data-t=g-bj]')).includes('coins · never cash') && !/play chips|£|\$|€|casino|gambl|wager/i.test(await txt(A, '[data-t=g-bj]')), 'coins copy, no currency symbols or casino words')
+await shot(A, '10-bj-start'); await shot(B, '10-bj-start')
+const coins = async p => parseInt(await txt(p, '[data-t=w-chips]'))
+let rounds = 0, hits = 0, stands = 0, shotPlay = false, shotRes = false
+const t1 = Date.now()
+while (Date.now() - t1 < 90000) {
+  if (await attr(A, '[data-t=g-bj]', 'data-over')) break
+  const ph = await attr(A, '[data-t=g-bj]', 'data-phase'), seq = +(await attr(A, '[data-t=g-bj]', 'data-seq'))
+  if (ph === 'bet') {
+    if (rounds && !shotRes) { shotRes = true; await shot(A, '12-bj-result'); await shot(B, '12-bj-result') }
+    const a0 = await coins(A), b0 = await coins(B)
+    if (rounds % 2) { await front(B); await B.keyboard.press('d') } else { await tap(A, '[data-t=bj-ante-5]'); await press(A, '[data-t=bj-deal]') }
+    if (!rounds && await until(async () => +(await attr(A, '[data-t=g-bj]', 'data-seq')) > seq, 3000, 40)) {
+      ok(await until(async () => (await coins(A)) <= a0 - 5 + 15 && (await coins(B)) <= b0 - 5 + 15 && (await coins(A)) !== a0 || (await attr(A, '[data-t=g-bj]', 'data-res')) === 'push', 4000), `ante of 5 moved through both wallets (${a0}→${await coins(A)}, ${b0}→${await coins(B)})`) }
+    rounds++
+  } else if (ph === 'play') {
+    if (!shotPlay) { shotPlay = true; await shot(A, '11-bj-play'); await shot(B, '11-bj-play')
+      ok((await A.$$('[data-t=bj-house] img')).length === 2, 'House shows 2 cards, hole card face down') }
+    const meA = (await attr(A, '[data-t=g-bj]', 'data-turn')) === 'me', P = meA ? A : B
+    const t = parseInt((await txt(P, '[data-t=bj-total]')).replace('soft ', ''))
+    if (t < 15) { if (P === A) await press(A, '[data-t=bj-hit]'); else { await front(B); await B.keyboard.press('h') } hits++ }
+    else { if (P === A) await press(A, '[data-t=bj-stand]'); else await press(B, '[data-t=bj-stand]'); stands++ }
+  }
+  await until(async () => +(await attr(A, '[data-t=g-bj]', 'data-seq')) > seq || (await attr(A, '[data-t=g-bj]', 'data-over')), 4000, 40)
+}
+ok(rounds >= 5 && await until(() => attr(A, '[data-t=g-bj]', 'data-over'), 8000), `5 rounds played together (${rounds} deals, ${hits} hits, ${stands} stands)`)
+ok(hits + stands >= 1, 'Hit / Stand on the shared turn')
+ok((await coins(A)) === (await coins(B)), 'co-op: both wallets end level')
+await shot(A, '13-bj-over'); await shot(B, '13-bj-over')
+await tap(B, '[data-t=g-stand]'); await tap(A, '[data-t=g-stand]')
 // back through the door
 await tap(B, '[data-t=w-door]')
 ok(await until(async () => (await txt(B, '[data-t=w-room-name]')) === 'Café' && (await st(B))?.inst?.startsWith('cafe-'), 12000), 'Blair back in the café')

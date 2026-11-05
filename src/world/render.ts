@@ -186,11 +186,12 @@ export class Renderer {
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
     const bg = new Sprite(T.map), glow = new Container()
-    // GD's door plaque hangs on the café side of the lounge door (the DD tiles), so the way in reads in the room itself
+    // GD's door plaque hangs on the café wall beside the lounge doorway, at lintel / OPEN-sign height, at the header size
+    // (GD's @3x plaque drawn at 40x18 art px, so it stays sharp at every zoom), so the door opening stays clear
     const plaque = new Container(), doors: number[][] = []; for (let y = 0; y < MAP.rows.length; y++) for (let x = 0; x < MAP.rows[y].length; x++) if (MAP.rows[y][x] === 'D') doors.push([x, y])
     if (CUR === 'cafe-landscape' && doors.length) {
-      const pl = await load('door-plaque.png'), cx = (Math.min(...doors.map(d => d[0])) + Math.max(...doors.map(d => d[0])) + 1) * TILE / 2, y0 = Math.min(...doors.map(d => d[1])) * TILE
-      const sp = new Sprite(tex(pl)); sp.position.set(Math.round(cx - pl.width / 2), y0 - pl.height + 6); sp.label = 'door-plaque'; plaque.addChild(sp)
+      const pl = await load('door-plaque@3x.png'), sp = new Sprite(tex(pl)), x1 = (Math.max(...doors.map(d => d[0])) + 1) * TILE
+      sp.scale.set(1 / 6); sp.position.set(x1 - 4, 6); sp.label = 'door-plaque'; plaque.addChild(sp)
     }
     for (const l of MAP.lights) { const t = T['glow-' + l.kind], s = new Sprite(t)
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }

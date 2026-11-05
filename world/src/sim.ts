@@ -840,7 +840,7 @@ export class Room {
       const o = this.byUid(sp.uid); if (!o) continue
       const v = Snap.view(g.s, sp.uid, { now, rnd: cryptoRnd })
       // uids never go on the wire: players are by their café id
-      o.sock.send(JSON.stringify({ t: 'game', on: true, tb: g.tb, now, ...v, turn: ids.get(v.turn) ?? 0, winner: v.winner === null ? null : (ids.get(v.winner) ?? 0),
+      o.sock.send(JSON.stringify({ t: 'game', on: true, tb: g.tb, now, ...v, me: o.id, turn: ids.get(v.turn) ?? 0, winner: v.winner === null ? null : (ids.get(v.winner) ?? 0),
         last: { ...v.last, who: ids.get(v.last.who) ?? 0 }, ps: v.ps.map(x => ({ ...x, uid: undefined, id: ids.get(x.uid) ?? 0 })), fam: g.famLv }))
     }
   }

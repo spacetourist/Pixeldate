@@ -35,7 +35,7 @@ export default function GamesPanel({ game, games, name, send, stand, desk, chips
   }, [live, send])
   if (!game) return <section className="w-panel g-panel" data-t="g-panel" aria-label="Games Lounge table">
     <h2 className="g-h">Games Lounge · play money only</h2>
-    <ul className="g-list">{games.map(g => <li key={g.id}><div><b>{g.title}</b>{g.id === 'blackjack' && <span className="g-tag">Co-op</span>}<small>{g.ready ? 'For two at this table' : g.id === 'blackjack' ? `Coming soon · you two vs the House · ${CHIPS_NAME}, never cash` : 'Coming soon'}</small></div>
+    <ul className="g-list">{games.map(g => <li key={g.id}><div><b>{g.title}</b>{g.id === 'blackjack' && <span className="g-tag">Co-op</span>}<small>{g.ready ? 'For two at this table' : g.id === 'blackjack' ? `Coming soon · you two vs the house · ${CHIPS_NAME}, never cash` : 'Coming soon'}</small></div>
       <button className="w-btn sm" data-t={'g-start-' + g.id} disabled={!g.ready} onClick={() => send({ t: 'gstart', g: g.id })}>{g.ready ? 'Start' : 'Soon'}</button></li>)}</ul>
     {chips !== null && <Chips bal={chips} />}
     <button className="w-btn sm ghost" data-t="g-stand" onClick={stand}>Stand up</button></section>

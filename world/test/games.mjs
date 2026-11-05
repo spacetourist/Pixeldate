@@ -15,9 +15,9 @@ const J = async (o = {}, room = 'games-1') => { const b = new Bot(profile(o), { 
 const lastGame = b => b.last('game')
 const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 8000), `sat at ${x},${y}`) }
 
-await test('map: games map 40x24, 12 tables for two, door, every seat reachable; café untouched after switching', async () => {
-  M.useMap('games'); assert.equal(M.TABLES.length, 12); for (const t of M.TABLES) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.ok(M.isSeat(x, y)) }
-  assert.ok(M.isDoor(20, 3)); const seen = new Set([M.SPAWNS[0].join()]), q = [M.SPAWNS[0]]
+await test('map: games map 40x24, 6 felt tables for two (GD floor plan), door, every seat reachable; café untouched after switching', async () => {
+  M.useMap('games'); assert.equal(M.TABLES.length, 6); assert.deepEqual(M.TABLES[0].seats, [[7, 9], [11, 9]]); assert.equal(M.TABLES[0].w, 3); for (const t of M.TABLES) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.ok(M.isSeat(x, y)) }
+  assert.ok(M.isDoor(11, 3) && M.isDoor(12, 3)); const seen = new Set([M.SPAWNS[0].join()]), q = [M.SPAWNS[0]]
   while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = [x + dx, y + dy]; if (M.walkable(...k) && !seen.has(k.join())) { seen.add(k.join()); q.push(k) } } }
   for (const t of M.TABLES) for (const s of M.seatsOf(t)) assert.ok(seen.has(s.join()), 'seat ' + s)
   M.useMap('cafe-landscape'); assert.equal(M.TABLES.length, 12); assert.equal(M.TABLES[0].extra.length, 0); assert.ok(!M.isSeat(4, 6))

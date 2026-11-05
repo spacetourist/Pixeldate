@@ -86,8 +86,8 @@ ok(await until(async () => (await txt(B, '[data-t=g-panel]')).includes('vs the h
 await shot(A, '03-table'); await shot(B, '03-table')
 await tap(A, '[data-t=g-start-snap]')
 for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-snap]'), 6000), p.tag + ' sees Snap start')
-const cards = async p => +(await attr(p, '[data-t=g-mine]', 'textContent') ?? 0)
-const mineN = p => p.$eval('[data-t=g-mine]', e => parseInt(e.textContent)).catch(() => -1)
+
+const mineN = p => p.$eval('[data-t=g-mine]', e => parseInt(e.textContent)).catch(() => -1), cards = mineN
 ok((await mineN(A)) === 26 && (await mineN(B)) === 26, 'dealt 26 each')
 await shot(A, '04-snap-start'); await shot(B, '04-snap-start')
 // play: whoever's turn flips (Avery by tap, Blair by the F key); a pair on top → snap (Avery by tap, Blair by Space)

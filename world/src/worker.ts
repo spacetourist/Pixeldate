@@ -6,7 +6,8 @@
 import { Server, routePartykitRequest, type Connection } from 'partyserver'
 import { DurableObject } from 'cloudflare:workers'
 import './profanity.ts'
-import { Room, emptyRec, type Field, type PairRec, type PairStore, type Rec, type Report, type Sock, type Store } from './sim.ts'
+import { newWallet, topUp, move, type Wallet } from '../shared/chips.ts'
+import { Room, emptyRec, type WalletStore, type Field, type PairRec, type PairStore, type Rec, type Report, type Sock, type Store } from './sim.ts'
 import { TICK_MS } from '../shared/proto.ts'
 import { Budget as Gate, graphqlUsage, type KV } from './budget.ts'
 import { handleTurn } from './turn.ts'
@@ -45,11 +46,18 @@ export class User extends DurableObject<Env> {
     const r = await this.load(); if (r[f].includes(other)) return
     r[f].push(other); if (r[f].length > 5000) r[f].shift(); await this.ctx.storage.put('rec', r)
   }
+  /** the Games Lounge play-chip wallet (shared/chips.ts), kept apart from the rec; one object per uid makes it atomic */
+  async wallet(now: number) { const w = (await this.ctx.storage.get<Wallet>('chips')) ?? newWallet(), topped = topUp(w, now); await this.ctx.storage.put('chips', w); return { bal: w.bal, topped } }
+  async chipMove(d: number) { const w = (await this.ctx.storage.get<Wallet>('chips')) ?? newWallet(); if (!move(w, d)) return null; await this.ctx.storage.put('chips', w); return w.bal }
   async del(f: Field, other: string) {
     const r = await this.load(); if (!r[f].includes(other)) return
     r[f] = r[f].filter(x => x !== other); await this.ctx.storage.put('rec', r)
   }
 }
+const wallets = (env: Env): WalletStore => ({
+  get: (uid, now) => env.User.get(env.User.idFromName(uid)).wallet(now),
+  move: (uid, d) => env.User.get(env.User.idFromName(uid)).chipMove(d),
+})
 const store = (env: Env): Store => ({
   load: uid => env.User.get(env.User.idFromName(uid)).load(),
   add: (uid, f, other) => { env.User.get(env.User.idFromName(uid)).add(f, other).catch(() => {}) },
@@ -78,7 +86,7 @@ export class Area extends Server<Env> {
   /** pair levels live in the app-wide Pair objects, not in this instance */
   async onStart() {
     this.room = new Room(this.name, store(this.env), { invites: new Set((this.env.INVITES ?? "").split(',').map(s => s.trim()).filter(Boolean)),
-      staleMs: this.env.STALE_MS ? +this.env.STALE_MS : undefined, pairs: pairs(this.env) })
+      staleMs: this.env.STALE_MS ? +this.env.STALE_MS : undefined, pairs: pairs(this.env), wallets: wallets(this.env) })
   }
   onConnect(c: Connection) {
     const s = c as unknown as Sock

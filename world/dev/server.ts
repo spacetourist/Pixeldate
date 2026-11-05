@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import { createServer } from 'node:http'
 import { Budget, memKV } from '../src/budget.ts'
 import { handleTurn } from '../src/turn.ts'
-import { Room, emptyRec, memPairs, type Rec, type Report, type Sock, type Store } from '../src/sim.ts'
+import { Room, emptyRec, memPairs, memWallets, type Rec, type Report, type Sock, type Store } from '../src/sim.ts'
 import { TICK_MS } from '../shared/proto.ts'
 
 let filterKind = 'obscenity'
@@ -16,7 +16,7 @@ try { await import('../src/profanity.ts') } catch { await import('../src/profani
 // In-memory stand-ins for UserDO (per-user records) and Mod (reports); shared by every room in this process
 const users = new Map<string, Rec>(), reports: Report[] = []
 /** the app-wide pair store stand-in (Pair DO): one for every room in this process */
-const pairs = memPairs()
+const pairs = memPairs(), wallets = memWallets()
 const store: Store = {
   load: async uid => structuredClone(users.get(uid) ?? emptyRec()),
   add: (uid, f, other) => { let r = users.get(uid); if (!r) users.set(uid, r = emptyRec()); if (!r[f].includes(other)) r[f].push(other) },
@@ -32,7 +32,7 @@ const rooms = new Map<string, { room: Room; timer: ReturnType<typeof setInterval
 const tickMs: number[] = []
 function area(name: string) {
   let a = rooms.get(name)
-  if (!a) { a = { room: new Room(name, store, { invites: INVITES, cap: CAP, staleMs: STALE, pairs }), timer: null }; rooms.set(name, a) }
+  if (!a) { a = { room: new Room(name, store, { invites: INVITES, cap: CAP, staleMs: STALE, pairs, wallets }), timer: null }; rooms.set(name, a) }
   return a
 }
 const port = +(process.argv.find(a => /^\d+$/.test(a)) ?? process.env.WORLD_PORT ?? 8787)
@@ -57,7 +57,7 @@ wss.on('connection', async (ws, req) => {
 })
 http.listen(port, '127.0.0.1')
 http.on('listening', () => console.log(`world dev server on ws://127.0.0.1:${port}/parties/area/cafe-1 · filter: ${filterKind}`))
-export { reports, tickMs, rooms, filterKind, pairs, budget, clock }
+export { reports, tickMs, rooms, filterKind, pairs, wallets, budget, clock }
 function attach(ws: WebSocket, name: string) {
   const a = area(name), room = a.room
   const s: Sock = { send: d => { if (ws.readyState === 1) ws.send(d) }, close: (c, r) => ws.close(c, r) }

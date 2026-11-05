@@ -209,3 +209,4 @@
 .w-sw { width: 56px; height: 32px; padding: 0; background: #48E5C2; border: 2px solid #05020F; box-shadow: inset 0 2px 0 rgb(255 255 255 / .3), 0 3px 0 #05020F; position: relative; flex: none; cursor: pointer }
 .w-sw::after { content: ''; position: absolute; right: 2px; top: 2px; width: 24px; height: 24px; background: #FFF1C1; border: 2px solid #05020F; box-sizing: border-box }
 .w-sw.off { background: #281D52 } .w-sw.off::after { right: auto; left: 2px; background: #A49CC2 }
+.w-top .w-chips { color: #F4C27A; font: var(--t-ui, 13px system-ui) }

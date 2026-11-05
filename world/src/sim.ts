@@ -1,3 +1,4 @@
+import { newWallet, topUp, move, type Wallet } from '../shared/chips.ts'
 /* One café instance, as a pure class: no Cloudflare APIs, so it runs (and is benchmarked) in plain Node too.
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
 import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, useMap, mapOf, seatsOf, type Table, type MapId } from '../shared/map.ts'
@@ -29,6 +30,11 @@ export interface PairRec { lv: number; seg?: number; date: string[]; duetUp?: st
 /** Where pair records live. load() is async (a Durable Object call); save() is fire-and-forget. */
 export interface PairStore { load(key: string): Promise<PairRec | undefined>; save(key: string, r: PairRec): void }
 /** In-memory pair store: one per process is shared by every room (tests, the Node dev server). */
+/** the app-wide play-chip wallets, by uid (shared/chips.ts): read (with the daily top-up) and move. Not the pair store. */
+export interface WalletStore { get(uid: string, now: number): Promise<{ bal: number; topped: boolean }>; move(uid: string, delta: number): Promise<number | null> }
+export const memWallets = (m = new Map<string, Wallet>()): WalletStore & { m: Map<string, Wallet> } => ({ m,
+  get: async (u, now) => { const w = m.get(u) ?? newWallet(); const topped = topUp(w, now); m.set(u, w); return { bal: w.bal, topped } },
+  move: async (u, d) => { const w = m.get(u) ?? newWallet(); if (!move(w, d)) return null; m.set(u, w); return w.bal } })
 export const memPairs = (m = new Map<string, PairRec>()): PairStore & { m: Map<string, PairRec> } => ({ m,
   load: async k => { const r = m.get(k); return r && structuredClone(r) },
   save: (k, r) => { m.set(k, structuredClone(r)); if (m.size > 50000) m.delete(m.keys().next().value!) } })
@@ -42,6 +48,7 @@ export async function peerTag(uid: string) {
 export const CLAIM_MS = 4000
 export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => number; next?: string
   /** a socket that sends nothing (not even the keepalive) for this long is dropped (default STALE_MS) */ staleMs?: number
+  /** the app-wide play-chip wallets (default: in-memory for this room only) */ wallets?: WalletStore
   /** the app-wide pair store (default: an in-memory one for this room only) */
   pairs?: PairStore }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
@@ -198,6 +205,7 @@ export class Room {
     me.seen = this.now(); this.players.set(s, me); this.byId.set(me.id, me)
     // 'add' below goes to you for EVERYONE in the room, yourself included: the client's count is its list's size
     s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)), now: this.now(), ...(this.mapId === 'games' ? { room: 'games', games: Object.values(GAMES).map(g => ({ id: g.id, title: g.title, min: g.min, max: g.max, ready: g.ready })) } : { sofas: true }) }))
+    if (this.mapId === 'games') void this.chips(me)
     for (const o of this.players.values()) {
       if (this.hidden(me, o)) continue
       s.send(JSON.stringify({ t: 'add', p: o.pub() }))
@@ -838,6 +846,11 @@ export class Room {
   }
   /** A finished game between exactly two (a pair at a table) moves their meter one segment, like a card both answered;
       once per pair per day (gameUp, like duetUp). Not for people who refused or blocked each other. */
+  get wallets() { return this.opts.wallets ??= memWallets() }
+  /** the lounge wallet line: play chips only, never bought or cashed out */
+  private async chips(p: Player) {
+    try { const w = await this.wallets.get(p.uid, this.now()); p.sock.send(JSON.stringify({ t: 'chips', bal: w.bal, topped: w.topped })) } catch {}
+  }
   private async gameFamiliarity(g: GameRun) {
     if (g.s.ps.length !== 2) return
     const [a, b] = g.s.ps.map(x => this.byUid(x.uid))

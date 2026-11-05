@@ -83,7 +83,7 @@ function World() {
   const [inst, setInst] = useState(''); const [count, setCount] = useState(0)
   /** which room: cafe-1 or the Games Lounge (games-1); the shared map follows it */
   const [room, setRoom] = useState(qs.get('room') === 'games' ? 'games-1' : 'cafe-1'), roomRef = useRef(room)
-  const [game, setGame] = useState<GameV | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false)
+  const [game, setGame] = useState<GameV | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [chips, setChips] = useState<number | null>(null)
   const [layout, setLayout] = useState<Layout>(layoutOf())
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
   const [card, setCard] = useState<Tbl | null>(null), selRef = useRef<Pub | null>(null)
@@ -128,6 +128,7 @@ function World() {
     const A = pa.current ??= new PianoAudio(o => net.current?.send(o as any))
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
+      if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash('Free daily top-up: your play chips are back to ' + m.bal + '.'); return }
       if (m.t === 'game') { setGame(m.on ? m : null); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
       if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
@@ -199,7 +200,7 @@ function World() {
     const n = net.current; if (!n || roomRef.current === to) return
     callRef.current?.end('hangup'); n.close(); net.current = null
     const A = pa.current; if (A) { A.set({ t: 'piano', by: 0, song: null, at: 0, now: 0 } as any); A.setDuet({ t: 'duet', on: false } as any) }
-    setCard(null); setSel(null); setGame(null); setPriv([]); setWhere(''); setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false)
+    setCard(null); setSel(null); setGame(null); setPriv([]); setWhere(''); setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false); setChips(null)
     bubbles.current.clear(); murmurs.current.clear(); setRoom(to); enter(to)
   }
   useEffect(() => { if (prof && invite && adult && qs.get('auto') === '1') enter() }, [])
@@ -446,6 +447,7 @@ function World() {
   return (
     <main className={'w-room ' + layout + (seated ? ' seated' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined}>
       <header className="w-top"><b data-t="w-room-name">{lounge ? 'Games Lounge' : 'Café'}</b><span data-t="w-inst">{inst.replace(/^(cafe|games)-/, 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
+        {lounge && chips !== null && <span className="w-chips" data-t="w-chips" data-n={chips} title="Play chips · just for fun, never bought or cashed out">● {chips} chips</span>}
         <button className="w-door" data-t="w-door" onClick={() => goRoom(lounge ? 'cafe-1' : 'games-1')}>{lounge ? '← Café' : 'Games Lounge →'}</button>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />

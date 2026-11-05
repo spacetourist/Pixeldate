@@ -15,8 +15,12 @@ const J = async (o = {}, room = 'games-1') => { const b = new Bot(profile(o), { 
 const lastGame = b => b.last('game')
 const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 8000), `sat at ${x},${y}`) }
 
-await test('map: games map 40x24, 6 felt tables for two (GD floor plan), door, every seat reachable; café untouched after switching', async () => {
-  M.useMap('games'); assert.equal(M.TABLES.length, 6); assert.deepEqual(M.TABLES[0].seats, [[7, 9], [11, 9]]); assert.equal(M.TABLES[0].w, 3); for (const t of M.TABLES) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.ok(M.isSeat(x, y)) }
+await test('map: games map 40x24, 6 felt tables for two plus 3 blackjack tables, door, every seat reachable; café untouched after switching', async () => {
+  M.useMap('games'); const snap = M.TABLES.filter(t => t.kind === 'snap'), bj = M.TABLES.filter(t => t.kind === 'blackjack'), sweet = M.TABLES.filter(t => t.kind === 'sweet')
+  assert.equal(snap.length, 6); assert.equal(bj.length, 3); assert.equal(sweet.length, 1); assert.deepEqual(snap[0].seats, [[7, 9], [11, 9]]); assert.equal(snap[0].w, 3)
+  for (const t of snap) assert.equal(M.seatsOf(t).length, 2)
+  for (const t of bj) { assert.equal(M.seatsOf(t).length, 5); assert.equal(t.w, 7); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'b') }
+  for (const t of sweet) { assert.equal(M.seatsOf(t).length, 2); assert.equal(t.w, 7); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'y') }
   assert.ok(M.isDoor(11, 3) && M.isDoor(12, 3)); const seen = new Set([M.SPAWNS[0].join()]), q = [M.SPAWNS[0]]
   while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = [x + dx, y + dy]; if (M.walkable(...k) && !seen.has(k.join())) { seen.add(k.join()); q.push(k) } } }
   for (const t of M.TABLES) for (const s of M.seatsOf(t)) assert.ok(seen.has(s.join()), 'seat ' + s)
@@ -49,7 +53,7 @@ await test('snap: a game always ends (timeouts only), and the winner is the last
   for (let i = 0; i < 400 && !Snap.done(s); i++) { t += TURN_MS; Snap.tick(s, { now: t, rnd: cryptoRnd }) }
   const d = Snap.done(s); assert.ok(d); assert.ok(['a', 'b', 'c', ''].includes(d.winner))
 })
-await test('hooks: snap and co-op blackjack are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2) })
+await test('hooks: snap, blackjack and Sweet Twenty are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(GAMES.sweet.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2); assert.equal(GAMES.blackjack.max, 5); assert.equal(GAMES.blackjack.min, 1); assert.equal(GAMES.sweet.min, 2); assert.equal(GAMES.sweet.max, 2) })
 
 const T = () => { M.useMap('games'); const t = M.TABLES[0]; M.useMap('cafe-landscape'); return t }
 const play = async (bots, { snapper = null } = {}) => {
@@ -154,47 +158,133 @@ await test('chips: one wallet per uid across the lounge, start balance, daily to
   assert.ok(memPairs)
 })
 const BJ = await import('../shared/games/blackjack.ts')
-await test('blackjack: totals (soft aces), deal hides the hole card, shared turn passes after Hit, clock stands, House to 17, payouts', () => {
+await test('blackjack: own hands, hole card hidden, turn stays on Hit, clock stands, House to 17, per-hand payouts', () => {
   const C = (r, su = 0) => (r - 1) * 4 + su   // rank 1..13
   assert.deepEqual(BJ.total([C(1), C(6)]), { t: 17, soft: true }); assert.deepEqual(BJ.total([C(1), C(6), C(10)]), { t: 17, soft: false }); assert.equal(BJ.total([C(1), C(1), C(13)]).t, 12)
-  let now = 1000; const c = () => ({ now, rnd: n => 0 })
+  let now = 1000; const c = () => ({ now, rnd: () => 0 })
   const s = BJ.Blackjack.start(['a', 'b'], c())
   assert.equal(BJ.Blackjack.canDeal(s, 'a', 7), 'bad-ante'); assert.equal(BJ.Blackjack.canDeal(s, 'z', 5), 'not-playing')
   assert.equal(BJ.Blackjack.act(s, 'a', { a: 'hit' }, c()), 'not-in-round')
-  // rigged deck: pop order = hand 2,3 · house 10,6 · then hits 2, 4 · house draws 9
-  const rig = () => { s.deck = [C(9), C(4), C(2), C(6), C(10), C(3), C(2)]; s.hand = [s.deck.pop(), s.deck.pop()]; s.house = [s.deck.pop(), s.deck.pop()]; s.phase = 'play'; s.ante = 25; s.turnAt = now; s.res = null; s.pay = []; s.round = 0; s.winner = null }
-  assert.equal(BJ.Blackjack.deal(s, 25, 'a', c()), ''); if (s.phase === 'play') { rig() } else { s.phase = 'bet'; s.pay = []; assert.equal(BJ.Blackjack.deal(s, 25, 'a', c()), ''); rig() }
+  // pop from the end: a 10,6 · b 9,9 · house 10,7 · a's hit is a 2
+  BJ.rig(s, [C(2), C(7), C(10), C(9), C(6), C(9), C(10)])
+  assert.equal(BJ.Blackjack.commit(s, 'a', 25, c()), '')
+  assert.equal(s.phase, 'bet', 'waiting on the other ante')
+  now += 300; assert.equal(BJ.Blackjack.commit(s, 'b', 25, c()), '')
+  assert.equal(s.phase, 'play'); assert.equal(BJ.total(s.ps[0].cards).t, 16); assert.equal(BJ.total(s.ps[1].cards).t, 18)
   const v = BJ.Blackjack.view(s, 'a', c()); assert.equal(v.house[1], null, 'hole card hidden'); assert.equal(v.houseTotal, null)
-  const t0 = s.turn, other = s.ps[1 - t0].uid, first = s.ps[t0].uid
-  assert.equal(BJ.Blackjack.act(s, other, { a: 'hit' }, c()), 'not-your-turn')
-  now += 300; assert.equal(BJ.Blackjack.act(s, first, { a: 'hit' }, c()), ''); assert.equal(s.turn, 1 - t0, 'turn passes after a Hit'); assert.equal(BJ.total(s.hand).t, 7)
-  now += 300; assert.equal(BJ.Blackjack.act(s, other, { a: 'hit' }, c()), ''); assert.equal(BJ.total(s.hand).t, 11)
-  now += BJ.TURN_MS; assert.ok(BJ.Blackjack.tick(s, c()), 'the clock stands'); assert.equal(s.last.k, 'settle')
-  assert.equal(BJ.total(s.house).t, 25); assert.equal(s.res, 'win', 'House busts'); assert.deepEqual(s.pay, [{ uid: 'a', delta: 50 }, { uid: 'b', delta: 50 }])
-  assert.equal(s.phase, 'bet'); assert.equal(s.round, 1); assert.equal(s.winner, null)
-  // push / lose / bust payouts; a leave ends the game
-  s.pay = []; s.hand = [C(10), C(12)]; s.house = [C(13), C(11)]; s.deck = []; s.phase = 'play'; s.turnAt = now; now += 300
-  BJ.Blackjack.act(s, s.ps[s.turn].uid, { a: 'stand' }, c()); assert.equal(s.res, 'push'); assert.deepEqual(s.pay.map(x => x.delta), [25, 25])
-  s.pay = []; s.hand = [C(10), C(12)]; s.house = [C(13), C(11)]; s.deck = [C(5)]; s.phase = 'play'; now += 300
-  BJ.Blackjack.act(s, s.ps[s.turn].uid, { a: 'hit' }, c()); assert.equal(s.res, 'bust'); assert.deepEqual(s.pay, [])
-  BJ.Blackjack.leave(s, 'b', c()); assert.equal(s.winner, '', 'co-op finish')
+  assert.equal(s.turn, 0, 'seat order, a first')
+  assert.equal(BJ.Blackjack.act(s, 'b', { a: 'hit' }, c()), 'not-your-turn')
+  now += 300; assert.equal(BJ.Blackjack.act(s, 'a', { a: 'hit' }, c()), ''); assert.equal(s.turn, 0, 'a hit stays with a'); assert.equal(s.ps[0].cards.length, 3); assert.equal(s.ps[1].cards.length, 2)
+  now += 300; assert.equal(BJ.Blackjack.canDouble(s, 'a', c()), 'no-double')
+  assert.equal(BJ.Blackjack.act(s, 'a', { a: 'stand' }, c()), ''); assert.equal(s.turn, 1)
+  now += BJ.TURN_MS; assert.ok(BJ.Blackjack.tick(s, c()), 'the clock stands for b'); assert.equal(s.last.k, 'settle')
+  assert.equal(BJ.total(s.house).t, 17); assert.equal(s.phase, 'bet'); assert.equal(s.round, 1); assert.equal(s.winner, null)
+  assert.equal(s.ps[0].res, 'win'); assert.equal(s.ps[1].res, 'win')
+  assert.deepEqual(s.pay.map(x => x.delta), [50, 50])
+  // leaving one player does not close the table; the last one does
+  BJ.Blackjack.leave(s, 'b', c()); assert.equal(s.winner, null); assert.equal(s.ps.length, 1)
+  BJ.Blackjack.leave(s, 'a', c()); assert.equal(s.winner, '')
 })
-await test('room: co-op blackjack at a table: antes come out of both wallets, rounds settle back into them, no uids on the wire', async () => {
-  const t = T(), [A, B] = [await J({ name: 'Cy' }), await J({ name: 'Di' })]
-  await goSit(A, t.seats[0]); await goSit(B, t.seats[1])
-  const bal = async b => (await b.wait(() => b.last('chips'))).bal
-  const a0 = await bal(A), b0 = await bal(B)
-  A.send({ t: 'gstart', g: 'blackjack' })
+const BJT = () => { M.useMap('games'); const t = M.TABLES.find(t => t.kind === 'blackjack'); M.useMap('cafe-landscape'); return t }
+const rail = t => [...t.seats, ...t.extra]
+const balOf = async b => (await b.wait(() => b.last('chips'))).bal
+const playOut = async (bots, ms = 20000) => {
+  const t0 = Date.now()
+  while (Date.now() - t0 < ms) {
+    const v = lastGame(bots[0]); if (!v || v.round >= 1 && v.phase === 'bet') return v
+    if (v.phase === 'play') { const who = bots.find(b => b.me === v.turn); if (who && who._s !== v.seq) { who._s = v.seq; who.send({ t: 'gact', a: 'stand' }) } }
+    await sleep(60)
+  }
+  throw new Error('round did not settle')
+}
+await test('room: blackjack table, each player antes their own coins, hole card hidden, no uids', async () => {
+  const t = BJT(), seats = rail(t), [A, B] = [await J({ name: 'Cy' }), await J({ name: 'Di' })]
+  await goSit(A, seats[0]); await goSit(B, seats[1])
+  const a0 = await balOf(A), b0 = await balOf(B)
+  A.send({ t: 'gstart', g: 'blackjack' }); assert.equal((await A.wait(() => A.last('gerr'))).why, 'bad', 'no second way to start')
   for (const b of [A, B]) assert.equal((await b.wait(() => lastGame(b)?.g === 'blackjack' && lastGame(b))).phase, 'bet')
   B.send({ t: 'gact', a: 'deal', ante: 3 }); assert.equal((await B.wait(() => B.last('gerr'))).why, 'bad-ante')
+  A.send({ t: 'gact', a: 'deal', ante: 25 }); await sleep(200); assert.equal(lastGame(A).phase, 'bet', 'one ante does not deal the table')
   B.send({ t: 'gact', a: 'deal', ante: 25 })
-  const g = await A.wait(() => lastGame(A)?.round === 1 || lastGame(A)?.phase === 'play' ? lastGame(A) : null, 5000); assert.ok(g)
-  // play the round out: whoever's turn stands
-  const t0 = Date.now(); while (lastGame(A).round < 1 && Date.now() - t0 < 15000) { const v = lastGame(A); const who = [A, B].find(b => b.me === v.turn); if (v.phase === 'play' && who && who._s !== v.seq) { who._s = v.seq; who.send({ t: 'gact', a: 'stand' }) } await sleep(80) }
-  const r = lastGame(A); assert.equal(r.round, 1); assert.ok(r.res); assert.equal(r.house.every(x => x !== null), true, 'House shown after the round')
-  const back = { win: 50, bj: 62, push: 25, lose: 0, bust: 0 }[r.res]
-  await sleep(400); assert.equal(A.last('chips').bal, a0 - 25 + back); assert.equal(B.last('chips').bal, b0 - 25 + back)
+  const g = await A.wait(() => { const v = lastGame(A); return v && (v.phase === 'play' || (v.round >= 1 && v.phase === 'bet')) ? v : null }, 5000); assert.ok(g)
+  if (g.phase === 'play') {
+    assert.equal(g.house.filter(x => x === null).length, 1, 'hole card hidden'); assert.equal(g.hand.length, 2); assert.equal(lastGame(B).hand.length, 2)
+    assert.equal(g.ps.length, 2)
+    await playOut([A, B])
+  }
+  const ra = lastGame(A), rb = lastGame(B)
+  assert.equal(ra.round, 1); assert.ok(ra.res && rb.res); assert.equal(ra.house.every(x => x !== null), true)
+  const back = r => ({ win: 50, bj: 62, push: 25, lose: 0, bust: 0 }[r] ?? -1)
+  await sleep(500)
+  assert.equal(A.last('chips').bal, a0 - 25 + back(ra.res))
+  assert.equal(B.last('chips').bal, b0 - 25 + back(rb.res))
   assert.ok(!A.text.join().includes('bot-'), 'no uids on the wire')
+})
+await test('room: two tables, own turns, Double, rejected acts, AFK stand, mid-round wait, leave, chat', async () => {
+  M.useMap('games'); const tables = M.TABLES.filter(t => t.kind === 'blackjack'); M.useMap('cafe-landscape')
+  const [t1, t2] = tables, s1 = rail(t1), s2 = rail(t2)
+  const A = await J({ name: 'Ann' }), B = await J({ name: 'Bo' }), C = await J({ name: 'Cy' }); let D
+  await goSit(A, s1[0]); await goSit(B, s1[1]); await goSit(C, s2[0])
+  await A.wait(() => lastGame(A)?.phase === 'bet'); await C.wait(() => lastGame(C)?.phase === 'bet')
+  assert.notEqual(lastGame(A).tb, lastGame(C).tb, 'independent tables')
+  const startBal = b => b.last('chips').bal
+  const aStart = startBal(A), bStart = startBal(B)
+  // C plays alone at table 2 and must not move table 1
+  C.send({ t: 'gact', a: 'deal', ante: 5 })
+  const cPlay = await C.wait(() => { const v = lastGame(C); return v && (v.phase === 'play' || v.round >= 1) ? v : null }, 4000)
+  assert.ok(cPlay); assert.equal(lastGame(A).phase, 'bet', 'the other table is still betting'); assert.equal(lastGame(A).round, 0)
+  A.send({ t: 'gact', a: 'deal', ante: 25 }); B.send({ t: 'gact', a: 'deal', ante: 25 })
+  const g = await A.wait(() => { const v = lastGame(A); return v && (v.phase === 'play' || (v.round >= 1 && v.phase === 'bet')) ? v : null }, 5000); assert.ok(g)
+  if (g.phase === 'play') {
+    const first = [A, B].find(b => b.me === lastGame(A).turn), other = first === A ? B : A
+    other.send({ t: 'gact', a: 'hit' }); assert.equal((await other.wait(() => other.last('gerr'))).why, 'not-your-turn')
+    D = await J({ name: 'Dee' }); await goSit(D, s1[2])
+    const dw = await D.wait(() => lastGame(D)?.phase === 'play' && lastGame(D), 4000); assert.ok(dw)
+    assert.equal(dw.waiting || dw.mine === 'wait', true, 'mid-round seat waits')
+    D.send({ t: 'gact', a: 'deal', ante: 5 }); assert.equal((await D.wait(() => D.last('gerr'))).why, 'waiting')
+    if (lastGame(first).phase === 'play' && lastGame(first).turn === first.me && lastGame(first).hand.length === 2) {
+      const seq = lastGame(first).seq, hand = lastGame(first).hand.length
+      first.send({ t: 'gact', a: 'double' }); first.send({ t: 'gact', a: 'double' })
+      const d = await first.wait(() => lastGame(first)?.seq !== seq && lastGame(first), 4000)
+      assert.ok(await first.wait(() => first.events.some(e => e.t === 'gerr'), 2000), 'a second tap is refused')
+      if (d && d.phase === 'play') { assert.equal(d.hand.length, hand + 1); assert.equal(d.ante, 50); await sleep(400); assert.equal(first.last('chips').bal, (first === A ? aStart : bStart) - 50) }
+      else if (d) assert.equal(d.hand.length, hand + 1, 'double took one card')
+    }
+    // the player still to act is left for the clock
+    const settled = await A.wait(() => lastGame(A)?.round >= 1 && lastGame(A)?.phase === 'bet' && lastGame(A), BJ.TURN_MS * 2 + 5000)
+    assert.ok(settled, 'AFK clock finished the round')
+    assert.ok(lastGame(A).last.k === 'settle' || lastGame(A).last.k === 'auto' || settled.last?.k === 'settle')
+  } else {
+    assert.ok(g.res, 'a natural settled immediately, still per player')
+    D = await J({ name: 'Dee' }); await goSit(D, s1[2]); await D.wait(() => lastGame(D)?.phase === 'bet', 4000)
+  }
+  // D can join the next round
+  D.send({ t: 'gact', a: 'deal', ante: 5 })
+  await D.wait(() => lastGame(D)?.mine === 'locked' || lastGame(D)?.phase === 'play', 4000)
+  assert.notEqual(lastGame(D).mine, 'wait')
+  // chat reaches the table, not the other one
+  A.send({ t: 'say', text: 'hello there' })
+  assert.equal((await B.wait(() => B.last('say') || B.last('said'))).text, 'hello there')
+  await sleep(250); assert.ok(!C.events.some(e => e.t === 'say' && e.text === 'hello there'), 'other table does not hear it')
+  // leave during a fresh round: stand the hand, the other player is still in
+  A.send({ t: 'gact', a: 'deal', ante: 5 }); await A.wait(() => lastGame(B)?.mine === 'locked' || lastGame(A)?.phase === 'play', 3000)
+  B.send({ t: 'gact', a: 'deal', ante: 5 }); await A.wait(() => lastGame(A)?.phase === 'play', 4000)
+  const leaver = [A, B].find(b => lastGame(b)?.turn === b.me) ?? A
+  const stay = leaver === A ? B : A
+  const before = stay.last('chips').bal
+  leaver.send({ t: 'gquit' })
+  assert.ok(await leaver.wait(() => leaver.last('game')?.on === false, 3000), 'leave closes their table')
+  await sleep(600)
+  assert.ok(lastGame(stay)?.on !== false, 'the other player keeps the table')
+  if (lastGame(stay)?.phase === 'play') { const mid = stay.last('chips').bal; await sleep(400); assert.equal(stay.last('chips').bal, mid, 'settled once') }
+  void before
+  // not enough coins
+  const poor = stay, w = dev.wallets.m.get(poor.p.uid)
+  if (w && w.bal > 4) await dev.wallets.move(poor.p.uid, -(w.bal - 4))
+  poor.send({ t: 'gact', a: 'deal', ante: 5 })
+  // may already be in a round; either chips or in-round/waiting is a refusal, but a fresh bet with 4 coins is chips
+  await sleep(300)
+  if (lastGame(poor)?.phase === 'bet' && lastGame(poor)?.mine !== 'locked') assert.ok(poor.events.some(e => e.why === 'chips'), 'cannot ante more than you have')
 })
 // ---- "Play a game?": café invite → both teleport to the lounge, seated opposite each other at one free table ----
 const Jc = o => J(o, 'cafe-1')

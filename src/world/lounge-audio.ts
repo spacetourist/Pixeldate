@@ -72,7 +72,7 @@ export function onGame(a: V, b: V) {
   } else if (b.g === 'blackjack') {
     const dealt = a.phase !== 'play' && b.phase === 'play'
     if (dealt) { play('chipPlace'); for (let i = 0; i < 4; i++) play('cardDeal', 150 + i * 150) }
-    else if (k === 'hit') { play('bjHit'); play('cardDeal', 80) } else if (k === 'stand' || k === 'auto') play('bjStand')
+    else if (k === 'hit' || k === 'double') { play('bjHit'); play('cardDeal', 80) } else if (k === 'stand' || k === 'auto') play('bjStand')
     if (b.res && b.res !== a.res || (b.res && b.phase === 'bet' && a.phase !== 'bet')) {
       const st = b.res === 'bj' ? 'bjBlackjack' : b.res === 'win' ? 'bjWin' : b.res === 'push' ? 'bjPush' : b.res === 'bust' ? 'bjBust' : null
       if (st) play(st, dealt ? 800 : 200)

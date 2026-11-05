@@ -4,9 +4,6 @@
 import { useEffect, useState } from 'react'
 import './games.css'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
-export interface BjV { on: true; g: 'blackjack'; tb: number; seq: number; now: number; me: number; phase: 'bet' | 'play' | 'house'; ante: number; hand: number[]
-  house: (number | null)[]; total: number; soft: boolean; houseTotal: number | null; turn: number; turnLeft: number; round: number; rounds: number
-  res: 'win' | 'bj' | 'push' | 'lose' | 'bust' | null; last: { k: string; who: number }; winner: number | null; ps: { id: number; out: boolean; away: boolean }[]; fam?: number }
 export interface GameV { on: true; g: 'snap'; tb: number; seq: number; now: number; me: number; pile: number[]; size: number; turn: number; turnLeft: number; left: number
   last: { k: string; who: number; n?: number }; winner: number | null; ps: { id: number; n: number; out: boolean; away: boolean; lock: number }[]; fam?: number }
 export interface GameInfo { id: string; title: string; min: number; max: number; ready: boolean }
@@ -19,7 +16,6 @@ const BACK = CARDS + 'back-120.png', BACK_SET = `${CARDS}back-120.png 1x, ${CARD
 const CHIP_ART = import.meta.glob<string>('./art/chips/*.png', { eager: true, query: '?url', import: 'default' })
 /** GD's @3x art for high-density screens (exact 3x of the 1x pixels) */
 const x3 = (m: Record<string, string>, stem: string) => m[stem + '@3x.png'] ? `${m[stem + '.png']} 1x, ${m[stem + '@3x.png']} 3x` : undefined
-const Back = () => <img src={BACK} srcSet={BACK_SET} alt="" className="g-card g-back" width={120} height={168} />
 /** a coin: GD's pixel chip is the rim (the light pixel accent); the value is crisp vector text over a flat centre disc,
     drawn at device resolution, so the number is sharp on every screen */
 const CHIP_FILL: Record<number, string> = { 1: '#FFF1C1', 5: '#FF6F59', 25: '#FFD84D', 100: '#48E5C2' }
@@ -35,7 +31,7 @@ function Card({ c, k }: { c: number; k?: string }) {
 }
 const Deck = ({ n, k }: { n: number; k: string }) => <div className="g-deck" data-t={k}>{n > 0 && <img src={BACK} srcSet={BACK_SET} alt="" />}{n > 1 && <img src={BACK} srcSet={BACK_SET} alt="" style={{ left: 2, top: -2 }} />}<span>{n}</span></div>
 export const Chips = ({ bal }: { bal: number }) => <span className="g-chips" data-t="g-chips">{[1, 5, 25, 100].map(v => <Chip key={v} v={v} />)} {bal} {CHIPS_NAME}</span>
-export default function GamesPanel({ game, games, name, send, stand, desk, chips }: { game: GameV | BjV | null; games: GameInfo[]; name: (id: number) => string; chips: number | null
+export default function GamesPanel({ game, games, name, send, stand, desk, chips }: { game: GameV | null; games: GameInfo[]; name: (id: number) => string; chips: number | null
   send: (o: object) => void; stand: () => void; desk: boolean }) {
   const [, tick] = useState(0), [t0, setT0] = useState(() => performance.now())
   useEffect(() => { setT0(performance.now()) }, [game?.seq])
@@ -52,11 +48,12 @@ export default function GamesPanel({ game, games, name, send, stand, desk, chips
   }, [snapLive, send])
   if (!game) return <section className="w-panel g-panel" data-t="g-panel" aria-label="Games Lounge table">
     <h2 className="g-h">Games Lounge · coins only</h2>
-    <ul className="g-list">{games.map(g => <li key={g.id}><div><b>{g.title}</b>{g.id === 'blackjack' && <span className="g-tag">Co-op</span>}<small>{g.id === 'blackjack' ? `You two share one hand vs the House · ${CHIPS_NAME}, never cash` : g.ready ? 'For two at this table' : g.id === 'blackjack' ? `Coming soon · you two vs the house · ${CHIPS_NAME}, never cash` : 'Coming soon'}</small></div>
+    <ul className="g-list">{games.filter(g => g.id === 'snap').map(g => <li key={g.id}><div><b>{g.title}</b><small>{g.ready ? 'For two at this table' : 'Coming soon'}</small></div>
       <button className="w-btn sm" data-t={'g-start-' + g.id} disabled={!g.ready} onClick={() => send({ t: 'gstart', g: g.id })}>{g.ready ? 'Start' : 'Soon'}</button></li>)}</ul>
+    <p className="g-sub">Blackjack is at the green tables · your own hand vs the House. Sweet Twenty is the heart table for two.</p>
     {chips !== null && <Chips bal={chips} />}
     <button className="w-btn sm ghost" data-t="g-stand" onClick={stand}>Stand up</button></section>
-  if (game.g === 'blackjack') return <BjPanel game={game} name={name} send={send} stand={stand} desk={desk} chips={chips} t0={t0} />
+  if (game.g !== 'snap') return null
   const el = performance.now() - t0, turnLeft = Math.max(0, game.turnLeft - el), mine = game.turn === game.me && live
   const me = game.ps.find(p => p.id === game.me), lock = me && me.lock - el > 0
   const top = game.pile, pair = top.length >= 2 && rank(top[top.length - 1]) === rank(top[top.length - 2])
@@ -77,49 +74,6 @@ export default function GamesPanel({ game, games, name, send, stand, desk, chips
       <button className="w-btn g-snapbtn" data-t="g-snap-btn" disabled={!!lock} onClick={() => send({ t: 'gact', a: 'snap' })}>Snap!{desk && <kbd>Space</kbd>}</button></div>
       : <div className="g-btns"><button className="w-btn" data-t="g-again" onClick={() => send({ t: 'gstart', g: 'snap' })}>Play again</button>
         <button className="w-btn ghost" data-t="g-done" onClick={() => send({ t: 'gquit' })}>Done</button></div>}
-    <button className="w-btn sm ghost" data-t="g-stand" onClick={stand}>{live ? 'Leave game' : 'Stand up'}</button>
-  </section>
-}
-
-const RES = { win: 'You two win the round!', bj: 'Blackjack! You two win big', push: 'Push · your coins come back', lose: 'The House takes this one', bust: 'Bust · over 21' } as const
-function BjPanel({ game, name, send, stand, desk, chips, t0 }: { game: BjV; name: (id: number) => string; send: (o: object) => void; stand: () => void; desk: boolean; chips: number | null; t0: number }) {
-  const [ante, setAnte] = useState(25)
-  const live = game.winner === null, play = live && game.phase === 'play', mine = play && game.turn === game.me, bet = live && game.phase === 'bet'
-  const turnLeft = Math.max(0, game.turnLeft - (performance.now() - t0))
-  const deal = () => send({ t: 'gact', a: 'deal', ante }), hit = () => send({ t: 'gact', a: 'hit' }), standH = () => send({ t: 'gact', a: 'stand' })
-  useEffect(() => {
-    if (!live || !desk) return
-    const k = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest?.('input, textarea') || e.repeat) return
-      const c = e.key.toLowerCase()
-      if (c === 'h') hit(); else if (c === 's') standH(); else if (c === 'd') deal(); else return
-      e.preventDefault()
-    }
-    addEventListener('keydown', k); return () => removeEventListener('keydown', k)
-  })
-  const stack = game.ante ? [100, 25, 5, 1].flatMap(v => Array(Math.floor((game.ante % (v * 10)) / v)).fill(v)).slice(0, 6) : []
-  return <section className="w-panel g-panel g-bj" data-t="g-bj" data-seq={game.seq} data-phase={game.phase} data-turn={mine ? 'me' : 'them'} data-over={game.winner !== null ? '1' : undefined} data-res={game.res ?? undefined} aria-label="Blackjack">
-    <h2 className="g-h">Blackjack <span className="g-tag">Co-op</span><small>round {Math.min(game.round + (bet ? 1 : play ? 1 : 0), game.rounds)} of {game.rounds}</small></h2>
-    <p className="g-sub">Shared hand vs the House · {CHIPS_NAME} only</p>
-    <div className="g-felt g-bjfelt">
-      <div className="g-row"><b className="g-house">House</b><small data-t="bj-house-total">{game.houseTotal !== null ? game.houseTotal : game.house.length ? '?' : ''}</small></div>
-      <div className="g-hand" data-t="bj-house">{game.house.map((c, i) => c === null ? <Back key={i} /> : <Card key={i} c={c} />)}</div>
-      <div className="g-row"><b className="g-ours">Your shared hand</b><small data-t="bj-total">{game.hand.length ? (game.soft && game.total < 21 ? 'soft ' : '') + game.total : ''}</small></div>
-      <div className="g-hand" data-t="bj-hand">{game.hand.length ? game.hand.map((c, i) => <Card key={i} c={c} />) : <span className="g-empty">pick your coins and Deal</span>}</div>
-      <div className="g-stack" data-t="bj-stack">{stack.map((v, i) => <Chip key={i} v={v} size={27} />)}<small>{game.ante ? `${game.ante} each · ` : ''}{CHIPS_NAME} · never cash</small></div>
-    </div>
-    <p className="g-status" role="status" data-t="g-status">{game.winner !== null ? 'Game over · thanks for playing together'
-      : play ? <span className={'g-pill' + (mine ? ' me' : '')}>{mine ? 'Your call' : `${name(game.turn)}'s call`} · {Math.ceil(turnLeft / 1000)}s</span>
-      : game.res ? <span data-t="bj-res">{RES[game.res]}</span> : 'Either of you can Deal'}</p>
-    {game.fam && game.winner !== null && <p className="g-fam" data-t="g-fam">You two got to know each other a little better.</p>}
-    {bet && <div className="g-antes" role="radiogroup" aria-label={`Coins each`}>{[1, 5, 25, 100].map(v => <button key={v} className={'g-ante' + (ante === v ? ' on' : '')} role="radio" aria-checked={ante === v} data-t={'bj-ante-' + v} disabled={chips !== null && chips < v} onClick={() => setAnte(v)}><Chip v={v} size={27} /></button>)}</div>}
-    {live ? <div className="g-btns g-bjbtns">
-      <button className="w-btn g-hit" data-t="bj-hit" disabled={!mine} onClick={hit}>Hit{desk && <kbd>H</kbd>}</button>
-      <button className="w-btn g-flip" data-t="bj-stand" disabled={!mine} onClick={standH}>Stand{desk && <kbd>S</kbd>}</button>
-      <button className="w-btn g-deal" data-t="bj-deal" disabled={!bet || (chips !== null && chips < ante)} onClick={deal}>Deal{desk && <kbd>D</kbd>}</button></div>
-      : <div className="g-btns"><button className="w-btn" data-t="g-again" onClick={() => send({ t: 'gstart', g: 'blackjack' })}>Play again</button>
-        <button className="w-btn ghost" data-t="g-done" onClick={() => send({ t: 'gquit' })}>Done</button></div>}
-    {chips !== null && <Chips bal={chips} />}
     <button className="w-btn sm ghost" data-t="g-stand" onClick={stand}>{live ? 'Leave game' : 'Stand up'}</button>
   </section>
 }

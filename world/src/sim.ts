@@ -5,6 +5,7 @@ import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, useMap, mapOf, seatsOf, 
 import { GAMES, cryptoRnd, type GameId } from '../shared/games/index.ts'
 import { Snap } from '../shared/games/snap.ts'
 import { Blackjack, type BjS } from '../shared/games/blackjack.ts'
+import { Sweet, type SwS } from '../shared/games/sweet.ts'
 import type { Game } from '../shared/games/index.ts'
 import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
 import { DUET, DUETS, PICK_MS, OFFER_MS, INVITE_MS, FLIP_MS, DUET_LEAD_MS, BASS_SEAT, MELODY_SEAT, MATCH_HOLD_MS, MAYBE_MS, LEVELUP_MS, MISS_HOLD_MS, type Part, type DuetPhase } from '../shared/duet.ts'
@@ -57,10 +58,12 @@ export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => numb
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
 /** a table's game: its state (shared/games), who's away (uid → since), who stood up (uid → since), each player's seat */
 type GameS = { ps: { uid: string; out: boolean; away: boolean }[]; seq: number; winner: string | null }
-interface GameRun { id: GameId; tb: number; s: GameS; busy?: boolean; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; ids: Map<string, number>; sent: number; fam: boolean; famLv?: number }
+interface GameRun { id: GameId; tb: number; s: GameS; busy?: boolean; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; ids: Map<string, number>; sent: number; fam: boolean; famLv?: number
+  /** per-player wallet calls in flight (a double-tap must not take the ante twice) */ hold: Set<string>
+  /** pressed Leave: don't sit them straight back down while they are still on the seat */ left: Set<string> }
 const RECONNECT_MS = 20_000, LEAVE_MS = 2500
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const MOD: Record<GameId, Game<any, any>> = { snap: Snap, blackjack: Blackjack }
+const MOD: Record<GameId, Game<any, any>> = { snap: Snap, blackjack: Blackjack, sweet: Sweet }
 const mod = (g: GameRun) => MOD[g.id]
 /** "Play a game?" (café → Games Lounge invites): answer window, one invite per inviter per GINV_GAP_MS, at most
     GINV_MAX per GINV_WIN_MS (server-side; the client's button state is only a hint), a ticket's seat hold in the lounge */
@@ -180,7 +183,7 @@ export class Room {
       case 'dinvx': { const d = this.duet; if (d?.inv?.from === p) this.duetInviteEnd('cancel'); return }
       case 'dinvans': return this.duetInviteAns(p, m.yes === true)
       case 'gstart': return this.gameStart(p, m.g)
-      case 'gact': return this.gameAct(p, m.a, m.ante)
+      case 'gact': return this.gameAct(p, m.a, m.ante, m.i, m.sign)
       case 'gquit': return this.gameQuit(p)
       case 'ginv': return this.gInvite(p, m.id)
       case 'ginvx': return this.gInviteEnd(p, 'cancel')
@@ -288,7 +291,7 @@ export class Room {
     if (!tkt) {
       const busy = new Set([...this.players.values()].map(o => Math.floor(o.x) + ',' + Math.floor(o.y)))
       const held = new Set([...this.tickets.values()].map(v => v.tb))
-      const t = TABLES.find(t => !held.has(t.id) && !(this.games.get(t.id)?.s.winner === null) && !seatsOf(t).some(s => busy.has(s.join(','))))
+      const t = TABLES.find(t => t.kind === 'snap' && !held.has(t.id) && !(this.games.get(t.id)?.s.winner === null) && !seatsOf(t).some(s => busy.has(s.join(','))))
       if (!t) return null
       tkt = { tb: t.id, exp: now + TICKET_MS, in: [] }; this.tickets.set(tk, tkt)
     }
@@ -376,7 +379,8 @@ export class Room {
       p.moving = this.move(p)
       const tx = Math.floor(p.x), ty = Math.floor(p.y), was = p.sitting
       p.sitting = !p.moving && !p.dir && (isSeat(tx, ty) || isPianoSeat(tx, ty)) && Math.abs(p.x - tx - .5) < .05 && Math.abs(p.y - ty - .5) < .05
-      if (p.sitting && !was) p.sitAt = this.tickN
+      if (p.sitting && !was) { p.sitAt = this.tickN; this.bjSit(p); this.sweetSit(p) }
+      if (!p.sitting) for (const g of this.games.values()) g.left.delete(p.uid)
       if (p.sofaWant && !p.moving && !p.path.length) this.sofaSit(p)
     }
     this.tables()
@@ -390,6 +394,7 @@ export class Room {
     const seated = new Map<string, Player>()
     for (const p of this.players.values()) if (p.sitting) seated.set(Math.floor(p.x) + ',' + Math.floor(p.y), p)
     for (const t of TABLES) {
+      if (t.kind === 'blackjack') { this.bjPair(t, seated); continue }
       const a = seated.get(t.seats[0].join(',')), b = seated.get(t.seats[1].join(',')), cur = this.pairs.get(t.id)
       // Not for me is for good: those two never get a table together again (the one who sat down second is stood up)
       if (a && b && this.refused(a, b)) { const late = a.sitAt >= b.sitAt ? a : b; this.standUp(late, t.seats[late === a ? 0 : 1]); late.sock.send(JSON.stringify({ t: 'note', k: 'table-no' })); continue }
@@ -748,7 +753,7 @@ export class Room {
     add(p, 'passed', o); add(o, 'refusedBy', p)
     for (const [x, y] of [[p, o], [o, p]]) if (x.sets.hearted.delete(y.uid)) this.store.del?.(x.uid, 'hearted', y.uid)
     this.endPair(pr.tb)
-    for (const x of [pr.a, pr.b]) this.standUp(x, x === pr.a ? tb.seats[0] : tb.seats[1])
+    for (const x of [pr.a, pr.b]) this.standUp(x, [Math.floor(x.x), Math.floor(x.y)])
     p.sock.send(JSON.stringify({ t: 'note', k: 'ended', id: o.id, name: o.name }))
     o.sock.send(JSON.stringify({ t: 'note', k: 'moved-on', id: p.id, name: p.name }))
   }
@@ -854,51 +859,163 @@ export class Room {
     }
     return null
   }
+  /** Exactly two at a blackjack table get the café's pair (chat + Start call). A third seat ends it; nobody is stood up. */
+  private bjPair(t: Table, seated: Map<string, Player>) {
+    const here = seatsOf(t).map(s => seated.get(s.join(','))).filter((p): p is Player => !!p)
+    const cur = this.pairs.get(t.id)
+    const ok = here.length === 2 && !this.hidden(here[0], here[1]) && !this.refused(here[0], here[1])
+    if (!ok) { if (cur) this.endPair(t.id); return }
+    const [a, b] = here[0].sitAt <= here[1].sitAt ? [here[0], here[1]] as const : [here[1], here[0]] as const
+    if (cur && !((cur.a === a && cur.b === b) || (cur.a === b && cur.b === a))) this.endPair(t.id)
+    if (this.pairs.has(t.id)) return
+    const key = pairKey(a, b)
+    const pr: Pair = { tb: t.id, key, a, b, level: 1, seg: 0, up: false, used: new Set(), q: null, ans: new Map(), rev: false, n: 0,
+      date: new Set(), call: null, live: null, loaded: false, claims: new Map(), rc: false, peer: new Map() }
+    this.pairs.set(t.id, pr); a.table = b.table = t
+    for (const [x, y] of [[a, b], [b, a]] as const) if (!x.sets.met.has(y.uid)) { x.sets.met.add(y.uid); this.store.add(x.uid, 'met', y.uid) }
+    this.deal(pr); void this.sync(pr)
+  }
+  /** Sitting at a blackjack seat joins that table's shoe. One way in: there is no Start button. */
+  private bjSit(p: Player) {
+    if (this.mapId !== 'games') return
+    const t = this.tableAt(p); if (!t || t.kind !== 'blackjack') return
+    let g = this.games.get(t.id)
+    if (g?.left.has(p.uid)) return
+    const elsewhere = [...this.games.values()].find(x => x !== g && x.s.winner === null && x.s.ps.some(sp => sp.uid === p.uid))
+    if (elsewhere) return
+    const seat = seatsOf(t).findIndex(([a, b]) => a === Math.floor(p.x) && b === Math.floor(p.y))
+    if (seat < 0) return
+    const now = this.now()
+    if (!g || g.id !== 'blackjack' || g.s.winner !== null) {
+      g = { id: 'blackjack', tb: t.id, s: Blackjack.start([], { now, rnd: cryptoRnd }), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false, hold: new Set(), left: new Set() }
+      this.games.set(t.id, g)
+    }
+    Blackjack.join(g.s as BjS, p.uid, seat, { now })
+    g.seat.set(p.uid, [Math.floor(p.x), Math.floor(p.y)])
+    this.gameCheck(g)
+  }
+  /** After a round, anyone still in a seat who missed the deal (they left, or arrived as it ended) is in for the next one. */
+  private bjCatchup(g: GameRun) {
+    if (g.id !== 'blackjack' || g.s.winner !== null) return
+    const s = g.s as BjS; if (s.phase !== 'bet') return
+    const t = TABLES.find(x => x.id === g.tb); if (!t) return
+    for (const p of this.players.values()) {
+      if (!p.sitting || g.left.has(p.uid) || this.tableAt(p)?.id !== t.id || s.ps.some(x => x.uid === p.uid)) continue
+      const seat = seatsOf(t).findIndex(([a, b]) => a === Math.floor(p.x) && b === Math.floor(p.y))
+      if (seat < 0) continue
+      Blackjack.join(s, p.uid, seat, { now: this.now() })
+      g.seat.set(p.uid, [Math.floor(p.x), Math.floor(p.y)])
+    }
+  }
+  /** Sitting at the Sweet Twenty table joins that match. One way in, same as blackjack. */
+  private sweetSit(p: Player) {
+    if (this.mapId !== 'games') return
+    const t = this.tableAt(p); if (!t || t.kind !== 'sweet') return
+    let g = this.games.get(t.id)
+    if (g?.left.has(p.uid)) return
+    const elsewhere = [...this.games.values()].find(x => x !== g && x.s.winner === null && x.s.ps.some(sp => sp.uid === p.uid))
+    if (elsewhere) return
+    const seat = seatsOf(t).findIndex(([a, b]) => a === Math.floor(p.x) && b === Math.floor(p.y))
+    if (seat < 0) return
+    const now = this.now()
+    if (!g || g.id !== 'sweet' || (g.s.winner !== null && !g.s.ps.length)) {
+      g = { id: 'sweet', tb: t.id, s: Sweet.start([], { now, rnd: cryptoRnd }), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false, hold: new Set(), left: new Set() }
+      this.games.set(t.id, g)
+    }
+    if (g.s.winner !== null) return
+    Sweet.join(g.s as SwS, p.uid, seat, { now })
+    g.seat.set(p.uid, [Math.floor(p.x), Math.floor(p.y)])
+    this.gameCheck(g)
+  }
+  /** Optional match stake. 0 is free and does not touch the wallet. */
+  private async sweetBet(g: GameRun, p: Player, ante: unknown) {
+    const s = g.s as SwS, err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
+    if (g.hold.has(p.uid)) return err('slow-down')
+    const why = Sweet.canBet(s, p.uid, ante); if (why) return err(why)
+    const n = ante as number
+    if (n === 0) {
+      const w = Sweet.commit(s, p.uid, 0, { now: this.now(), rnd: cryptoRnd })
+      if (w) return err(w)
+      this.gameCheck(g); return
+    }
+    g.hold.add(p.uid); let took = false
+    try {
+      if ((await this.wallets.move(p.uid, -n)) === null) return err('chips')
+      took = true; useMap(this.mapId)
+      if (this.gameOf(p) !== g || Sweet.canBet(s, p.uid, n)) { await this.wallets.move(p.uid, n); return err(this.gameOf(p) !== g ? 'bad' : Sweet.canBet(s, p.uid, n) || 'in-round') }
+      const w2 = Sweet.commit(s, p.uid, n, { now: this.now(), rnd: cryptoRnd })
+      if (w2) { await this.wallets.move(p.uid, n); return err(w2) }
+    } catch { if (took) await this.wallets.move(p.uid, n).catch(() => null); return err('bad') }
+    finally {
+      g.hold.delete(p.uid); this.bjChips(g)
+      for (const x of s.ps) { const o = this.byUid(x.uid); if (o) void this.chips(o) }
+    }
+    this.gameCheck(g)
+  }
   private gameStart(p: Player, id: unknown) {
     const info = typeof id === 'string' ? GAMES[id as GameId] : undefined
     const err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
     if (this.mapId !== 'games' || !info) return err('bad')
     if (!info.ready) return err('soon')
     const t = this.tableAt(p); if (!t) return err('sit')
+    // Blackjack has one door: sit at a blackjack table. Snap stays on the felt tables for two.
+    if (info.id === 'blackjack' || info.id === 'sweet' || t.kind !== 'snap') return err('bad')
     if (this.games.has(t.id) && this.games.get(t.id)!.s.winner === null) return err('running')
     const grp = (this.tableGroup(p) ?? []).filter(o => !this.gameOf(o) || this.gameOf(o)!.s.winner !== null)
     if (grp.some(a => grp.some(b => this.hidden(a, b)))) return err('bad')
     if (grp.length < info.min) return err('few')
     if (grp.length > info.max) return err('many')
     const now = this.now(), c = { now, rnd: cryptoRnd }
-    const g: GameRun = { id: info.id, tb: t.id, s: MOD[info.id].start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false }
+    const g: GameRun = { id: info.id, tb: t.id, s: MOD[info.id].start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false, hold: new Set(), left: new Set() }
     for (const o of grp) g.seat.set(o.uid, [Math.floor(o.x), Math.floor(o.y)])
     this.games.set(t.id, g); this.gameSend(g)
   }
-  private gameAct(p: Player, a: unknown, ante?: unknown) {
+  private gameAct(p: Player, a: unknown, ante?: unknown, i?: unknown, sign?: unknown) {
     const g = this.gameOf(p); if (!g || typeof a !== 'string' || a.length > 12) return
     if (g.id === 'blackjack' && a === 'deal') { void this.bjDeal(g, p, ante); return }
-    const why = mod(g).act(g.s, p.uid, { a }, { now: this.now(), rnd: cryptoRnd })
+    if (g.id === 'blackjack' && a === 'double') { void this.bjDouble(g, p); return }
+    if (g.id === 'sweet' && a === 'bet') { void this.sweetBet(g, p, ante); return }
+    const why = mod(g).act(g.s, p.uid, { a, ...(typeof i === 'number' ? { i } : {}), ...(sign === 1 || sign === -1 ? { sign } : {}) }, { now: this.now(), rnd: cryptoRnd })
     if (why && why !== 'false-snap') p.sock.send(JSON.stringify({ t: 'gerr', why }))
     this.gameCheck(g)
   }
-  /** Blackjack Deal: the ante comes out of BOTH wallets first (WalletStore.move, never below 0); if either can't cover
-      it, whatever was taken goes straight back and nobody is dealt in. One deal at a time per table (busy). */
+  /** Blackjack Deal: this player's ante comes out of their own wallet (never below 0). A failed check puts it straight back. */
   private async bjDeal(g: GameRun, p: Player, ante: unknown) {
     const s = g.s as BjS, err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
-    if (g.busy) return err('slow-down')
+    if (g.hold.has(p.uid)) return err('slow-down')
     const why = Blackjack.canDeal(s, p.uid, ante); if (why) return err(why)
-    const n = ante as number, took: string[] = []; g.busy = true
+    const n = ante as number; g.hold.add(p.uid); let took = false
     try {
-      for (const x of s.ps) { if ((await this.wallets.move(x.uid, -n)) === null) break; took.push(x.uid) }
-      if (took.length < s.ps.length || Blackjack.canDeal(s, p.uid, n)) {
-        for (const u of took) await this.wallets.move(u, n)
-        return err(took.length < s.ps.length ? 'chips' : 'in-round')
-      }
-      Blackjack.deal(s, n, p.uid, { now: this.now(), rnd: cryptoRnd })
-    } catch { for (const u of took) await this.wallets.move(u, n).catch(() => null); return err('bad') }
-    finally { g.busy = false; this.bjChips(g) }
+      if ((await this.wallets.move(p.uid, -n)) === null) return err('chips')
+      took = true; useMap(this.mapId)
+      if (this.gameOf(p) !== g || Blackjack.canDeal(s, p.uid, n)) { await this.wallets.move(p.uid, n); return err(this.gameOf(p) !== g ? 'bad' : Blackjack.canDeal(s, p.uid, n) || 'in-round') }
+      const w2 = Blackjack.commit(s, p.uid, n, { now: this.now(), rnd: cryptoRnd })
+      if (w2) { await this.wallets.move(p.uid, n); return err(w2) }
+    } catch { if (took) await this.wallets.move(p.uid, n).catch(() => null); return err('bad') }
+    finally { g.hold.delete(p.uid); this.bjChips(g); void this.chips(p) }
     this.gameCheck(g)
   }
-  /** drain a Blackjack round's payouts into the wallets, then tell both their balance */
+  /** Double: one extra stake, equal to the bet, then exactly one card. Refused when it isn't your turn, your first two cards, or you can't cover it. */
+  private async bjDouble(g: GameRun, p: Player) {
+    const s = g.s as BjS, err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
+    if (g.hold.has(p.uid)) return err('slow-down')
+    const now = this.now(), why = Blackjack.canDouble(s, p.uid, { now }); if (why) return err(why)
+    const n = s.ps.find(x => x.uid === p.uid)!.bet; g.hold.add(p.uid); let took = false
+    try {
+      if ((await this.wallets.move(p.uid, -n)) === null) return err('chips')
+      took = true; useMap(this.mapId)
+      if (this.gameOf(p) !== g) { await this.wallets.move(p.uid, n); return err('bad') }
+      const w2 = Blackjack.double(s, p.uid, { now: this.now(), rnd: cryptoRnd })
+      if (w2) { await this.wallets.move(p.uid, n); return err(w2) }
+    } catch { if (took) await this.wallets.move(p.uid, n).catch(() => null); return err('bad') }
+    finally { g.hold.delete(p.uid); this.bjChips(g); void this.chips(p) }
+    this.gameCheck(g)
+  }
+  /** drain a table game's payouts into the wallets, then tell everyone at the table their balance */
   private bjChips(g: GameRun) {
-    if (g.id !== 'blackjack') return
-    const s = g.s as BjS, pay = s.pay.splice(0)
+    const s = g.s as { pay?: { uid: string; delta: number }[]; ps: { uid: string }[] }
+    if (!s.pay?.length) return
+    const pay = s.pay.splice(0)
     void (async () => {
       for (const x of pay) await this.wallets.move(x.uid, x.delta).catch(() => null)
       for (const x of s.ps) { const o = this.byUid(x.uid); if (o) await this.chips(o) }
@@ -907,7 +1024,11 @@ export class Room {
   private gameQuit(p: Player) {
     const g = this.gameOf(p); if (!g) { p.sock.send(JSON.stringify({ t: 'game', on: false })); return }   // already out of it (left mid-game): just clear their panel
     if (g.s.winner !== null) { g.s.ps = g.s.ps.filter(x => x.uid !== p.uid); p.sock.send(JSON.stringify({ t: 'game', on: false })); if (!g.s.ps.length) this.games.delete(g.tb); return }
-    mod(g).leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd }); this.gameCheck(g)
+    if (g.id === 'blackjack' || g.id === 'sweet') g.left.add(p.uid)
+    mod(g).leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd })
+    p.sock.send(JSON.stringify({ t: 'game', on: false }))
+    if ((g.id === 'blackjack' || g.id === 'sweet') && p.sitting) this.standUp(p, [Math.floor(p.x), Math.floor(p.y)])
+    this.gameCheck(g)
   }
   /** every tick: the turn clock, and who's still here. Gone (socket closed) = RECONNECT_MS to come back; stood up from
       the table for LEAVE_MS = left the game. A finished game stays on the table (the result) until its players leave. */
@@ -922,16 +1043,18 @@ export class Room {
       }
       // everyone gone: nobody to wait for, the table is free again
       if (!g.s.ps.some(x => this.byUid(x.uid))) { this.games.delete(g.tb); continue }
-      for (const sp of g.s.ps) {
+      for (const sp of [...g.s.ps]) {
         if (sp.out) continue
         const o = this.byUid(sp.uid)
         if (!o) { if (!g.away.has(sp.uid)) { g.away.set(sp.uid, now); sp.away = true; g.s.seq++ } else if (now - g.away.get(sp.uid)! > RECONNECT_MS) { g.away.delete(sp.uid); mod(g).leave(g.s, sp.uid, c) } continue }
         if (this.tableAt(o)?.id === g.tb) { g.off.delete(sp.uid); continue }
-        if (!o.moving && !o.path.length && Math.floor(o.x) === g.seat.get(sp.uid)![0] && Math.floor(o.y) === g.seat.get(sp.uid)![1]) continue   // settling back in
+        const seat = g.seat.get(sp.uid)
+        if (seat && !o.moving && !o.path.length && Math.floor(o.x) === seat[0] && Math.floor(o.y) === seat[1]) continue   // settling back in
         if (!g.off.has(sp.uid)) g.off.set(sp.uid, now)
-        else if (now - g.off.get(sp.uid)! > LEAVE_MS) { g.off.delete(sp.uid); mod(g).leave(g.s, sp.uid, c) }
+        else if (now - g.off.get(sp.uid)! > LEAVE_MS) { g.off.delete(sp.uid); mod(g).leave(g.s, sp.uid, c); o.sock.send(JSON.stringify({ t: 'game', on: false })) }
       }
       mod(g).tick(g.s, c)
+      this.bjCatchup(g)
       this.gameCheck(g)
     }
   }
@@ -939,7 +1062,7 @@ export class Room {
   /** send on change; at the end, the pair's familiarity */
   private gameCheck(g: GameRun) {
     if (g.s.seq !== g.sent) this.gameSend(g)
-    if (g.id === 'blackjack' && (g.s as BjS).pay.length) this.bjChips(g)
+    if ((g.s as { pay?: unknown[] }).pay?.length) this.bjChips(g)
     if (g.s.winner !== null && !g.fam) { g.fam = true; void this.gameFamiliarity(g) }
   }
   private gameSend(g: GameRun) {

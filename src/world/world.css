@@ -218,3 +218,4 @@
 .w-ginvite p { margin: 0 0 6px } .w-ginvite .w-sub { opacity: .75; font-size: 13px }
 .w-ginv-out { display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 14px }
 .w-ginv-l, .w-ginv-t { margin-left: 8px; font-size: 12px }
+.w-ginv-l { padding: 0; min-height: 0; line-height: inherit; vertical-align: baseline }

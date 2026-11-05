@@ -254,8 +254,10 @@ function World() {
         const w = sat && isPianoSeat(fx, fy) ? 'piano' : sat && at(fx, fy) === 'S' ? 'sofa' : ''
         if (w !== whereRef.current) { whereRef.current = w; setWhere(w) }
         // the archway: stepping onto the door tiles walks you through (armed once you've been off them since arriving)
-        const onDoor = isDoor(fx, fy); if (!onDoor) doorArm.current = true
-        else if (doorArm.current && !arrive.current && !sat) { doorArm.current = false; goRoom(roomRef.current.startsWith('games-') ? 'cafe-1' : 'games-1') }
+        // …unless a tapped route only passes over them on its way somewhere else
+        const onDoor = isDoor(fx, fy), tg = target.current, passing = !!tg && !isDoor(tg[0], tg[1]) && (tg[0] !== fx || tg[1] !== fy)
+        if (!onDoor) doorArm.current = true
+        else if (doorArm.current && !arrive.current && !sat && !passing) { doorArm.current = false; goRoom(roomRef.current.startsWith('games-') ? 'cafe-1' : 'games-1') }
         if (now - lastN > 500) { RA.bed(roomRef.current, Math.hypot(n.lerpX(me, now) - doorCol() - 1, n.lerpY(me, now) - 3)); lastN = now; let c = 0; for (const e of n.ents.values()) if (e.id !== n.me && hears(e.x, e.y)) c++; setNear(c) } }
       if (me && target.current && Math.floor(me.x) === target.current[0] && Math.floor(me.y) === target.current[1]) { target.current = null; r.path = [] }
       // GD's 9-slice bubble (world.css): the box is snapped to whole art px (u CSS px) so the slices stay crisp, and the
@@ -444,7 +446,7 @@ function World() {
       <header>{sel.pav && <span className="w-pport"><Suspense fallback={null}><Char json={sel.pav} scale={2} label={`${sel.name}'s Pixel You`} t="w-portrait" /></Suspense></span>}<b data-t="w-person-name">{selName}</b><button className="w-x" aria-label="Close" onClick={close}>×</button></header>
       {menu === '' && <div className="w-acts">
         <button className="w-btn sm heart" data-t="w-heart" onClick={() => act('heart')}>♥ Heart</button>
-        {!room.startsWith('games-') && <button className="w-btn sm" data-t="w-ginv" onClick={() => ginv(sel.id)}>Play a game?</button>}
+        {!room.startsWith('games-') && <button className="w-btn sm ghost" data-t="w-ginv" onClick={() => ginv(sel.id)}>Play a game?</button>}
         <button className="w-btn sm ghost" data-t="w-pass" onClick={() => act('pass')}>Pass</button>
         <button className="w-btn sm ghost" data-t="w-report" onClick={() => setMenu('report')}>Report</button>
         <button className="w-btn sm danger" data-t="w-block" onClick={() => setMenu('block')}>Block</button></div>}

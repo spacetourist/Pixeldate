@@ -105,6 +105,7 @@ function World() {
   const [note, setNote] = useState(''); const [text, setText] = useState('')
   // desktop chat log: recent bubbles that went out (the server only relays text that passed the filter; held lines stay out)
   const [log, setLog] = useState<{ k: number; name: string; text: string; mine: boolean; id?: number }[]>([]), logEl = useRef<HTMLOListElement>(null), logK = useRef(0)
+  const logRef = useRef(log); logRef.current = log
   const addLog = (name: string, text: string, mine: boolean, id?: number) => setLog(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, name, text, mine, id }])
   const net = useRef<WorldNet | null>(null), ren = useRef<Renderer | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), over = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null)
@@ -324,7 +325,7 @@ function World() {
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
       couple: () => ({ hearts: [...r.hearts], on: r.coupleOn, marks: r.markOn, call: callRef.current ? { up: callRef.current.up, host: callRef.current.host, lv: callRef.current.lv, muted: callRef.current.muted, camOff: callRef.current.camOff } : null }),
       emoteFx: () => Object.entries(r.emoteOn).map(([id, [e, f, dx, dy]]) => ({ id: +id, e, f, dx, dy })),
-      emoteCd: () => emoCdRef.current, sounds: () => RA.calls.slice(),
+      emoteCd: () => emoCdRef.current, sounds: () => RA.calls.slice(), logText: () => logRef.current.map(l => l.text).join('\n'),
       emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
         requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },

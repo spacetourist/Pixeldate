@@ -19,4 +19,4 @@ export function move(w: Wallet, delta: number): boolean {
 }
 /** what the UI calls the currency: one place, because the name isn't settled (play chips, Tokens or Sparks). The chip
     art (digits 1 5 25 100, cream / coral / butter / mint) stays whatever it's called. */
-export const CHIPS_NAME = 'play chips'
+export const CHIPS_NAME = 'coins'

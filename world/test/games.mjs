@@ -49,7 +49,7 @@ await test('snap: a game always ends (timeouts only), and the winner is the last
   for (let i = 0; i < 400 && !Snap.done(s); i++) { t += TURN_MS; Snap.tick(s, { now: t, rnd: cryptoRnd }) }
   const d = Snap.done(s); assert.ok(d); assert.ok(['a', 'b', 'c', ''].includes(d.winner))
 })
-await test('hooks: blackjack and pong are registered but not ready', () => { assert.ok(GAMES.snap.ready); assert.ok(!GAMES.blackjack.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2) })
+await test('hooks: snap and co-op blackjack are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2) })
 
 const T = () => { M.useMap('games'); const t = M.TABLES[0]; M.useMap('cafe-landscape'); return t }
 const play = async (bots, { snapper = null } = {}) => {
@@ -75,7 +75,7 @@ await test('room: two at a table start Snap; only the two get it; a third person
   A.send({ t: 'gstart', g: 'snap' }); assert.equal((await A.wait(() => A.last('gerr'))).why, 'sit')
   await goSit(A, t.seats[0]); A.send({ t: 'gstart', g: 'snap' }); assert.equal((await A.wait(() => A.events.filter(e => e.t === 'gerr').length > 1 && A.last('gerr'))).why, 'few')
   await goSit(B, t.seats[1])
-  A.send({ t: 'gstart', g: 'blackjack' }); assert.equal((await A.wait(() => A.events.filter(e => e.t === 'gerr').length > 2 && A.last('gerr'))).why, 'soon')
+  A.send({ t: 'gstart', g: 'pong' }); assert.equal((await A.wait(() => A.events.filter(e => e.t === 'gerr').length > 2 && A.last('gerr'))).why, 'bad')
   A.send({ t: 'gstart', g: 'snap' })
   for (const b of [A, B]) { const g = await b.wait(() => lastGame(b)?.on && lastGame(b)); assert.ok(g, b.p.name + ' got the game'); assert.equal(g.ps.length, 2); assert.equal(g.ps.reduce((a, p) => a + p.n, 0), 52) }
   assert.ok(!lastGame(X), 'a bystander never gets the game'); assert.ok(!A.text.join().includes('bot-'), 'no uids on the wire')
@@ -152,6 +152,49 @@ await test('chips: one wallet per uid across the lounge, start balance, daily to
   // the dev server shares one wallet store between lounge instances, and a lounge join sends the balance
   assert.ok(dev.wallets, 'dev server exports one shared wallet store')
   assert.ok(memPairs)
+})
+const BJ = await import('../shared/games/blackjack.ts')
+await test('blackjack: totals (soft aces), deal hides the hole card, shared turn passes after Hit, clock stands, House to 17, payouts', () => {
+  const C = (r, su = 0) => (r - 1) * 4 + su   // rank 1..13
+  assert.deepEqual(BJ.total([C(1), C(6)]), { t: 17, soft: true }); assert.deepEqual(BJ.total([C(1), C(6), C(10)]), { t: 17, soft: false }); assert.equal(BJ.total([C(1), C(1), C(13)]).t, 12)
+  let now = 1000; const c = () => ({ now, rnd: n => 0 })
+  const s = BJ.Blackjack.start(['a', 'b'], c())
+  assert.equal(BJ.Blackjack.canDeal(s, 'a', 7), 'bad-ante'); assert.equal(BJ.Blackjack.canDeal(s, 'z', 5), 'not-playing')
+  assert.equal(BJ.Blackjack.act(s, 'a', { a: 'hit' }, c()), 'not-in-round')
+  // rigged deck: pop order = hand 2,3 · house 10,6 · then hits 2, 4 · house draws 9
+  const rig = () => { s.deck = [C(9), C(4), C(2), C(6), C(10), C(3), C(2)]; s.hand = [s.deck.pop(), s.deck.pop()]; s.house = [s.deck.pop(), s.deck.pop()]; s.phase = 'play'; s.ante = 25; s.turnAt = now; s.res = null; s.pay = []; s.round = 0; s.winner = null }
+  assert.equal(BJ.Blackjack.deal(s, 25, 'a', c()), ''); if (s.phase === 'play') { rig() } else { s.phase = 'bet'; s.pay = []; assert.equal(BJ.Blackjack.deal(s, 25, 'a', c()), ''); rig() }
+  const v = BJ.Blackjack.view(s, 'a', c()); assert.equal(v.house[1], null, 'hole card hidden'); assert.equal(v.houseTotal, null)
+  const t0 = s.turn, other = s.ps[1 - t0].uid, first = s.ps[t0].uid
+  assert.equal(BJ.Blackjack.act(s, other, { a: 'hit' }, c()), 'not-your-turn')
+  now += 300; assert.equal(BJ.Blackjack.act(s, first, { a: 'hit' }, c()), ''); assert.equal(s.turn, 1 - t0, 'turn passes after a Hit'); assert.equal(BJ.total(s.hand).t, 7)
+  now += 300; assert.equal(BJ.Blackjack.act(s, other, { a: 'hit' }, c()), ''); assert.equal(BJ.total(s.hand).t, 11)
+  now += BJ.TURN_MS; assert.ok(BJ.Blackjack.tick(s, c()), 'the clock stands'); assert.equal(s.last.k, 'settle')
+  assert.equal(BJ.total(s.house).t, 25); assert.equal(s.res, 'win', 'House busts'); assert.deepEqual(s.pay, [{ uid: 'a', delta: 50 }, { uid: 'b', delta: 50 }])
+  assert.equal(s.phase, 'bet'); assert.equal(s.round, 1); assert.equal(s.winner, null)
+  // push / lose / bust payouts; a leave ends the game
+  s.pay = []; s.hand = [C(10), C(12)]; s.house = [C(13), C(11)]; s.deck = []; s.phase = 'play'; s.turnAt = now; now += 300
+  BJ.Blackjack.act(s, s.ps[s.turn].uid, { a: 'stand' }, c()); assert.equal(s.res, 'push'); assert.deepEqual(s.pay.map(x => x.delta), [25, 25])
+  s.pay = []; s.hand = [C(10), C(12)]; s.house = [C(13), C(11)]; s.deck = [C(5)]; s.phase = 'play'; now += 300
+  BJ.Blackjack.act(s, s.ps[s.turn].uid, { a: 'hit' }, c()); assert.equal(s.res, 'bust'); assert.deepEqual(s.pay, [])
+  BJ.Blackjack.leave(s, 'b', c()); assert.equal(s.winner, '', 'co-op finish')
+})
+await test('room: co-op blackjack at a table: antes come out of both wallets, rounds settle back into them, no uids on the wire', async () => {
+  const t = T(), [A, B] = [await J({ name: 'Cy' }), await J({ name: 'Di' })]
+  await goSit(A, t.seats[0]); await goSit(B, t.seats[1])
+  const bal = async b => (await b.wait(() => b.last('chips'))).bal
+  const a0 = await bal(A), b0 = await bal(B)
+  A.send({ t: 'gstart', g: 'blackjack' })
+  for (const b of [A, B]) assert.equal((await b.wait(() => lastGame(b)?.g === 'blackjack' && lastGame(b))).phase, 'bet')
+  B.send({ t: 'gact', a: 'deal', ante: 3 }); assert.equal((await B.wait(() => B.last('gerr'))).why, 'bad-ante')
+  B.send({ t: 'gact', a: 'deal', ante: 25 })
+  const g = await A.wait(() => lastGame(A)?.round === 1 || lastGame(A)?.phase === 'play' ? lastGame(A) : null, 5000); assert.ok(g)
+  // play the round out: whoever's turn stands
+  const t0 = Date.now(); while (lastGame(A).round < 1 && Date.now() - t0 < 15000) { const v = lastGame(A); const who = [A, B].find(b => b.me === v.turn); if (v.phase === 'play' && who && who._s !== v.seq) { who._s = v.seq; who.send({ t: 'gact', a: 'stand' }) } await sleep(80) }
+  const r = lastGame(A); assert.equal(r.round, 1); assert.ok(r.res); assert.equal(r.house.every(x => x !== null), true, 'House shown after the round')
+  const back = { win: 50, bj: 62, push: 25, lose: 0, bust: 0 }[r.res]
+  await sleep(400); assert.equal(A.last('chips').bal, a0 - 25 + back); assert.equal(B.last('chips').bal, b0 - 25 + back)
+  assert.ok(!A.text.join().includes('bot-'), 'no uids on the wire')
 })
 dev.default?.close?.()
 console.log(`\n${n} passed, ${failed} failed`); process.exit(failed ? 1 : 0)

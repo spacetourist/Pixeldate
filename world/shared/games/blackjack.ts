@@ -1,5 +1,5 @@
 /* Co-op Blackjack, server-authoritative. The two at the table share ONE hand against the House (a warm NPC dealer).
-   Rounds: in 'bet' either player taps Deal with an ante (play chips, 1/5/25/100; both put the same in, the Room takes it
+   Rounds: in 'bet' either player taps Deal with an ante (coins, 1/5/25/100; both put the same in, the Room takes it
    from each wallet through WalletStore.move before the cards come out). In 'play' the pair take turns deciding for the
    shared hand: Hit or Stand, TURN_MS each (the clock stands for you). After a Hit the turn passes to the other player.
    Then the House draws to 17 (stands on soft 17) and the round settles: both win or lose together.

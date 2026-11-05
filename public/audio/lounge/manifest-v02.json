@@ -1,0 +1,62 @@
+{
+  "pack": "pd_lounge_v02",
+  "sampleRate": 48000,
+  "channels": 1,
+  "formats": {
+    "opus": ".ogg",
+    "aac": ".m4a"
+  },
+  "basePath": "./",
+  "sounds": {
+    "inviteAccept": {
+      "takes": [
+        "inviteAccept"
+      ],
+      "durationSec": [
+        0.78
+      ],
+      "gain": 0.65,
+      "loop": false,
+      "category": "stinger",
+      "description": "brighter F-major confirmation: C5 F5 A5 + soft glock/glass"
+    },
+    "inviteChime": {
+      "takes": [
+        "inviteChime_1",
+        "inviteChime_2"
+      ],
+      "durationSec": [
+        0.78,
+        0.78
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "stinger",
+      "description": "soft warm two-note F-major chime (2 takes: C5->F5 / A4->C5) with quiet glock"
+    },
+    "inviteDecline": {
+      "takes": [
+        "inviteDecline"
+      ],
+      "durationSec": [
+        0.58
+      ],
+      "gain": 0.5,
+      "loop": false,
+      "category": "sfx",
+      "description": "gentle descending A4 -> F4 with soft felt tap"
+    },
+    "teleport": {
+      "takes": [
+        "teleport"
+      ],
+      "durationSec": [
+        1.05
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "stinger",
+      "description": "gentle airy swoosh with light sparkle (players appear at a lounge table)"
+    }
+  }
+}

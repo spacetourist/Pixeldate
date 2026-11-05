@@ -61,12 +61,15 @@ export class PianoAudio {
   }
   get unlocked() { return this.ctx?.state === 'running' }
   setMuted(m: boolean) { this.muted = m; localStorage.setItem(MUTE_KEY, m ? '1' : '0'); if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.03) }
+  /** doorway crossfade (equal-power cos) */
+  room = 1
+  setRoom(g: number) { this.room = g; if (this.ctx && this.dist) this.dist.gain.setTargetAtTime(this.gain * g, this.ctx.currentTime, 0.05) }
   /** where I am (tiles): distance volume and pan */
   listen(x: number, y: number) {
     const d = Math.hypot(x - PIANO_AT[0], y - PIANO_AT[1]); this.gain = gainAt(d); this.pan = panAt(PIANO_AT[0] - x)
     if (this.gain > 0 && this.play && !this.play.src) this.fetchIfHeard()
     if (this.gain > 0 && this.duet && !this.duet.started) this.duetFetch()
-    if (this.ctx && this.dist && this.panner) { this.dist.gain.setTargetAtTime(this.gain, this.ctx.currentTime, 0.08); this.panner.pan.setTargetAtTime(this.pan, this.ctx.currentTime, 0.08) }
+    if (this.ctx && this.dist && this.panner) { this.dist.gain.setTargetAtTime(this.gain * this.room, this.ctx.currentTime, 0.08); this.panner.pan.setTargetAtTime(this.pan, this.ctx.currentTime, 0.08) }
   }
   /** a solo piece, or a duet's mix (Play solo instead: one person plays both parts) */
   url(id: string) { return BASE + (DUET.has(id) ? 'duets/' + id + '_mix' : id) + '.' + this.fmt }

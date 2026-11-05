@@ -207,14 +207,14 @@
         "loungeBed"
       ],
       "durationSec": [
-        24.0
+        24
       ],
       "gain": 0.35,
       "loop": true,
       "category": "bed",
       "description": "room tone",
       "loopStart": 0,
-      "loopEnd": 24.0,
+      "loopEnd": 24,
       "duckUnderCallGain": 0.12
     },
     "snapFalse": {
@@ -268,6 +268,60 @@
       "loop": false,
       "category": "sfx",
       "description": "soft UI tick"
+    },
+    "inviteAccept": {
+      "takes": [
+        "inviteAccept"
+      ],
+      "durationSec": [
+        0.78
+      ],
+      "gain": 0.65,
+      "loop": false,
+      "category": "stinger",
+      "description": "brighter F-major confirmation: C5 F5 A5 + soft glock/glass"
+    },
+    "inviteChime": {
+      "takes": [
+        "inviteChime_1",
+        "inviteChime_2"
+      ],
+      "durationSec": [
+        0.78,
+        0.78
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "stinger",
+      "description": "soft warm two-note F-major chime (2 takes: C5->F5 / A4->C5) with quiet glock"
+    },
+    "inviteDecline": {
+      "takes": [
+        "inviteDecline"
+      ],
+      "durationSec": [
+        0.58
+      ],
+      "gain": 0.5,
+      "loop": false,
+      "category": "sfx",
+      "description": "gentle descending A4 -> F4 with soft felt tap"
+    },
+    "teleport": {
+      "takes": [
+        "teleport"
+      ],
+      "durationSec": [
+        1.05
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "stinger",
+      "description": "gentle airy swoosh with light sparkle (players appear at a lounge table)"
     }
-  }
+  },
+  "packs": [
+    "pd_lounge_v01",
+    "pd_lounge_v02"
+  ]
 }

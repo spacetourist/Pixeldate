@@ -1,13 +1,25 @@
-/** AE's room sound hooks (café/lounge beds cross-faded by distance to the archway, the "Play a game?" chime, the teleport
-    swoosh). Silent no-ops until AE's files land: fill SOUNDS (file stems under public/audio/rooms/) and they play. Nothing
-    is fetched while SOUNDS is empty, so this costs no bytes or AudioContext today. */
-export const SOUNDS: Partial<Record<'cafeBed' | 'loungeBed' | 'inviteChime' | 'teleportSwoosh', string>> = {}
-/** bed mix from my distance to the door in tiles: at the door 50/50, BED_FADE tiles in, only this room's bed */
-export const BED_FADE = 8
-export const bedMix = (room: string, d: number) => { const t = Math.min(1, Math.max(0, d / BED_FADE)), here = 0.5 + t / 2
-  return room.startsWith('games') ? { lounge: here, cafe: 1 - here } : { cafe: here, lounge: 1 - here } }
+/** room sound hooks, per AE's lounge v02 AUDIO.md: the café piano and loungeBed cross-faded equal-power over ~3 tiles of
+    the archway (loungeBed 0.35 fully inside the lounge), the "Play a game?" chime / accept / decline and the teleport
+    stinger. The sounds themselves live in lounge-audio.ts, imported lazily (LOUNGE_AUDIO) so the initial bundle is unchanged. */
+import { LOUNGE_AUDIO } from './flags.ts'
+/** tiles of blend each side of the arch */
+export const BED_FADE = 3
+/** v: 0 = fully café side, 1 = fully lounge side (0.5 under the arch); equal-power gains */
+export const bedMix = (room: string, d: number) => {
+  const t = Math.min(1, Math.max(0, d / BED_FADE)) / 2, v = room.startsWith('games') ? 0.5 + t : 0.5 - t
+  return { cafe: Math.cos(v * Math.PI / 2), lounge: Math.sin(v * Math.PI / 2) }
+}
 export const calls: string[] = []   // for tests: which hooks fired
-let lastMix = ''
-export function bed(room: string, d: number) { const m = bedMix(room, d), k = m.cafe.toFixed(2); if (k === lastMix) return; lastMix = k; calls.push('bed:' + k); if (!SOUNDS.cafeBed) return }
-export function chime() { calls.push('chime'); if (!SOUNDS.inviteChime) return }
-export function swoosh() { calls.push('swoosh'); if (!SOUNDS.teleportSwoosh) return }
+let lastMix = '', cafeSink: ((g: number) => void) | null = null
+/** the café bed (piano) volume multiplier */
+export const onCafe = (f: (g: number) => void) => { cafeSink = f }
+const LA = () => LOUNGE_AUDIO ? import('./lounge-audio.ts') : Promise.resolve(null)
+export function bed(room: string, d: number) {
+  const m = bedMix(room, d), k = m.cafe.toFixed(2); if (k === lastMix) return; lastMix = k; calls.push('bed:' + k)
+  cafeSink?.(m.cafe); LA().then(A => A?.bedLevel(m.lounge))
+}
+const sfx = (id: string, tag: string) => { calls.push(tag); LA().then(A => A?.play(id)) }
+export const chime = () => sfx('inviteChime', 'chime')
+export const accept = () => sfx('inviteAccept', 'accept')
+export const decline = () => sfx('inviteDecline', 'decline')
+export const swoosh = () => sfx('teleport', 'swoosh')

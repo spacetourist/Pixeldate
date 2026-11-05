@@ -1,11 +1,12 @@
 /** AE's lounge sound pack, wired per its AUDIO.md: WebAudio, Opus .ogg with .m4a fallback, rotating takes (never the same
-    take twice in a row), the loungeBed loop ducked under call audio, unlocked on the first tap. Loaded lazily with the lounge,
+    take twice in a row), the loungeBed loop ducked under call audio, unlocked on the first tap. Loaded lazily once in the world (café or lounge),
     and only when LOUNGE_AUDIO (flags.ts) is on. */
 type Snd = { takes: string[]; durationSec: number[]; gain: number; loop: boolean; category: string }
 const BASE = import.meta.env.BASE_URL + 'audio/lounge/'
 let ctx: AudioContext | null = null, sfx: GainNode, bed: GainNode, man: Record<string, Snd> = {}, ready: Promise<void> | null = null
 const buf: Record<string, AudioBuffer> = {}, lastTake: Record<string, number> = {}
-let bedSrc: AudioBufferSourceNode | null = null, ducked = false, stingerUntil = 0
+let bedSrc: AudioBufferSourceNode | null = null, ducked = false, stingerUntil = 0, level = 0
+const bedGain = () => 0.35 * level * (ducked ? 0.35 : 1)
 
 export function load() {
   if (ready) { ctx!.resume().then(startBed); return ready }
@@ -27,7 +28,8 @@ export function load() {
 
 export function play(id: string, delay = 0) {
   const s = man[id]; if (!ctx || !s || ctx.state !== 'running') return
-  if (s.category === 'stinger') { const now = performance.now(); if (now < stingerUntil) return; stingerUntil = now + s.durationSec[0] * 1000 }
+  if (s.category === 'stinger' && id !== 'inviteAccept') {   // accept may replace a chime still ringing
+ const now = performance.now(); if (now < stingerUntil) return; stingerUntil = now + s.durationSec[0] * 1000 }
   let i = 0
   if (s.takes.length > 1) { do i = Math.floor(Math.random() * s.takes.length); while (i === lastTake[id]) }
   lastTake[id] = i
@@ -41,16 +43,19 @@ function startBed() {
   const s = man.loungeBed, b = s && buf[s.takes[0]]; if (!ctx || !b || bedSrc) return
   bedSrc = ctx.createBufferSource(); bedSrc.buffer = b; bedSrc.loop = true; bedSrc.loopEnd = s.durationSec[0]
   bedSrc.connect(bed); bedSrc.start(0, Math.random() * s.durationSec[0])
-  bed.gain.setValueAtTime(0, ctx.currentTime); bed.gain.linearRampToValueAtTime(0.35 * (ducked ? 0.35 : 1), ctx.currentTime + 2)
+  bed.gain.setValueAtTime(0, ctx.currentTime); bed.gain.linearRampToValueAtTime(bedGain(), ctx.currentTime + 2)
 }
 
 /** under call audio: the bed to 0.35x and sfx to 0.7 */
 export function duck(on: boolean) {
   ducked = on; if (!ctx) return
   const t = ctx.currentTime
-  bed.gain.cancelScheduledValues(t); bed.gain.linearRampToValueAtTime(bedSrc ? 0.35 * (on ? 0.35 : 1) : 0, t + 0.3)
+  bed.gain.cancelScheduledValues(t); bed.gain.linearRampToValueAtTime(bedSrc ? bedGain() : 0, t + 0.3)
   sfx.gain.cancelScheduledValues(t); sfx.gain.linearRampToValueAtTime(on ? 0.7 : 1, t + 0.3)
 }
+
+/** doorway crossfade: loungeBed's share (equal-power sin, 1 = fully in the lounge → 0.35) */
+export function bedLevel(v: number) { level = v; if (ctx && bedSrc) bed.gain.setTargetAtTime(bedGain(), ctx.currentTime, 0.05) }
 
 export function stop() { bedSrc?.stop(); bedSrc = null; ctx?.suspend() }
 

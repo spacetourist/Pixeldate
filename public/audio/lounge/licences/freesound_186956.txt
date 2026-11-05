@@ -1,0 +1,6 @@
+Freesound #186956 "woosh.wav" by ReadeOnly (uploaded April 30th, 2013)
+https://freesound.org/people/ReadeOnly/sounds/186956/
+Description on page: "Small rocket launch from a recording of fireworks on freesound."
+Licence: Creative Commons 0 (CC0 1.0). The page licence box links to creativecommons.org/publicdomain/zero/1.0/.
+Also recorded CC0-OK in /workspace/radcars-audio/real/sources.tsv.
+Page checked from this box on 2026-11-05 (curl showed Creative Commons 0). File used: HQ preview as src/freesound/186956_woosh.ogg.

@@ -137,7 +137,7 @@ function World() {
     roomRef.current = to; useMap(mapOf(to))
     localStorage.setItem('pd.invite', invite.trim()); if (!prof.adult) void saveProfile({ ...prof, adult: true })
     const n = new WorldNet(serverUrl(), invite.trim(), joinP(prof)); net.current = n; if (!arrive.current) setPhase('joining')
-    const A = pa.current ??= new PianoAudio(o => net.current?.send(o as any))
+    const A = pa.current ??= new PianoAudio(o => net.current?.send(o as any)); RA.onCafe(g => A.setRoom(g))
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
       if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
@@ -150,7 +150,7 @@ function World() {
       else if (m.t === 'ginv') { if (m.ok) setGinvOut({ to: m.to, until: performance.now() + m.ms }); else flash(GINV_WHY[m.why] ?? 'Invite not sent.') }
       else if (m.t === 'ginvite') { if (m.from) { setGinvIn({ from: m.from, until: performance.now() + m.ms }); RA.chime() }
         else setGinvIn(g => { if (g && m.why === 'cancel') flash(`${n.pubs.get(g.from)?.name ?? 'They'} cancelled the invite.`); if (g && m.why === 'gone') flash(`${n.pubs.get(g.from)?.name ?? 'They'} left the café.`); if (!g && m.why === 'gone') flash('That invite has ended.'); return null }) }
-      else if (m.t === 'ginvend') { setGinvOut(null); const f = GINV_END[m.why]; if (f) flash(f(n.pubs.get(m.id)?.name ?? 'They')) }
+      else if (m.t === 'ginvend') { setGinvOut(null); if (m.why === 'no') RA.decline(); const f = GINV_END[m.why]; if (f) flash(f(n.pubs.get(m.id)?.name ?? 'They')) }
       else if (m.t === 'gtele') { setGinvOut(null); setGinvIn(null); RA.swoosh(); goRoom(m.room, m.tk) }
       else if (m.t === 'gfull') flash('Lounge is full')
       else if (m.t === 'gseat') { /* seated opposite each other; the games panel opens with the table */ }
@@ -417,10 +417,10 @@ function World() {
 
   // AE's lounge sounds (flag off by default): load with the lounge, stop on the way out, bed ducked under call audio
   useEffect(() => {
-    if (!LOUNGE_AUDIO || phase !== 'in' || !room.startsWith('games-')) return
+    if (!LOUNGE_AUDIO || phase !== 'in') return
     import('./lounge-audio.ts').then(A => A.load())
     return () => { import('./lounge-audio.ts').then(A => A.stop()) }
-  }, [room, phase])
+  }, [phase])
   useEffect(() => { if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.duck(!!call)) }, [call])
   if (phase !== 'in') return (
     <main className="w-gate" data-t="w-gate">
@@ -503,7 +503,7 @@ function World() {
         {duet && duetPlaying && duet.ph === 'play' && !duet.me && !sel && pa.current && <DuetCard v={duet} who={who} A={pa.current} />}
         {invOpen && duet?.me === 'bass' && <InviteSheet people={dlist} who={who} song={duet.song} pending={!!duet.inv} onInvite={id => { dsend({ t: 'dinv', id }); setInvOpen(false) }} onClose={() => setInvOpen(false)} />}
         {fade && <div className="w-fade" data-t="w-fade" aria-hidden="true" />}
-        {ginvIn && <GameInvite who={nn?.pubs.get(ginvIn.from)?.name ?? 'Someone'} until={ginvIn.until} onAns={yes => { dsend({ t: 'ginvans', yes }); if (!yes) setGinvIn(null) }} />}
+        {ginvIn && <GameInvite who={nn?.pubs.get(ginvIn.from)?.name ?? 'Someone'} until={ginvIn.until} onAns={yes => { dsend({ t: 'ginvans', yes }); if (yes) RA.accept(); else { RA.decline(); setGinvIn(null) } }} />}
         {ginvOut && <section className="w-panel w-ginv-out" data-t="w-ginv-out" role="status"><span>Asked <b>{nn?.pubs.get(ginvOut.to)?.name ?? 'them'}</b> to play a game…</span>
           <button className="w-link" data-t="w-ginv-cancel" onClick={() => { dsend({ t: 'ginvx' }); setGinvOut(null) }}>Cancel</button></section>}
         {dinv && pa.current && <InviteCard from={dinv.from} song={dinv.song} until={dinv.until} who={who} A={pa.current} send={dsend} />}</div>

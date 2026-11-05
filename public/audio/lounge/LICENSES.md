@@ -45,3 +45,28 @@ Credit is not required. Suggested credits line: “Sounds: Kenney (kenney.nl), V
 | `snapSlap_3.ogg` / `snapSlap_3.m4a` | Kenney Casino Audio: card-place-3.ogg (first 0.5 s) |
 | `snapWin.ogg` / `snapWin.m4a` | Kenney Casino Audio card-place-3.ogg; VSCO-2 CE Upright Piano (C5 -> F5+A5); Kenney Interface Sounds pluck_002.ogg (-10 dB) |
 | `uiTap.ogg` / `uiTap.m4a` | Kenney UI Audio: click3.ogg (LP 6 kHz) |
+
+## pd_lounge_v02
+# Pixeldate Games Lounge sound add-on v02: licences and sources
+
+Checked on **2026-11-05**. Every file is built from **recorded CC0 samples**. No synthesis was used: piano and glock / BellTree notes are real VSCO-2 CE recordings, pitch-shifted by at most 1–2 semitones (bamboo whoosh +2 st). Processing (trim, EQ, layering, loudness, limiting) was done for Pixeldate.
+
+## Source packs
+| Pack | Author | Licence | URL |
+|---|---|---|---|
+| Interface Sounds | Kenney Vleugels | CC0 1.0 (`licences/kenney_interface-sounds_License.txt`) | https://kenney.nl/assets/interface-sounds |
+| RPG Audio | Kenney Vleugels | CC0 1.0 (`licences/kenney_rpg-audio_License.txt`) | https://kenney.nl/assets/rpg-audio |
+| VSCO-2 Community Edition (Upright Piano, Percussion: Glock, Quinto, BellTree) | Versilian Studios / Sam Gossner, Ivy Audio / Simon Dalzell | CC0 1.0 (`licences/VSCO-2-CE_LICENSE.txt`) | https://github.com/sgossner/VSCO-2-CE |
+| Freesound #186956 “woosh.wav” | ReadeOnly (https://freesound.org/people/ReadeOnly/) | CC0 1.0 (`licences/freesound_186956.txt`; page checked 2026-11-05, Creative Commons 0) | https://freesound.org/people/ReadeOnly/sounds/186956/ |
+| Freesound #60013 “Whoosh” | qubodup (https://freesound.org/people/qubodup/) | CC0 1.0 / public domain (`licences/freesound_60013.txt`; page checked 2026-11-05, “I release it to the public domain”) | https://freesound.org/people/qubodup/sounds/60013/ |
+
+Credit is not required. Suggested credits line: “Sounds: Kenney (kenney.nl), VSCO 2 CE (Versilian Studios / Ivy Audio), ReadeOnly & qubodup (freesound.org), all CC0.”
+
+## Per file
+| File | Built from |
+|---|---|
+| `inviteChime_1.ogg` / `inviteChime_1.m4a` | VSCO-2 CE Upright Piano (C5, F5) + VSCO-2 CE Glock glock_medium_C6.wav (-14 dB) |
+| `inviteChime_2.ogg` / `inviteChime_2.m4a` | VSCO-2 CE Upright Piano (A4, C5) + VSCO-2 CE Glock glock_medium_G5.wav (-16 dB) |
+| `inviteAccept.ogg` / `inviteAccept.m4a` | VSCO-2 CE Upright Piano (C5 F5 A5) + VSCO-2 CE Glock glock_medium_C6.wav (-12 dB) + Kenney Interface Sounds glass_002.ogg (-18 dB, LP 8 kHz) |
+| `inviteDecline.ogg` / `inviteDecline.m4a` | VSCO-2 CE Upright Piano (A4, F4), soft + VSCO-2 CE Percussion Quinto-Tap1_v1_rr1_Sum.wav (LP 2.8 kHz, -10 dB) |
+| `teleport.ogg` / `teleport.m4a` | Freesound #186956 "woosh.wav" by ReadeOnly, CC0 (HQ preview, first 1.08 s, HP 200 Hz / LP 4.2 kHz) + Freesound #60013 "Whoosh" by qubodup, CC0 (+2 st, -12 dB) + Kenney RPG Audio cloth3.ogg (LP 4.5 kHz, -16 dB) + VSCO-2 CE Glock glock_medium_C6.wav (-20 dB) + VSCO-2 CE Percussion BellTree_Stroke2_v1_Sum.wav (-8 dB) + Kenney Interface Sounds glass_002.ogg (-24 dB, LP 8.5 kHz) |

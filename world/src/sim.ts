@@ -52,7 +52,8 @@ export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => numb
   /** a socket that sends nothing (not even the keepalive) for this long is dropped (default STALE_MS) */ staleMs?: number
   /** the app-wide play-chip wallets (default: in-memory for this room only) */ wallets?: WalletStore
   /** the app-wide pair store (default: an in-memory one for this room only) */
-  pairs?: PairStore }
+  pairs?: PairStore
+  /** "Play a game?" answer window (default GINV_MS; tests shorten it) */ ginvMs?: number }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
 /** a table's game: its state (shared/games), who's away (uid → since), who stood up (uid → since), each player's seat */
 type GameS = { ps: { uid: string; out: boolean; away: boolean }[]; seq: number; winner: string | null }
@@ -61,6 +62,9 @@ const RECONNECT_MS = 20_000, LEAVE_MS = 2500
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MOD: Record<GameId, Game<any, any>> = { snap: Snap, blackjack: Blackjack }
 const mod = (g: GameRun) => MOD[g.id]
+/** "Play a game?" (café → Games Lounge invites): answer window, one invite per inviter per GINV_GAP_MS, at most
+    GINV_MAX per GINV_WIN_MS (server-side; the client's button state is only a hint), a ticket's seat hold in the lounge */
+export const GINV_MS = 30_000, GINV_GAP_MS = 4_000, GINV_MAX = 5, GINV_WIN_MS = 60_000, TICKET_MS = 20_000, LOUNGE = 'games-1'
 const R_SPACE = 0.75, BOX = 0.28, INPUT_PER_S = 20
 
 class Player {
@@ -75,6 +79,8 @@ class Player {
   sets: Record<Field, Set<string>>
   /** voice emotes: when the last one went out, and the last take per emote (never the same take twice in a row) */
   emoteAt = -Infinity; takes: Record<string, string> = {}
+  /** "Play a game?": my outgoing invite (to, expiry), and when I sent my recent ones (rate limit) */
+  ginv: { to: Player; exp: number } | null = null; ginvLog: number[] = []
   constructor(id: number, uid: string, name: string, p: Prefs & { pav?: string }, sock: Sock, rec: Rec, spawn: P) {
     this.id = id; this.uid = uid; this.name = name; this.br = p.br; this.min = p.min; this.max = p.max; this.iam = p.iam; this.seek = p.seek; this.pav = p.pav; this.sock = sock
     this.x = spawn[0] + .5; this.y = spawn[1] + .5
@@ -126,6 +132,8 @@ export class Room {
   name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
   /** which map this instance is (games-N: the Games Lounge); every entry point switches the shared grid to it first */
   mapId: MapId; games = new Map<number, GameRun>()
+  /** lounge: invite tickets (tk → the table held for the two and until when; who has arrived) */
+  tickets = new Map<string, { tb: number; exp: number; in: string[] }>()
   constructor(name: string, store: Store, opts: RoomOpts) { this.mapId = mapOf(name); this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
   get size() { return this.players.size }
   nextName() { const m = /^(.*?)-?(\d+)$/.exec(this.name); return this.opts.next ?? (m ? `${m[1]}-${+m[2] + 1}` : `${this.name}-2`) }
@@ -174,6 +182,9 @@ export class Room {
       case 'gstart': return this.gameStart(p, m.g)
       case 'gact': return this.gameAct(p, m.a, m.ante)
       case 'gquit': return this.gameQuit(p)
+      case 'ginv': return this.gInvite(p, m.id)
+      case 'ginvx': return this.gInviteEnd(p, 'cancel')
+      case 'ginvans': return this.gInviteAns(p, m.yes === true)
     }
   }
   /** the duet bench (null: nobody on a duet seat) */
@@ -184,6 +195,8 @@ export class Room {
     this.players.delete(s); this.byId.delete(p.id)
     for (const o of this.players.values()) if (!this.hidden(o, p)) o.sock.send(JSON.stringify({ t: 'del', id: p.id }))
     this.unpair(p)
+    if (p.ginv) this.gInviteEnd(p, 'gone')
+    for (const o of this.players.values()) if (o.ginv?.to === p) this.gInviteEnd(o, 'gone')
     if (this.piano.by === p) { this.piano = { by: null, song: null, at: 0, role: 'solo', seats: null }; this.pianoSend() }
     if (this.duet) this.duetTick()
   }
@@ -205,13 +218,16 @@ export class Room {
     if (!this.pending.has(s)) return // went away while loading
     useMap(this.mapId)   // another room may have run while we awaited
     this.pending.delete(s)
-    const back = this.gameSeat(p.uid)
-    const me = new Player(this.nextId++, p.uid, cleanName(p.name), p, s, rec, back ?? this.spawn())
+    const back = this.gameSeat(p.uid), tk = typeof m.tk === 'string' && /^[0-9a-f]{32}$/.test(m.tk) && this.mapId === 'games' ? m.tk : null
+    let held: P | null = null, full = false
+    if (!back && tk) { held = this.ticketSeat(tk, p.uid); full = !held }
+    const me = new Player(this.nextId++, p.uid, cleanName(p.name), p, s, rec, back ?? held ?? this.spawn())
     if (this.nextId > 65000) this.nextId = 1
     me.seen = this.now(); this.players.set(s, me); this.byId.set(me.id, me)
     // 'add' below goes to you for EVERYONE in the room, yourself included: the client's count is its list's size
     s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)), now: this.now(), ...(this.mapId === 'games' ? { room: 'games', games: Object.values(GAMES).map(g => ({ id: g.id, title: g.title, min: g.min, max: g.max, ready: g.ready })) } : { sofas: true }) }))
     if (this.mapId === 'games') void this.chips(me)
+    if (tk) s.send(JSON.stringify(full ? { t: 'gfull' } : { t: 'gseat' }))
     for (const o of this.players.values()) {
       if (this.hidden(me, o)) continue
       s.send(JSON.stringify({ t: 'add', p: o.pub() }))
@@ -225,6 +241,61 @@ export class Room {
       g.away.delete(me.uid)
       // a fast reload can land before the old socket closes: sit back down anyway (only someone else blocks the seat)
       const st = g.seat.get(me.uid); if (st && ![...this.players.values()].some(o => o.uid !== me.uid && Math.floor(o.x) === st[0] && Math.floor(o.y) === st[1])) { me.x = st[0] + .5; me.y = st[1] + .5; me.path = []; me.dir = null; me.sitting = true; me.moving = false } const sp = g.s.ps.find(x => x.uid === me.uid); if (sp) sp.away = false; g.s.seq++; this.gameSend(g) }
+  }
+  /* ---- "Play a game?": a café invite to the Games Lounge. The café holds the invite (one out per inviter, one in per
+     invitee, 30 s, rate-limited); on yes it hands both the same one-time ticket, and the lounge seats the two holders of
+     a ticket opposite each other at one free table (held TICKET_MS for the second to land). ---- */
+  private gInvite(p: Player, id: unknown) {
+    const no = (why: string, wait?: number) => p.sock.send(JSON.stringify({ t: 'ginv', ok: false, why, ...(wait ? { wait } : {}) }))
+    if (this.mapId === 'games') return no('here')
+    const to = typeof id === 'number' ? this.byId.get(id) : undefined
+    if (!to || to === p || this.hidden(p, to)) return no('gone')
+    const now = this.now()
+    if (p.ginv && p.ginv.to === to) return no('dup')
+    p.ginvLog = p.ginvLog.filter(t => now - t < GINV_WIN_MS)
+    const last = p.ginvLog[p.ginvLog.length - 1] ?? -Infinity
+    if (now - last < GINV_GAP_MS) return no('slow', GINV_GAP_MS - (now - last))
+    if (p.ginvLog.length >= GINV_MAX) return no('slow', GINV_WIN_MS - (now - p.ginvLog[0]))
+    if ([...this.players.values()].some(o => o !== p && o.ginv?.to === to) || to.ginv?.to === p) return no('busy')
+    if (p.ginv) this.gInviteEnd(p, 'cancel')
+    const ms = this.opts.ginvMs ?? GINV_MS; p.ginvLog.push(now); p.ginv = { to, exp: now + ms }
+    p.sock.send(JSON.stringify({ t: 'ginv', ok: true, to: to.id, ms }))
+    to.sock.send(JSON.stringify({ t: 'ginvite', from: p.id, ms }))
+  }
+  /** the invite from p is over: tell both (why: no / late / cancel / gone) */
+  private gInviteEnd(p: Player, why: string) {
+    const v = p.ginv; if (!v) return; p.ginv = null
+    p.sock.send(JSON.stringify({ t: 'ginvend', id: v.to.id, why }))
+    v.to.sock.send(JSON.stringify({ t: 'ginvite', from: 0, was: p.id, why }))
+  }
+  private gInviteAns(p: Player, yes: boolean) {
+    const from = [...this.players.values()].find(o => o.ginv?.to === p)
+    if (!from) return p.sock.send(JSON.stringify({ t: 'ginvite', from: 0, why: 'gone' }))
+    if (!yes) return this.gInviteEnd(from, 'no')
+    from.ginv = null
+    const tk = [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2, '0')).join('')
+    for (const [o, slot] of [[from, 0], [p, 1]] as const) o.sock.send(JSON.stringify({ t: 'gtele', room: LOUNGE, tk, slot, with: (o === from ? p : from).id }))
+  }
+  private gInviteTick() {
+    const now = this.now()
+    for (const o of this.players.values()) if (o.ginv && now > o.ginv.exp) this.gInviteEnd(o, 'late')
+  }
+  /** lounge: the seat a ticket holder lands on (null: no table free) */
+  private ticketSeat(tk: string, uid: string): P | null {
+    const now = this.now()
+    for (const [k, v] of this.tickets) if (now > v.exp) this.tickets.delete(k)
+    let tkt = this.tickets.get(tk)
+    if (!tkt) {
+      const busy = new Set([...this.players.values()].map(o => Math.floor(o.x) + ',' + Math.floor(o.y)))
+      const held = new Set([...this.tickets.values()].map(v => v.tb))
+      const t = TABLES.find(t => !held.has(t.id) && !(this.games.get(t.id)?.s.winner === null) && !seatsOf(t).some(s => busy.has(s.join(','))))
+      if (!t) return null
+      tkt = { tb: t.id, exp: now + TICKET_MS, in: [] }; this.tickets.set(tk, tkt)
+    }
+    if (!tkt.in.includes(uid)) { if (tkt.in.length >= 2) return null; tkt.in.push(uid) }
+    const t = TABLES[tkt.tb], seat = t.seats[tkt.in.indexOf(uid)]
+    if (tkt.in.length >= 2) this.tickets.delete(tk)
+    return [seat[0], seat[1]]
   }
   private spawn(): P {
     for (const sp of SPAWNS) if (![...this.players.values()].some(o => Math.hypot(o.x - sp[0] - .5, o.y - sp[1] - .5) < 1)) return sp
@@ -309,6 +380,7 @@ export class Room {
       if (p.sofaWant && !p.moving && !p.path.length) this.sofaSit(p)
     }
     this.tables()
+    if (this.tickN % 5 === 0) this.gInviteTick()
     this.pianoTick()
     this.duetTick()
     if (this.games.size) this.gamesTick()

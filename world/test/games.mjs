@@ -1,7 +1,7 @@
 // Games Room v1 server tests: Snap rules (pure module), then the Room over the Node dev server: 2-4 at a table, the
 // shuffle, turns + timeouts, snap rate limit, privacy, reconnect, familiarity once per pair per day, map isolation.
 import assert from 'node:assert/strict'
-process.env.WORLD_STALE_MS ??= '3000'; process.env.WORLD_PORT = '18793'; process.env.WORLD_URL = 'ws://127.0.0.1:18793'
+process.env.WORLD_STALE_MS ??= '3000'; process.env.WORLD_GINV_MS ??= '1500'; process.env.WORLD_PORT = '18793'; process.env.WORLD_URL = 'ws://127.0.0.1:18793'
 const dev = await import('../dev/server.ts'); await new Promise(r => setTimeout(r, 300))
 const { Bot, profile, sleep } = await import('./lib.mjs')
 const { Snap, rank, matches, TURN_MS, SNAP_GAP_MS, LOCK_MS } = await import('../shared/games/snap.ts')
@@ -195,6 +195,54 @@ await test('room: co-op blackjack at a table: antes come out of both wallets, ro
   const back = { win: 50, bj: 62, push: 25, lose: 0, bust: 0 }[r.res]
   await sleep(400); assert.equal(A.last('chips').bal, a0 - 25 + back); assert.equal(B.last('chips').bal, b0 - 25 + back)
   assert.ok(!A.text.join().includes('bot-'), 'no uids on the wire')
+})
+// ---- "Play a game?": café invite → both teleport to the lounge, seated opposite each other at one free table ----
+const Jc = o => J(o, 'cafe-1')
+const tele = async (A, B) => {
+  A.send({ t: 'ginv', id: B.me }); const inv = await B.wait(() => B.last('ginvite')); assert.equal(inv.from, A.me)
+  B.send({ t: 'ginvans', yes: true }); const a = await A.wait(() => A.last('gtele')), b = await B.wait(() => B.last('gtele'))
+  assert.ok(a && b); assert.equal(a.tk, b.tk); assert.equal(a.room, 'games-1'); assert.notEqual(a.slot, b.slot); return a.tk }
+await test('invite: Play a game? → Accept → both land seated opposite at one free lounge table, ready for Snap', async () => {
+  const A = await Jc({ name: 'Ann' }), B = await Jc({ name: 'Bo' }); await sleep(200)
+  const tk = await tele(A, B); assert.match(tk, /^[0-9a-f]{32}$/)
+  const LA = new Bot(A.p, { room: 'games-1', tk }), LB = new Bot(B.p, { room: 'games-1', tk }); all.push(LA, LB); A.close(); B.close()
+  assert.equal((await LA.connect()).t, 'hi'); assert.equal((await LB.connect()).t, 'hi')
+  assert.ok(await LA.wait(() => LA.last('gseat'))); assert.ok(await LB.wait(() => LB.last('gseat')))
+  const sa = await LA.wait(() => { const s = LA.self(); return s && (s.f & 8) && s }), sb = await LB.wait(() => { const s = LB.self(); return s && (s.f & 8) && s })
+  assert.ok(sa && sb, 'both seated'); M.useMap('games'); const t = M.TABLES.find(t => t.seats.some(([x, y]) => x === Math.floor(sa.x) && y === Math.floor(sa.y)))
+  assert.ok(t, 'on a lounge seat'); assert.ok(t.seats.some(([x, y]) => x === Math.floor(sb.x) && y === Math.floor(sb.y)), 'same table'); assert.notEqual(Math.floor(sa.x), Math.floor(sb.x), 'opposite')
+  LA.send({ t: 'gstart', g: 'snap' }); assert.ok(await LA.wait(() => LA.last('game')?.on !== false && LA.last('game')), 'Snap starts at once')
+  assert.ok(!LA.text.join().includes(tk) && !LA.text.join().includes('bot-'), 'ticket not echoed, no uids')
+})
+await test('invite: duplicate, busy, spam (server rate limit), not from the lounge, blocked/gone targets', async () => {
+  const A = await Jc(), B = await Jc(), C = await Jc(); await sleep(200)
+  A.send({ t: 'ginv', id: B.me }); assert.ok(await B.wait(() => B.last('ginvite')))
+  A.send({ t: 'ginv', id: B.me }); assert.equal((await A.wait(() => A.events.find(e => e.t === 'ginv' && e.ok === false)))?.why, 'dup')
+  C.send({ t: 'ginv', id: B.me }); assert.equal((await C.wait(() => C.last('ginv')))?.why, 'busy')
+  A.send({ t: 'ginv', id: C.me }); const sl = await A.wait(() => A.events.filter(e => e.t === 'ginv' && e.why === 'slow')[0]); assert.ok(sl && sl.wait > 0, 'too soon after the last one')
+  A.send({ t: 'ginv', id: 9999 }); assert.ok(await A.wait(() => A.events.some(e => e.why === 'gone')))
+  A.send({ t: 'ginv', id: A.me }); await sleep(150)
+  const L = await J(); L.send({ t: 'ginv', id: L.me }); assert.equal((await L.wait(() => L.last('ginv')))?.why, 'here')
+  assert.ok(B.events.filter(e => e.t === 'ginvite' && e.from).length === 1, 'invitee got exactly one prompt')
+})
+await test('invite: decline tells the inviter; it times out; inviter left → the prompt closes and Accept is refused', async () => {
+  const A = await Jc(), B = await Jc(); await sleep(200)
+  A.send({ t: 'ginv', id: B.me }); await B.wait(() => B.last('ginvite')); B.send({ t: 'ginvans', yes: false })
+  assert.equal((await A.wait(() => A.last('ginvend')))?.why, 'no')
+  const C = await Jc(), D = await Jc(); await sleep(200)
+  C.send({ t: 'ginv', id: D.me }); await D.wait(() => D.last('ginvite')); assert.equal((await C.wait(() => C.last('ginvend'), 4000))?.why, 'late')
+  assert.equal((await D.wait(() => D.last('ginvite')?.from === 0 && D.last('ginvite'))).why, 'late')
+  const E = await Jc(), F = await Jc(); await sleep(200)
+  E.send({ t: 'ginv', id: F.me }); await F.wait(() => F.last('ginvite')); E.close()
+  assert.equal((await F.wait(() => F.last('ginvite')?.from === 0 && F.last('ginvite'))).why, 'gone')
+  F.events.length = 0; F.send({ t: 'ginvans', yes: true }); await sleep(200); assert.ok(!F.last('gtele'), 'no teleport alone')
+})
+await test('invite: lounge full → both told (gfull), nobody is seated on top of anyone', async () => {
+  M.useMap('games'); const sitters = []
+  for (const t of M.TABLES) { const b = await J(); sitters.push(b); await goSit(b, t.seats[0]) }
+  const A = await Jc(), B = await Jc(); await sleep(200); const tk = await tele(A, B)
+  const LA = new Bot(A.p, { room: 'games-1', tk }); all.push(LA); A.close(); await LA.connect()
+  assert.ok(await LA.wait(() => LA.last('gfull'))); await sleep(300); const s = LA.self(); assert.ok(s && !(s.f & 8), 'standing, not seated')
 })
 dev.default?.close?.()
 console.log(`\n${n} passed, ${failed} failed`); process.exit(failed ? 1 : 0)

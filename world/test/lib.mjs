@@ -10,14 +10,14 @@ export function profile(o = {}) {
     pav: JSON.stringify({ v: 1, ...SAMPLES[i % SAMPLES.length] }), ...o }
 }
 export class Bot {
-  constructor(p, { invite = 'dev-invite-1', room = 'cafe-1', follow = true } = {}) {
-    this.p = p; this.invite = invite; this.room = room; this.follow = follow
+  constructor(p, { invite = 'dev-invite-1', room = 'cafe-1', follow = true, tk } = {}) {
+    this.p = p; this.tk = tk; this.invite = invite; this.room = room; this.follow = follow
     this.text = []; this.bin = []; this.ents = new Map(); this.pubs = new Map(); this.events = []; this.me = 0; this.inst = null; this.closed = null
   }
   connect() {
     return new Promise(res => {
       const ws = this.ws = new WebSocket(`${BASE}/parties/area/${this.room}`); ws.binaryType = 'arraybuffer'
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'join', invite: this.invite, p: this.p }))
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'join', invite: this.invite, p: this.p, ...(this.tk ? { tk: this.tk } : {}) }))
       ws.onclose = e => { this.closed = e.code; clearInterval(this.ka); res({ t: 'closed', code: e.code }) }
       ws.onmessage = e => {
         if (typeof e.data !== 'string') {

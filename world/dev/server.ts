@@ -32,7 +32,7 @@ const rooms = new Map<string, { room: Room; timer: ReturnType<typeof setInterval
 const tickMs: number[] = []
 function area(name: string) {
   let a = rooms.get(name)
-  if (!a) { a = { room: new Room(name, store, { invites: INVITES, cap: CAP, staleMs: STALE, pairs, wallets }), timer: null }; rooms.set(name, a) }
+  if (!a) { a = { room: new Room(name, store, { invites: INVITES, cap: CAP, staleMs: STALE, pairs, wallets, ginvMs: process.env.WORLD_GINV_MS ? +process.env.WORLD_GINV_MS : undefined }), timer: null }; rooms.set(name, a) }
   return a
 }
 const port = +(process.argv.find(a => /^\d+$/.test(a)) ?? process.env.WORLD_PORT ?? 8787)

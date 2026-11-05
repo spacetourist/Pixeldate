@@ -29,7 +29,7 @@ const rank = (c: number) => (c >> 2) + 1, suit = (c: number) => c & 3
 const FACE = import.meta.glob<string>('./art/cards-svg/*.svg', { eager: true, query: '?url', import: 'default' }), CODE = 'SHDC'
 function Card({ c, k }: { c: number; k?: string }) {
   const r = RANK[rank(c)], st = SUIT[suit(c)]
-  return <img className="g-card g-face" src={FACE[`./art/cards-svg/card-${r}${CODE[suit(c)]}.svg`]} alt={r + st} data-t={k} data-rank={rank(c)} width={60} height={84} draggable={false} />
+  return <img className="g-card g-face" src={FACE[`./art/cards-svg/card-${r}${CODE[suit(c)]}.svg`]} alt={r + st} data-t={k} data-rank={rank(c)} width={60} height={84} draggable={false} style={{ color: suit(c) === 1 || suit(c) === 2 ? "#C8102E" : "#1A1A1A" }} />
 }
 const Deck = ({ n, k }: { n: number; k: string }) => <div className="g-deck" data-t={k}>{n > 0 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" />}{n > 1 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" style={{ left: 2, top: -2 }} />}<span>{n}</span></div>
 export const Chips = ({ bal }: { bal: number }) => <span className="g-chips" data-t="g-chips">{[1, 5, 25, 100].map(v => <Chip key={v} v={v} />)} {bal} {CHIPS_NAME}</span>

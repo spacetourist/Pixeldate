@@ -5,19 +5,19 @@
   </g>
   <g id="face">
     <rect x="1" y="1" width="38" height="54" rx="1" ry="1" fill="#FFF1C1"/>
-    <line x1="2" y1="1.5" x2="38" y2="1.5" stroke="#E9E2F5" stroke-width="1"/>
+    <line x1="2" y1="1.5" x2="38" y2="1.5" stroke="#1A1A1A" stroke-width="1"/>
   </g>
   <g id="rank">
-    <text x="4" y="11" fill="#48E5C2" font-size="9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" letter-spacing="-0.5">J</text>
+    <text x="4" y="11" fill="#1A1A1A" font-size="9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" letter-spacing="-0.5">J</text>
     <g transform="translate(36,52) rotate(180)">
-      <text x="0" y="7" fill="#48E5C2" font-size="9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" letter-spacing="-0.5">J</text>
+      <text x="0" y="7" fill="#1A1A1A" font-size="9" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" letter-spacing="-0.5">J</text>
     </g>
   </g>
   <g id="suit">
-    <circle cx="7.5" cy="16.56" r="1.44" fill="#48E5C2"/><circle cx="5.88" cy="18.54" r="1.44" fill="#48E5C2"/><circle cx="9.12" cy="18.54" r="1.44" fill="#48E5C2"/><circle cx="7.5" cy="18.18" r="0.99" fill="#48E5C2"/><rect x="7" y="18.45" width="0.99" height="2.7" fill="#48E5C2"/><rect x="5.92" y="20.79" width="3.15" height="0.81" rx="0.18" fill="#48E5C2"/>
-    <circle cx="20" cy="25.64" r="3.36" fill="#48E5C2"/><circle cx="16.22" cy="30.26" r="3.36" fill="#48E5C2"/><circle cx="23.78" cy="30.26" r="3.36" fill="#48E5C2"/><circle cx="20" cy="29.42" r="2.31" fill="#48E5C2"/><rect x="18.84" y="30.05" width="2.31" height="6.3" fill="#48E5C2"/><rect x="16.32" y="35.51" width="7.35" height="1.89" rx="0.42" fill="#48E5C2"/>
+    <circle cx="7.5" cy="16.56" r="1.44" fill="#1A1A1A"/><circle cx="5.88" cy="18.54" r="1.44" fill="#1A1A1A"/><circle cx="9.12" cy="18.54" r="1.44" fill="#1A1A1A"/><circle cx="7.5" cy="18.18" r="0.99" fill="#1A1A1A"/><rect x="7" y="18.45" width="0.99" height="2.7" fill="#1A1A1A"/><rect x="5.92" y="20.79" width="3.15" height="0.81" rx="0.18" fill="#1A1A1A"/>
+    <circle cx="20" cy="25.64" r="3.36" fill="#1A1A1A"/><circle cx="16.22" cy="30.26" r="3.36" fill="#1A1A1A"/><circle cx="23.78" cy="30.26" r="3.36" fill="#1A1A1A"/><circle cx="20" cy="29.42" r="2.31" fill="#1A1A1A"/><rect x="18.84" y="30.05" width="2.31" height="6.3" fill="#1A1A1A"/><rect x="16.32" y="35.51" width="7.35" height="1.89" rx="0.42" fill="#1A1A1A"/>
     <g transform="translate(36,52) rotate(180)">
-      <circle cx="3.5" cy="5.56" r="1.44" fill="#48E5C2"/><circle cx="1.88" cy="7.54" r="1.44" fill="#48E5C2"/><circle cx="5.12" cy="7.54" r="1.44" fill="#48E5C2"/><circle cx="3.5" cy="7.18" r="0.99" fill="#48E5C2"/><rect x="3" y="7.45" width="0.99" height="2.7" fill="#48E5C2"/><rect x="1.93" y="9.79" width="3.15" height="0.81" rx="0.18" fill="#48E5C2"/>
+      <circle cx="3.5" cy="5.56" r="1.44" fill="#1A1A1A"/><circle cx="1.88" cy="7.54" r="1.44" fill="#1A1A1A"/><circle cx="5.12" cy="7.54" r="1.44" fill="#1A1A1A"/><circle cx="3.5" cy="7.18" r="0.99" fill="#1A1A1A"/><rect x="3" y="7.45" width="0.99" height="2.7" fill="#1A1A1A"/><rect x="1.93" y="9.79" width="3.15" height="0.81" rx="0.18" fill="#1A1A1A"/>
     </g>
   </g>
 </svg>

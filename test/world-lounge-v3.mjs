@@ -131,8 +131,10 @@ const face = await until(() => A.$('.g-face'), 4000)
 ok(!!face, 'card faces drawn')
 ok(await A.$eval('.g-face', e => /\.svg|svg\+xml/.test(e.src) && e.getBoundingClientRect().width === 60), "face is GD's SVG at the same 60 px size")
 await shot(A, '04-snap-cards'); await shot(B, '04-snap-cards')
-{ const el = await A.$('.g-face'); await el.screenshot({ path: OUT + '04-card-zoom-390.png' }) }
-{ const el = await B.$('.g-face'); if (el) await el.screenshot({ path: OUT + '04-card-zoom-1440.png' }) }
+for (const [pg, w] of [[A, 390], [B, 1440]]) {
+  const r = await pg.evaluate(() => { const b = document.querySelector('.g-face')?.getBoundingClientRect(); return b && { x: b.x - 4, y: b.y - 4, width: b.width + 8, height: b.height + 8 } })
+  if (r) await pg.screenshot({ path: OUT + `04-card-zoom-${w}.png`, clip: r, captureBeyondViewport: false })
+}
 await tap(A, '[data-t=g-stand]'); await sleep(800)
 if (await until(() => B.$('[data-t=g-done]'), 4000)) await tap(B, '[data-t=g-done]')
 const [sa] = TABLES[0].seats

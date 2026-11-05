@@ -109,6 +109,7 @@ const tot = async () => (await mineN(A)) + (await mineN(B)) + +(await attr(A, '[
 ok((await tot()) === 52, 'cards conserved (hands + pile = 52)')
 console.log('  snaps tried', snaps)
 await shot(A, '06-mid'); await shot(B, '06-mid')
+ok(/^\d+ play chips$/.test((await txt(A, '[data-t=w-chips]')).trim()), 'play chips wallet shown (CHIPS_NAME)')
 // reconnect: Blair reloads mid-game → back in her seat with the game
 const before = await mineN(B)
 await B.reload({ waitUntil: 'networkidle0' }); await B.waitForSelector('[data-t=w-room]', { timeout: 20000 })

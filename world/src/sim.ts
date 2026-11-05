@@ -215,7 +215,10 @@ export class Room {
     if (this.duet) s.send(JSON.stringify(this.duetView(me)))
     for (const tb of this.hearts) { const pr = this.pairs.get(tb); if (pr && !this.hidden(me, pr.a) && !this.hidden(me, pr.b)) s.send(JSON.stringify({ t: 'couple', tb, on: true })) }
     // a reconnect mid-game: back in your seat, the game picks you up again
-    for (const g of this.games.values()) if (g.away.has(me.uid)) { g.away.delete(me.uid); const sp = g.s.ps.find(x => x.uid === me.uid); if (sp) sp.away = false; g.s.seq++; this.gameSend(g) }
+    for (const g of this.games.values()) if (g.away.has(me.uid) || (g.s.winner === null && g.s.ps.some(x => x.uid === me.uid && !x.out))) {
+      g.away.delete(me.uid)
+      // a fast reload can land before the old socket closes: sit back down anyway (only someone else blocks the seat)
+      const st = g.seat.get(me.uid); if (st && ![...this.players.values()].some(o => o.uid !== me.uid && Math.floor(o.x) === st[0] && Math.floor(o.y) === st[1])) { me.x = st[0] + .5; me.y = st[1] + .5; me.path = []; me.dir = null; me.sitting = true; me.moving = false } const sp = g.s.ps.find(x => x.uid === me.uid); if (sp) sp.away = false; g.s.seq++; this.gameSend(g) }
   }
   private spawn(): P {
     for (const sp of SPAWNS) if (![...this.players.values()].some(o => Math.hypot(o.x - sp[0] - .5, o.y - sp[1] - .5) < 1)) return sp

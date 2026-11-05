@@ -204,6 +204,7 @@ function World() {
     const A = pa.current; if (A) { A.set({ t: 'piano', by: 0, song: null, at: 0, now: 0 } as any); A.setDuet({ t: 'duet', on: false } as any) }
     setCard(null); setSel(null); setGame(null); setPriv([]); setWhere(''); setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false); setChips(null)
     bubbles.current.clear(); murmurs.current.clear(); setRoom(to); enter(to)
+    { const u = new URL(location.href); if (to.startsWith('games')) u.searchParams.set('room', 'games'); else u.searchParams.delete('room'); history.replaceState(history.state, '', u) }   // a reload stays in this room
   }
   useEffect(() => { if (prof && invite && adult && qs.get('auto') === '1') enter() }, [])
 

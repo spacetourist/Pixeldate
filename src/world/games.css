@@ -12,13 +12,13 @@
 .g-players li b { font: 400 18px/1 var(--font-px, monospace) }
 .g-players li.turn { border-color: var(--c-butter, #FFD84D) } .g-players li.turn.me { border-color: var(--c-mint, #48E5C2) }
 .g-players li.out { opacity: .5 } .g-players em { color: var(--c-butter, #FFD84D); font-size: 12px }
-.g-felt { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; min-height: 108px;
+.g-felt { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; min-height: 192px;
   background: #24543A; border: 3px solid #6B2F1C; box-shadow: inset 0 0 0 2px #1A3A2A, 0 0 0 2px var(--edge, #05020F); border-radius: 14px }
 .g-deck { position: relative; width: 60px; height: 84px } .g-deck img { position: absolute; width: 60px; height: 84px; image-rendering: pixelated }
 .g-deck span { position: absolute; bottom: -4px; right: -6px; font: 600 11px/1 var(--font-ui); background: #05020F; color: var(--c-cream, #FFF1C1); padding: 2px 4px }
-.g-pile { position: relative; flex: 1; height: 84px; display: flex; align-items: center; justify-content: center }
-.g-pile .g-card { margin-left: -40px } .g-pile .g-card:first-child { margin-left: 0 }
-.g-card { width: 60px; height: 84px; image-rendering: pixelated; display: block }
+.g-pile { position: relative; flex: 1; min-width: 0; height: 168px; display: flex; align-items: center; justify-content: center }
+.g-pile .g-card { margin-left: -96px } .g-pile .g-card:first-child { margin-left: 0 }
+.g-card { width: 120px; height: 168px; display: block; flex: none } .g-card.g-back { image-rendering: pixelated }
 .g-chip { position: relative; display: inline-grid; place-items: center; flex: none; vertical-align: middle }
 .g-chip img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated }
 .g-chip b { position: relative; display: grid; place-items: center; width: 62%; height: 62%; border-radius: 50%; background: var(--cf); color: #05020F;
@@ -39,7 +39,10 @@
 .g-row { display: flex; gap: 8px; align-items: baseline } .g-row small { color: #CFE6D7 }
 .g-house { font: 400 20px/1 var(--font-px, monospace); color: var(--c-butter, #FFD84D) } .g-ours { font: 600 13px/1 var(--font-ui); color: var(--c-mint, #48E5C2); margin: 0 auto }
 .g-row:has(.g-ours) { justify-content: center } .g-row:has(.g-ours) small { margin-left: 4px }
-.g-hand { display: flex; justify-content: center; gap: 6px; min-height: 84px; align-items: center; flex-wrap: wrap }
+.g-hand { display: flex; justify-content: center; min-height: 168px; align-items: center }
+/* Direction A cards are 120x168: overlapped fans, so a 5-card hand still fits the 390 felt (the corner index stays readable) */
+.g-hand .g-card + .g-card { margin-left: -72px }
+@media (min-width: 700px) { .g-hand .g-card + .g-card { margin-left: -20px } .g-pile .g-card { margin-left: -84px } }
 .g-stack { display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--c-cream, #FFF1C1) } .g-stack img { image-rendering: pixelated }
 .g-stack small { margin-left: 6px; font: 600 12px/1 var(--font-ui) }
 .g-antes { display: flex; gap: 8px; justify-content: center }
@@ -48,5 +51,5 @@
 .g-bjbtns { grid-template-columns: 1fr 1fr 1fr }
 .g-hit { background: var(--c-mint, #48E5C2); color: #05020F } .g-deal { background: var(--c-butter, #FFD84D); color: #05020F }
 
-/* GD's vector faces: smooth scaling (the back alone stays pixelated) */
-.g-card.g-face { image-rendering: auto }
+/* Direction A faces: smooth (never pixelated); the back alone keeps its pixels */
+.g-card.g-face { image-rendering: auto; border-radius: 10px }

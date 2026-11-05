@@ -1,6 +1,6 @@
 /* Games Lounge panel (lazy chunk: only loaded in the Games Lounge). The server (world/src/sim.ts + shared/games) runs
    every game; this only draws the view it sends and sends flip / snap. Touch: two big buttons. Keyboard: Space = snap,
-   F = flip. Placeholder card faces in the café palette; GD's card art drops in through CARD_ART (one PNG per card). */
+   F = flip. Cards: GD's Direction A pack (public/art/cards-a). */
 import { useEffect, useState } from 'react'
 import './games.css'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
@@ -11,27 +11,29 @@ export interface GameV { on: true; g: 'snap'; tb: number; seq: number; now: numb
   last: { k: string; who: number; n?: number }; winner: number | null; ps: { id: number; n: number; out: boolean; away: boolean; lock: number }[]; fam?: number }
 export interface GameInfo { id: string; title: string; min: number; max: number; ready: boolean }
 const SUIT = ['♠', '♥', '♦', '♣'], RANK = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
-/** GD's card art (games-lounge pack via tools/games-lounge-art.py): cards/<rank><suit>.png, 20x28, shown at 3x */
-const CARD_ART = import.meta.glob<string>('./art/cards/back*.png', { eager: true, query: '?url', import: 'default' })
+/** GD's Direction A pack (public/art/cards-a, tools/card-pack-a.mjs): served as plain files, fetched only when a card is
+    on screen, so none of it is in the JS bundle. Faces 120x168 CSS: the SVG first (drawn at device resolution), the 240x336
+    raster (@2x) if the SVG fails. The back is pixel art (nearest-neighbour scaled by GD) and stays pixelated. */
+const CARDS = import.meta.env.BASE_URL + 'art/cards-a/'
+const BACK = CARDS + 'back-120.png', BACK_SET = `${CARDS}back-120.png 1x, ${CARDS}back-240.png 2x, ${CARDS}back-360.png 3x`
 const CHIP_ART = import.meta.glob<string>('./art/chips/*.png', { eager: true, query: '?url', import: 'default' })
-const BACK = CARD_ART['./art/cards/back.png']
 /** GD's @3x art for high-density screens (exact 3x of the 1x pixels) */
 const x3 = (m: Record<string, string>, stem: string) => m[stem + '@3x.png'] ? `${m[stem + '.png']} 1x, ${m[stem + '@3x.png']} 3x` : undefined
-const Back = () => <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" className="g-card" width={60} height={84} />
+const Back = () => <img src={BACK} srcSet={BACK_SET} alt="" className="g-card g-back" width={120} height={168} />
 /** a coin: GD's pixel chip is the rim (the light pixel accent); the value is crisp vector text over a flat centre disc,
     drawn at device resolution, so the number is sharp on every screen */
 const CHIP_FILL: Record<number, string> = { 1: '#FFF1C1', 5: '#FF6F59', 25: '#FFD84D', 100: '#48E5C2' }
 const Chip = ({ v, size = 18 }: { v: number; size?: number }) => <span className="g-chip" data-v={v} style={{ width: size, height: size, ['--cf' as string]: CHIP_FILL[v] ?? '#FFF1C1', fontSize: Math.max(7, Math.round(size * (v >= 100 ? .32 : .42))) }}>
   <img src={CHIP_ART[`./art/chips/${v}.png`]} srcSet={x3(CHIP_ART, `./art/chips/${v}`)} alt="" width={size} height={size} /><b aria-label={String(v)}>{v}</b></span>
 const rank = (c: number) => (c >> 2) + 1, suit = (c: number) => c & 3
-/** a card face: GD's vector card (art/cards-svg, from the games-lounge sharp pack; tools/card-svgs.mjs), drawn by the
-    browser at device resolution so ranks and suits stay sharp, at the same 60x84 CSS size as before. The back keeps its pixels. */
-const FACE = import.meta.glob<string>('./art/cards-svg/*.svg', { eager: true, query: '?url', import: 'default' }), CODE = 'SHDC'
+/** a card face: GD's Direction A SVG at 120x168 CSS, the 240x336 PNG as its fallback */
+const CODE = 'SHDC'
 function Card({ c, k }: { c: number; k?: string }) {
-  const r = RANK[rank(c)], st = SUIT[suit(c)]
-  return <img className="g-card g-face" src={FACE[`./art/cards-svg/card-${r}${CODE[suit(c)]}.svg`]} alt={r + st} data-t={k} data-rank={rank(c)} width={60} height={84} draggable={false} style={{ color: suit(c) === 1 || suit(c) === 2 ? "#D32F2F" : "#1A1A1A" }} />
+  const r = RANK[rank(c)], st = SUIT[suit(c)], f = `card-${r}${CODE[suit(c)]}`
+  return <img className="g-card g-face" src={`${CARDS}svg/${f}.svg`} alt={r + st} data-t={k} data-rank={rank(c)} width={120} height={168} draggable={false} decoding="async"
+    onError={e => { const i = e.currentTarget; if (!i.src.endsWith('.png')) i.src = `${CARDS}png/${f}.png` }} style={{ color: suit(c) === 1 || suit(c) === 2 ? '#D32F2F' : '#1A1A1A' }} />
 }
-const Deck = ({ n, k }: { n: number; k: string }) => <div className="g-deck" data-t={k}>{n > 0 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" />}{n > 1 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" style={{ left: 2, top: -2 }} />}<span>{n}</span></div>
+const Deck = ({ n, k }: { n: number; k: string }) => <div className="g-deck" data-t={k}>{n > 0 && <img src={BACK} srcSet={BACK_SET} alt="" />}{n > 1 && <img src={BACK} srcSet={BACK_SET} alt="" style={{ left: 2, top: -2 }} />}<span>{n}</span></div>
 export const Chips = ({ bal }: { bal: number }) => <span className="g-chips" data-t="g-chips">{[1, 5, 25, 100].map(v => <Chip key={v} v={v} />)} {bal} {CHIPS_NAME}</span>
 export default function GamesPanel({ game, games, name, send, stand, desk, chips }: { game: GameV | BjV | null; games: GameInfo[]; name: (id: number) => string; chips: number | null
   send: (o: object) => void; stand: () => void; desk: boolean }) {

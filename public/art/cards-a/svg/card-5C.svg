@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 336" width="240" height="336">
+  <title>card-5C</title>
+  <rect width="240" height="336" rx="20" ry="20" fill="#05020F"/>
+  <rect x="3" y="3" width="234" height="330" rx="17" ry="17" fill="#F6EEDC"/>
+  <!-- pixel bitmap rank (rects) -->
+  <g id="rank-tl">
+<rect x="14" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="18" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="22" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="26" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="30" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="18" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="22" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="18" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="22" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="26" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="30" y="30" width="4" height="4" fill="#1A1A1A"/>
+<rect x="30" y="34" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="38" width="4" height="4" fill="#1A1A1A"/>
+<rect x="18" y="38" width="4" height="4" fill="#1A1A1A"/>
+<rect x="22" y="38" width="4" height="4" fill="#1A1A1A"/>
+<rect x="26" y="38" width="4" height="4" fill="#1A1A1A"/>
+  </g>
+  <!-- corner suit -->
+<g  fill="#1A1A1A"><g transform="translate(12 48) scale(0.24)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+  <g id="index-br" transform="rotate(180 120.0 168.0)">
+<rect x="14" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="18" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="22" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="26" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="30" y="14" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="18" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="22" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="18" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="22" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="26" y="26" width="4" height="4" fill="#1A1A1A"/>
+<rect x="30" y="30" width="4" height="4" fill="#1A1A1A"/>
+<rect x="30" y="34" width="4" height="4" fill="#1A1A1A"/>
+<rect x="14" y="38" width="4" height="4" fill="#1A1A1A"/>
+<rect x="18" y="38" width="4" height="4" fill="#1A1A1A"/>
+<rect x="22" y="38" width="4" height="4" fill="#1A1A1A"/>
+<rect x="26" y="38" width="4" height="4" fill="#1A1A1A"/>
+<g  fill="#1A1A1A"><g transform="translate(12 48) scale(0.24)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+  </g>
+<g  fill="#1A1A1A"><g transform="translate(52.8 43.2) scale(0.48)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+<g  fill="#1A1A1A"><g transform="translate(139.20000000000002 43.2) scale(0.48)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+<g  fill="#1A1A1A"><g transform="translate(96.0 144.0) scale(0.48)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+<g transform="translate(76.8 268.8) rotate(180) translate(-76.8 -268.8)" fill="#1A1A1A"><g transform="translate(52.8 244.8) scale(0.48)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+<g transform="translate(163.20000000000002 268.8) rotate(180) translate(-163.20000000000002 -268.8)" fill="#1A1A1A"><g transform="translate(139.20000000000002 244.8) scale(0.48)"><circle cx="50" cy="27" r="21"/><circle cx="27" cy="58" r="21"/><circle cx="73" cy="58" r="21"/><path d="M44 40 L56 40 L56 62 L44 62 Z"/><path d="M47 58 C47 78 42 90 32 96 L68 96 C58 90 53 78 53 58 Z"/></g></g>
+</svg>

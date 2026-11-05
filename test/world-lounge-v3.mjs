@@ -129,7 +129,9 @@ for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-snap]'), 6000), p.ta
 for (let i = 0; i < 4; i++) { if ((await attr(A, '[data-t=g-snap]', 'data-turn')) === 'me') await press(A, '[data-t=g-flip]'); else { await front(B); await B.keyboard.press('f') } await sleep(400) }
 const face = await until(() => A.$('.g-face'), 4000)
 ok(!!face, 'card faces drawn')
-ok(await A.$eval('.g-face', e => /\.svg|svg\+xml/.test(e.src) && e.getBoundingClientRect().width === 60), "face is GD's SVG at the same 60 px size")
+ok(await until(() => A.$eval('.g-face', e => /art\/cards-a\/svg\/card-\w+\.svg$/.test(e.src) && e.complete && e.naturalWidth > 0 && e.getBoundingClientRect().width === 120 && getComputedStyle(e).imageRendering !== 'pixelated'), 4000), "face is GD's Direction A SVG at 120x168, smooth")
+const fits = p => p.evaluate(() => [...document.querySelectorAll('.g-card')].every(e => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth }))
+ok(await fits(A), 'Snap cards fit the 390 screen')
 await shot(A, '04-snap-cards'); await shot(B, '04-snap-cards')
 for (const [pg, w] of [[A, 390], [B, 1440]]) {
   const r = await pg.evaluate(() => { const b = document.querySelector('.g-face')?.getBoundingClientRect(); return b && { x: b.x - 4, y: b.y - 4, width: b.width + 8, height: b.height + 8 } })
@@ -148,6 +150,9 @@ if (await until(() => A.$('[data-t=g-start-blackjack]'), 8000)) { await tap(A, '
   await shot(A, '05-bj-coins'); await shot(B, '05-bj-coins')
   await tap(A, '[data-t=bj-ante-5]'); await press(A, '[data-t=bj-deal]'); await sleep(1200)
   ok((await A.$$('[data-t=bj-house] .g-card')).length === 2, 'House shows 2 cards')
+  ok(await A.$eval('[data-t=bj-house] .g-back', e => getComputedStyle(e).imageRendering === 'pixelated' && /back-/.test(e.currentSrc)), 'hole card is the pixel back')
+  for (let i = 0; i < 3 && await A.$('[data-t=bj-hit]:not([disabled])'); i++) { await press(A, '[data-t=bj-hit]'); await sleep(600) }
+  ok(await fits(A), 'blackjack cards fit the 390 screen (' + (await A.$$('.g-card')).length + ' cards)')
   await shot(A, '06-bj-cards'); await shot(B, '06-bj-cards') }
 else ok(false, 'blackjack offered')
 void sa

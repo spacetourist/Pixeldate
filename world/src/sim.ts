@@ -1,6 +1,8 @@
 /* One café instance, as a pure class: no Cloudflare APIs, so it runs (and is benchmarked) in plain Node too.
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
-import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, type Table } from '../shared/map.ts'
+import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, useMap, mapOf, seatsOf, type Table, type MapId } from '../shared/map.ts'
+import { GAMES, cryptoRnd, type GameId } from '../shared/games/index.ts'
+import { Snap, type SnapS } from '../shared/games/snap.ts'
 import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
 import { DUET, DUETS, PICK_MS, OFFER_MS, INVITE_MS, FLIP_MS, DUET_LEAD_MS, BASS_SEAT, MELODY_SEAT, MATCH_HOLD_MS, MAYBE_MS, LEVELUP_MS, MISS_HOLD_MS, type Part, type DuetPhase } from '../shared/duet.ts'
 import { EMOTE_COOLDOWN_MS, isEmote, nextTake, setOf } from '../shared/emote.ts'
@@ -22,7 +24,8 @@ export interface Store { load(uid: string): Promise<Rec>; add(uid: string, f: Fi
 export interface Report { at: number; inst: string; by: string; who: string; why: string; ctx: { said: { at: number; text: string }[]; heard: { at: number; text: string }[]; where: [number, number][]; tick: number } }
 /** v05: what a pair keeps across the whole app (one Pair Durable Object per pair in production, shared by every room
     and instance): their level, how many cards into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
-export interface PairRec { lv: number; seg?: number; date: string[]; duetUp?: string }
+export interface PairRec { lv: number; seg?: number; date: string[]; duetUp?: string
+  /** the day (ISO date) a finished Games Room game last moved this pair's meter: once per pair per day */ gameUp?: string }
 /** Where pair records live. load() is async (a Durable Object call); save() is fire-and-forget. */
 export interface PairStore { load(key: string): Promise<PairRec | undefined>; save(key: string, r: PairRec): void }
 /** In-memory pair store: one per process is shared by every room (tests, the Node dev server). */
@@ -42,6 +45,9 @@ export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => numb
   /** the app-wide pair store (default: an in-memory one for this room only) */
   pairs?: PairStore }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
+/** a table's game: its state (shared/games), who's away (uid → since), who stood up (uid → since), each player's seat */
+interface GameRun { id: GameId; tb: number; s: SnapS; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; sent: number; fam: boolean; famLv?: number }
+const RECONNECT_MS = 20_000, LEAVE_MS = 2500
 const R_SPACE = 0.75, BOX = 0.28, INPUT_PER_S = 20
 
 class Player {
@@ -64,7 +70,7 @@ class Player {
   pub(): Pub { return { id: this.id, name: this.name, br: this.br, pav: this.pav } }
 }
 interface Pair { tb: number; key: string; a: Player; b: Player; level: number; seg: number; up: boolean; used: Set<string>; q: Question | null
-  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null; duetUp?: string
+  ans: Map<Player, string>; rev: boolean; n: number; date: Set<Player>; call: Player | null; duetUp?: string; gameUp?: string
   /** a call the two started in the café (after both tapped): who reports it connected, and each one's
       "Show our heart in the café" switch (on at the start of every call) */
   live: { up: Set<Player>; sw: Map<Player, boolean> } | null
@@ -105,12 +111,15 @@ export class Room {
   /** tables showing the couple heart right now (GD couple/README: only on/off per table is ever broadcast) */
   hearts = new Set<number>()
   name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
-  constructor(name: string, store: Store, opts: RoomOpts) { this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
+  /** which map this instance is (games-N: the Games Room); every entry point switches the shared grid to it first */
+  mapId: MapId; games = new Map<number, GameRun>()
+  constructor(name: string, store: Store, opts: RoomOpts) { this.mapId = mapOf(name); this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
   get size() { return this.players.size }
   nextName() { const m = /^(.*?)-?(\d+)$/.exec(this.name); return this.opts.next ?? (m ? `${m[1]}-${+m[2] + 1}` : `${this.name}-2`) }
 
   connect(s: Sock) { this.pending.add(s) }
   async message(s: Sock, raw: string | ArrayBuffer) {
+    useMap(this.mapId)
     // a photo for the table partner is the one message allowed to be big (a pixelated PNG, or the level-5 512 px JPEG)
     if (typeof raw !== 'string' || raw.length > (raw.startsWith('{"t":"photo"') ? PHOTO_MAX + 64 : 1200)) return
     let m: any; try { m = JSON.parse(raw) } catch { return }
@@ -149,11 +158,15 @@ export class Room {
       case 'dinv': return this.duetInvite(p, m.id)
       case 'dinvx': { const d = this.duet; if (d?.inv?.from === p) this.duetInviteEnd('cancel'); return }
       case 'dinvans': return this.duetInviteAns(p, m.yes === true)
+      case 'gstart': return this.gameStart(p, m.g)
+      case 'gact': return this.gameAct(p, m.a)
+      case 'gquit': return this.gameQuit(p)
     }
   }
   /** the duet bench (null: nobody on a duet seat) */
   duet: DuetS | null = null
   close(s: Sock) {
+    useMap(this.mapId)
     this.pending.delete(s); const p = this.players.get(s); if (!p) return
     this.players.delete(s); this.byId.delete(p.id)
     for (const o of this.players.values()) if (!this.hidden(o, p)) o.sock.send(JSON.stringify({ t: 'del', id: p.id }))
@@ -177,12 +190,14 @@ export class Room {
     this.joining++
     let rec: Rec; try { rec = await this.store.load(p.uid) } catch { rec = emptyRec() } finally { this.joining-- }
     if (!this.pending.has(s)) return // went away while loading
+    useMap(this.mapId)   // another room may have run while we awaited
     this.pending.delete(s)
-    const me = new Player(this.nextId++, p.uid, cleanName(p.name), p, s, rec, this.spawn())
+    const back = this.gameSeat(p.uid)
+    const me = new Player(this.nextId++, p.uid, cleanName(p.name), p, s, rec, back ?? this.spawn())
     if (this.nextId > 65000) this.nextId = 1
     me.seen = this.now(); this.players.set(s, me); this.byId.set(me.id, me)
     // 'add' below goes to you for EVERYONE in the room, yourself included: the client's count is its list's size
-    s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)), now: this.now(), sofas: true }))
+    s.send(JSON.stringify({ t: 'hi', me: me.id, inst: this.name, n: this.players.size, ka: Math.max(250, Math.floor(this.stale / 3)), now: this.now(), ...(this.mapId === 'games' ? { room: 'games', games: Object.values(GAMES).map(g => ({ id: g.id, title: g.title, min: g.min, max: g.max, ready: g.ready })) } : { sofas: true }) }))
     for (const o of this.players.values()) {
       if (this.hidden(me, o)) continue
       s.send(JSON.stringify({ t: 'add', p: o.pub() }))
@@ -191,6 +206,8 @@ export class Room {
     s.send(JSON.stringify(this.pianoView(me)))   // a late joiner hears the song from where it is now
     if (this.duet) s.send(JSON.stringify(this.duetView(me)))
     for (const tb of this.hearts) { const pr = this.pairs.get(tb); if (pr && !this.hidden(me, pr.a) && !this.hidden(me, pr.b)) s.send(JSON.stringify({ t: 'couple', tb, on: true })) }
+    // a reconnect mid-game: back in your seat, the game picks you up again
+    for (const g of this.games.values()) if (g.away.has(me.uid)) { g.away.delete(me.uid); const sp = g.s.ps.find(x => x.uid === me.uid); if (sp) sp.away = false; g.s.seq++; this.gameSend(g) }
   }
   private spawn(): P {
     for (const sp of SPAWNS) if (![...this.players.values()].some(o => Math.hypot(o.x - sp[0] - .5, o.y - sp[1] - .5) < 1)) return sp
@@ -262,6 +279,7 @@ export class Room {
     for (const [s, p] of [...this.players]) if (t - p.seen > this.stale) { try { s.close(4004, 'stale') } catch {} this.close(s) }
   }
   tick() {
+    useMap(this.mapId)
     this.tickN = (this.tickN + 1) & 0xffff
     if (this.tickN % 5 === 0) this.prune()
     for (const p of this.players.values()) {
@@ -276,6 +294,7 @@ export class Room {
     this.tables()
     this.pianoTick()
     this.duetTick()
+    if (this.games.size) this.gamesTick()
     this.snapshots()
   }
   private tables() {
@@ -285,7 +304,8 @@ export class Room {
       const a = seated.get(t.seats[0].join(',')), b = seated.get(t.seats[1].join(',')), cur = this.pairs.get(t.id)
       // Not for me is for good: those two never get a table together again (the one who sat down second is stood up)
       if (a && b && this.refused(a, b)) { const late = a.sitAt >= b.sitAt ? a : b; this.standUp(late, t.seats[late === a ? 0 : 1]); late.sock.send(JSON.stringify({ t: 'note', k: 'table-no' })); continue }
-      const ok = !!(a && b && !this.hidden(a, b))
+      // a Games Room table with someone on an extra seat is a group, not a pair: no cards, chat goes to the table
+      const ok = !!(a && b && !this.hidden(a, b)) && !t.extra.some(e => seated.has(e.join(',')))
       if (cur && (!ok || cur.a !== a || cur.b !== b)) this.endPair(t.id)
       if (ok && a && b && !this.pairs.has(t.id)) {
         const key = pairKey(a, b)
@@ -325,7 +345,7 @@ export class Room {
       const lv = Math.min(LV_MAX, Math.max(1, Math.floor(rec.lv) || 1)), seg = Math.min(LV_SEG, Math.max(0, Math.floor(rec.seg ?? 0)))
       if (lv > pr.level || (lv === pr.level && seg > pr.seg)) { pr.level = lv; pr.seg = seg }
       for (const x of [pr.a, pr.b]) if (rec.date?.includes(x.uid)) pr.date.add(x)
-      pr.duetUp = rec.duetUp
+      pr.duetUp = rec.duetUp; pr.gameUp = rec.gameUp
     }
     pr.loaded = true
     if (!this.reconcile(pr) && pr.level !== lv0) this.redeal(pr)
@@ -363,7 +383,7 @@ export class Room {
   }
   private sendCard(pr: Pair) { for (const v of [pr.a, pr.b]) v.sock.send(JSON.stringify(this.view(pr, v))) }
   private persist(pr: Pair) {
-    this.ps.save(pr.key, { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid), ...(pr.duetUp ? { duetUp: pr.duetUp } : {}) })
+    this.ps.save(pr.key, { lv: pr.level, seg: pr.seg, date: [...pr.date].map(x => x.uid), ...(pr.duetUp ? { duetUp: pr.duetUp } : {}), ...(pr.gameUp ? { gameUp: pr.gameUp } : {}) })
   }
   pairOf(p: Player) { for (const pr of this.pairs.values()) if (pr.a === p || pr.b === p) return pr; return null }
   private answer(p: Player, text: unknown) {
@@ -674,6 +694,7 @@ export class Room {
   /** Sofas: a casual hangout. Tapping one walks you to the floor in front of it, then you take the free slot nearest to
       where you tapped; up to SOFA_CAP a sofa, a full sofa says so. Room chat stays public; no cards. */
   private sofaGo(p: Player, i: unknown) {
+    if (this.mapId !== 'cafe-landscape') return
     const sf = typeof i === 'number' ? SOFAS[i] : undefined; if (!sf) return
     if (p.sofa?.[0] === i) return
     const free = this.sofaFree(i as number); if (free < 0) { p.sock.send(JSON.stringify({ t: 'note', k: 'sofa-full' })); return }
@@ -721,6 +742,120 @@ export class Room {
     const msg = JSON.stringify({ t: 'emote', id: p.id, e, take })
     for (const v of this.players.values()) if (v === p || !this.hidden(v, p)) v.sock.send(msg)
   }
+  /* ---- Games Room (shared/games): the Room is the authority. A game belongs to a table; its players are the people
+     seated there when someone pressed Start. Only those players are ever sent its state (gameSend). ---- */
+  /** the table whose seat (any of its 2-4) p is sitting on */
+  private tableAt(p: Player): Table | null {
+    if (!p.sitting) return null
+    const x = Math.floor(p.x), y = Math.floor(p.y)
+    return TABLES.find(t => seatsOf(t).some(([a, b]) => a === x && b === y)) ?? null
+  }
+  /** everyone sitting at p's table (Games Room only; the café's tables are pairs) */
+  private tableGroup(p: Player): Player[] | null {
+    if (this.mapId !== 'games') return null
+    const t = this.tableAt(p); if (!t) return null
+    return [...this.players.values()].filter(o => this.tableAt(o) === t)
+  }
+  private gameOf(p: Player) { for (const g of this.games.values()) if (g.s.ps.some(x => x.uid === p.uid)) return g; return null }
+  /** a reconnecting player's seat, while their game is waiting for them */
+  private gameSeat(uid: string): P | null {
+    for (const g of this.games.values()) if (g.away.has(uid)) {
+      const seat = g.seat.get(uid)!
+      if (![...this.players.values()].some(o => Math.floor(o.x) === seat[0] && Math.floor(o.y) === seat[1])) return seat
+    }
+    return null
+  }
+  private gameStart(p: Player, id: unknown) {
+    const info = typeof id === 'string' ? GAMES[id as GameId] : undefined
+    const err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
+    if (this.mapId !== 'games' || !info) return err('bad')
+    if (!info.ready) return err('soon')
+    const t = this.tableAt(p); if (!t) return err('sit')
+    if (this.games.has(t.id) && this.games.get(t.id)!.s.winner === null) return err('running')
+    const grp = (this.tableGroup(p) ?? []).filter(o => !this.gameOf(o) || this.gameOf(o)!.s.winner !== null)
+    if (grp.some(a => grp.some(b => this.hidden(a, b)))) return err('bad')
+    if (grp.length < info.min) return err('few')
+    if (grp.length > info.max) return err('many')
+    const now = this.now(), c = { now, rnd: cryptoRnd }
+    const g: GameRun = { id: info.id, tb: t.id, s: Snap.start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), sent: 0, fam: false }
+    for (const o of grp) g.seat.set(o.uid, [Math.floor(o.x), Math.floor(o.y)])
+    this.games.set(t.id, g); this.gameSend(g)
+  }
+  private gameAct(p: Player, a: unknown) {
+    const g = this.gameOf(p); if (!g || typeof a !== 'string' || a.length > 12) return
+    const why = Snap.act(g.s, p.uid, { a }, { now: this.now(), rnd: cryptoRnd })
+    if (why && why !== 'false-snap') p.sock.send(JSON.stringify({ t: 'gerr', why }))
+    this.gameCheck(g)
+  }
+  private gameQuit(p: Player) {
+    const g = this.gameOf(p); if (!g) return
+    if (g.s.winner !== null) { g.s.ps = g.s.ps.filter(x => x.uid !== p.uid); p.sock.send(JSON.stringify({ t: 'game', on: false })); if (!g.s.ps.length) this.games.delete(g.tb); return }
+    Snap.leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd }); this.gameCheck(g)
+  }
+  /** every tick: the turn clock, and who's still here. Gone (socket closed) = RECONNECT_MS to come back; stood up from
+      the table for LEAVE_MS = left the game. A finished game stays on the table (the result) until its players leave. */
+  private gamesTick() {
+    const now = this.now(), c = { now, rnd: cryptoRnd }
+    for (const g of [...this.games.values()]) {
+      if (g.s.winner !== null) {
+        // the result stays until everyone has stood up or gone
+        g.s.ps = g.s.ps.filter(x => { const o = this.byUid(x.uid); return !!o && this.tableAt(o)?.id === g.tb })
+        if (!g.s.ps.length) this.games.delete(g.tb)
+        continue
+      }
+      for (const sp of g.s.ps) {
+        if (sp.out) continue
+        const o = this.byUid(sp.uid)
+        if (!o) { if (!g.away.has(sp.uid)) { g.away.set(sp.uid, now); sp.away = true; g.s.seq++ } else if (now - g.away.get(sp.uid)! > RECONNECT_MS) { g.away.delete(sp.uid); Snap.leave(g.s, sp.uid, c) } continue }
+        if (this.tableAt(o)?.id === g.tb) { g.off.delete(sp.uid); continue }
+        if (!o.moving && !o.path.length && Math.floor(o.x) === g.seat.get(sp.uid)![0] && Math.floor(o.y) === g.seat.get(sp.uid)![1]) continue   // settling back in
+        if (!g.off.has(sp.uid)) g.off.set(sp.uid, now)
+        else if (now - g.off.get(sp.uid)! > LEAVE_MS) { g.off.delete(sp.uid); Snap.leave(g.s, sp.uid, c) }
+      }
+      Snap.tick(g.s, c)
+      this.gameCheck(g)
+    }
+  }
+  private byUid(uid: string) { for (const p of this.players.values()) if (p.uid === uid) return p; return null }
+  /** send on change; at the end, the pair's familiarity */
+  private gameCheck(g: GameRun) {
+    if (g.s.seq !== g.sent) this.gameSend(g)
+    if (g.s.winner !== null && !g.fam) { g.fam = true; void this.gameFamiliarity(g) }
+  }
+  private gameSend(g: GameRun) {
+    g.sent = g.s.seq
+    const now = this.now(), ids = new Map<string, number>()
+    for (const sp of g.s.ps) { const o = this.byUid(sp.uid); ids.set(sp.uid, o?.id ?? 0) }
+    for (const sp of g.s.ps) {
+      const o = this.byUid(sp.uid); if (!o) continue
+      const v = Snap.view(g.s, sp.uid, { now, rnd: cryptoRnd })
+      // uids never go on the wire: players are by their café id
+      o.sock.send(JSON.stringify({ t: 'game', on: true, tb: g.tb, now, ...v, turn: ids.get(v.turn) ?? 0, winner: v.winner === null ? null : (ids.get(v.winner) ?? 0),
+        last: { ...v.last, who: ids.get(v.last.who) ?? 0 }, ps: v.ps.map(x => ({ ...x, uid: undefined, id: ids.get(x.uid) ?? 0 })), fam: g.famLv }))
+    }
+  }
+  /** A finished game between exactly two (a pair at a table) moves their meter one segment, like a card both answered;
+      once per pair per day (gameUp, like duetUp). Not for people who refused or blocked each other. */
+  private async gameFamiliarity(g: GameRun) {
+    if (g.s.ps.length !== 2) return
+    const [a, b] = g.s.ps.map(x => this.byUid(x.uid))
+    if (!a || !b || this.hidden(a, b) || this.refused(a, b)) return
+    const today = new Date(this.now()).toISOString().slice(0, 10), key = pairKey(a, b)
+    const pr = this.pairs.get(g.tb)
+    if (pr && pr.key === key && pr.loaded) {
+      if (pr.gameUp === today) return
+      pr.gameUp = today
+      if (pr.level >= LV_MAX) pr.seg = Math.min(LV_SEG, pr.seg + 1)
+      else if (++pr.seg >= LV_SEG) { pr.level++; pr.seg = 0; pr.up = true }
+      this.persist(pr); this.sendCard(pr); g.famLv = pr.level; g.s.seq++; this.gameSend(g); return
+    }
+    const rec = (await this.ps.load(key).catch(() => undefined)) ?? { lv: 1, seg: 0, date: [] }
+    if (rec.gameUp === today) return
+    rec.gameUp = today; rec.lv = Math.min(LV_MAX, Math.max(1, rec.lv || 1)); rec.seg = rec.seg ?? 0
+    if (rec.lv >= LV_MAX) rec.seg = Math.min(LV_SEG, rec.seg + 1)
+    else if (++rec.seg >= LV_SEG) { rec.lv++; rec.seg = 0 }
+    this.ps.save(key, rec); g.famLv = rec.lv; g.s.seq++; this.gameSend(g)
+  }
   private say(p: Player, text: unknown) {
     const t = this.now(); p.says = p.says.filter(s => s > t - SAY_WINDOW_MS)
     const raw = typeof text === 'string' ? text.slice(0, 200) : ''
@@ -730,6 +865,16 @@ export class Room {
     const pr = this.pairOf(p)
     // what you said at a table is tagged with who heard it: it only goes into a report that person makes
     p.says.push(t); p.recent.push({ at: t, text: v.text, ...(pr ? { to: other(pr, p).uid } : {}) }); if (p.recent.length > 8) p.recent.shift()
+    const grp = !pr ? this.tableGroup(p) : null
+    if (grp && grp.length > 1) {
+      // a Games Room table of 3-4 (or 2 who aren't a pair): the table hears it, everyone else gets the "…"
+      p.sock.send(JSON.stringify({ t: 'said', ok: true, text: v.text, priv: 1 }))
+      const msg = JSON.stringify({ t: 'say', id: p.id, text: v.text, priv: 1 })
+      for (const o of grp) if (o !== p && !this.hidden(p, o)) { o.sock.send(msg); o.heard.push({ at: t, text: v.text }); if (o.heard.length > 8) o.heard.shift() }
+      const mm = JSON.stringify({ t: 'murmur', tb: grp[0].table?.id ?? this.tableAt(p)!.id })
+      for (const x of this.players.values()) if (!grp.includes(x) && !grp.some(g => this.hidden(g, x))) x.sock.send(mm)
+      return
+    }
     if (pr) {
       // at a table, speech is for the two of them: the text goes to the partner only; everyone else gets a "…" over the table
       const o = other(pr, p)

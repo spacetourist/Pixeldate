@@ -5,7 +5,7 @@
            s chair seat (sit here) · P plant · L standing lamp · S sofa / candle side table · K piano + bench
            p the piano bench seats: the solo seat in the middle, the duet's Bass (left) and Melody (right) either side
              (shared/piano.ts, shared/duet.ts); never walked across, only sat on
-           D doormat (spawn) · . floor
+           g a Games Room table's extra seat (up to four at a table) · D doormat / door · . floor
    All blocked: # C T c P L S K. Rugs are art only (walkable). */
 export const TILE = 16
 export type Light = { kind: 'table' | 'pendant' | 'floor'; x: number; y: number }
@@ -51,23 +51,77 @@ export const MAPS: Record<string, MapDef> = {
       { kind: 'table', x: 34 * T + 8, y: 6 * T + 14 },
     ],
   },
+  /** 40x24 Games Room (placeholder art until GD's lands: src/world/art/games-map.png, same grid). Tables are for up to four:
+      the 2x2 table with the pair's two seats either side of its lower row (s, the café's table for two) and two more on
+      its upper row (g). D: the door back to the café. */
+  games: {
+    art: 'games-map.png',
+    rows: [
+    '########################################',
+    '########################################',
+    '########################################',
+    '#P..................DD................P#',
+    '#......................................#',
+    '#......................................#',
+    '#...gTTg.....gTTg.....gTTg.....gTTg....#',
+    '#...sTTs.....sTTs.....sTTs.....sTTs....#',
+    '#......................................#',
+    '#......................................#',
+    '#......................................#',
+    '#P.....................................#',
+    '#...gTTg.....gTTg.....gTTg.....gTTg....#',
+    '#...sTTs.....sTTs.....sTTs.....sTTs....#',
+    '#......................................#',
+    '#......................................#',
+    '#......................................#',
+    '#P....................................P#',
+    '#...gTTg.....gTTg.....gTTg.....gTTg....#',
+    '#...sTTs.....sTTs.....sTTs.....sTTs....#',
+    '#......................................#',
+    '#......................................#',
+    '#P....................................P#',
+    '########################################',
+    ],
+    spawns: [[20, 4], [21, 4], [19, 4], [22, 4], [20, 5], [21, 5], [19, 5], [22, 5], [18, 4], [23, 4]],
+    lights: [],
+  },
 }
-/** The map choice: ONE config value. */
-export const MAP_ID = 'cafe-landscape'
-export const MAP = MAPS[MAP_ID]
-export const ROWS = MAP.rows
-export const W = ROWS[0].length, H = ROWS.length
-for (const r of ROWS) if (r.length !== W) throw new Error('map row width')
-export const at = (x: number, y: number) => (x < 0 || y < 0 || x >= W || y >= H) ? '#' : ROWS[y][x]
+/** Which map a room instance uses: games-N is the Games Room, everything else the café. */
+export type MapId = 'cafe-landscape' | 'games'
+export const mapOf = (room: string): MapId => room.startsWith('games-') ? 'games' : 'cafe-landscape'
+/** The door tile(s): the café's doormat leads to the Games Room, the Games Room's door back to the café. */
+export const isDoor = (x: number, y: number) => at(x, y) === 'D'
+export const MAP_ID: MapId = 'cafe-landscape'
+export interface Table { id: number; x: number; y: number; seats: [[number, number], [number, number]]
+  /** Games Room tables: the two extra seats on the upper row (2-4 players) */ extra: [number, number][] }
 const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K'])
+/* The current map. Every Room (server) and the client switch with useMap() before touching the grid; the exports are
+   live bindings, so importers always see the current one. JS is single-threaded and a Room calls useMap() at the top
+   of each entry point, so two rooms in one isolate never see each other's map. All maps are the same size. */
+export let MAP: MapDef, ROWS: string[], W = 40, H = 24, TABLES: Table[] = [], SPAWNS: [number, number][] = [], CUR: MapId = MAP_ID
+const built = new Map<MapId, { tables: Table[] }>()
+export function useMap(id: MapId) {
+  if (id === CUR && ROWS) return
+  const m = MAPS[id]; MAP = m; ROWS = m.rows; CUR = id; SPAWNS = m.spawns
+  if (ROWS[0].length !== W || ROWS.length !== H) throw new Error('map size')
+  for (const r of ROWS) if (r.length !== W) throw new Error('map row width')
+  let b = built.get(id)
+  if (!b) { const tables: Table[] = []
+    /** Every table: a 2x2 table with a seat either side on its lower row, exactly where GD drew the chairs (+ g seats above). */
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+      if (ROWS[y][x] === 's' && ROWS[y][x + 1] === 'T' && ROWS[y][x + 2] === 'T' && ROWS[y][x + 3] === 's') {
+        const extra: [number, number][] = y > 0 && ROWS[y - 1][x] === 'g' && ROWS[y - 1][x + 3] === 'g' ? [[x, y - 1], [x + 3, y - 1]] : []
+        tables.push({ id: tables.length, x: x + 1, y, seats: [[x, y], [x + 3, y]], extra }) }
+    b = { tables }; built.set(id, b) }
+  TABLES = b.tables
+}
+for (const id of Object.keys(MAPS) as MapId[]) useMap(id)   // checks every map's size once
+useMap(MAP_ID)
+export const at = (x: number, y: number) => (x < 0 || y < 0 || x >= W || y >= H) ? '#' : ROWS[y][x]
 /** Can a foot stand on tile (x, y)? The doormat counts, so people can walk in. */
 export const walkable = (x: number, y: number) => !BLOCK.has(at(x, y))
-export const isSeat = (x: number, y: number) => at(x, y) === 's'
+/** a chair: the café's s, or a Games Room table's extra g */
+export const isSeat = (x: number, y: number) => { const c = at(x, y); return c === 's' || c === 'g' }
 export const isPianoSeat = (x: number, y: number) => at(x, y) === 'p'
-export interface Table { id: number; x: number; y: number; seats: [[number, number], [number, number]] }
-/** Every table for two: a 2x2 table with a seat either side on its lower row, exactly where GD drew the chairs. */
-export const TABLES: Table[] = []
-for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
-  if (at(x, y) === 's' && at(x + 1, y) === 'T' && at(x + 2, y) === 'T' && at(x + 3, y) === 's')
-    TABLES.push({ id: TABLES.length, x: x + 1, y, seats: [[x, y], [x + 3, y]] })
-export const SPAWNS = MAP.spawns
+/** every seat of table t (the pair's two first) */
+export const seatsOf = (t: Table): [number, number][] => [...t.seats, ...t.extra]

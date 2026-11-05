@@ -49,7 +49,7 @@ const http = createServer(async (req, res) => {
 })
 const wss = new WebSocketServer({ server: http, maxPayload: 262144 })
 wss.on('connection', async (ws, req) => {
-  const path = new URL(req.url ?? '/', 'http://x').pathname, m = /^\/parties\/area\/(cafe-\d{1,3})$/.exec(path)
+  const path = new URL(req.url ?? '/', 'http://x').pathname, m = /^\/parties\/area\/((?:cafe|games)-\d{1,3})$/.exec(path)
   if (!m) { ws.close(4004, 'no such room'); return }
   const day = await budget.join(1)
   if (day.busy) { ws.send(JSON.stringify({ t: 'no', why: 'busy' })); ws.close(4003, 'busy'); return }

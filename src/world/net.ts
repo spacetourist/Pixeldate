@@ -10,9 +10,10 @@ export class WorldNet {
   url: string; invite: string; p: JoinP
   onmsg: (m: ServerMsg) => void = () => {}
   constructor(url: string, invite: string, p: JoinP) { this.url = url; this.invite = invite; this.p = p }
-  open(room = 'cafe-1') {
+  tk = ''
+  open(room = 'cafe-1', tk = '') { this.tk = tk
     const ws = this.ws = new WebSocket(`${this.url}/parties/area/${room}`); ws.binaryType = 'arraybuffer'
-    ws.onopen = () => this.send({ t: 'join', invite: this.invite, p: this.p })
+    ws.onopen = () => this.send({ t: 'join', invite: this.invite, p: this.p, ...(this.tk ? { tk: this.tk } : {}) } as any)
     ws.onclose = e => { if (this.ws !== ws) return; clearInterval(this.ka); this.onmsg({ t: 'no', why: e.code === 4002 ? 'replaced' : 'closed' } as any) }
     ws.onmessage = e => {
       if (typeof e.data !== 'string') { this.bytes += e.data.byteLength; const s = decodeSnap(e.data); if (s) this.snap(s.tick, s.ents); return }

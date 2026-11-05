@@ -62,7 +62,7 @@ export type DuetView = { t: 'duet'; on: false } | {
   inv?: { to: number; exp: number }
 }
 export type ClientMsg =
-  | { t: 'join'; invite: string; p: { name: string; br: [number, number]; min: number; max: number; iam: string; seek: string; uid: string; pav?: string; adult?: boolean } }
+  | { t: 'join'; invite: string; p: { name: string; br: [number, number]; min: number; max: number; iam: string; seek: string; uid: string; pav?: string; adult?: boolean }; tk?: string }
   | { t: 'go'; x: number; y: number } | { t: 'dir'; dx: number; dy: number }
   | { t: 'say'; text: string }
   | { t: 'heart' | 'pass' | 'block'; id: number } | { t: 'report'; id: number; why: string }

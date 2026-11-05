@@ -29,6 +29,7 @@ import { Renderer, MW, MH, type Layout } from './render.ts'
 import heartPng from './art/markers/heart.png'
 import coupleHeart3x from './art/couple/couple-heart@3x.png'
 import { CafeCall, turnUrl, type CallEnd } from './call.ts'
+import * as RA from './room-audio.ts'
 import './world.css'
 const Char = lazy(() => import('../avatar/kit/Char'))
 /** the Games Lounge's panel: its own chunk, fetched only in the lounge */
@@ -74,6 +75,10 @@ const CALLEND: Record<CallEnd | 'server', string> = { hangup: 'Call ended.', rem
 const pendingHearts = new Set<number>()
 const DUET_OFF = { on: false, bass: 0, melody: 0, ph: '', song: null, at: 0, gone: [] }
 /** PLACEHOLDER glyphs for the emote effect over the emoter (GD's art to come) */
+/** "Play a game?" (café → Games Lounge together): why an invite didn't go, and how it ended for the one who asked */
+const GINV_WHY: Record<string, string> = { here: "You're already in the Games Lounge.", gone: "They've left the café.", dup: "You've already asked them. Waiting for an answer.",
+  slow: 'Too many invites. Wait a moment.', busy: "They're answering another invite." }
+const GINV_END: Record<string, (n: string) => string> = { no: n => `${n} said not now.`, late: n => `No answer from ${n}.`, gone: n => `${n} left the café.`, cancel: n => `Invite to ${n} cancelled.` }
 const layoutOf = (): Layout => innerWidth >= 900 && innerWidth > innerHeight ? 'desk' : 'phone'
 
 function World() {
@@ -99,8 +104,8 @@ function World() {
   const claimed = useRef('')
   const [note, setNote] = useState(''); const [text, setText] = useState('')
   // desktop chat log: recent bubbles that went out (the server only relays text that passed the filter; held lines stay out)
-  const [log, setLog] = useState<{ k: number; name: string; text: string; mine: boolean }[]>([]), logEl = useRef<HTMLOListElement>(null), logK = useRef(0)
-  const addLog = (name: string, text: string, mine: boolean) => setLog(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, name, text, mine }])
+  const [log, setLog] = useState<{ k: number; name: string; text: string; mine: boolean; id?: number }[]>([]), logEl = useRef<HTMLOListElement>(null), logK = useRef(0)
+  const addLog = (name: string, text: string, mine: boolean, id?: number) => setLog(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, name, text, mine, id }])
   const net = useRef<WorldNet | null>(null), ren = useRef<Renderer | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), over = useRef<HTMLDivElement>(null), input = useRef<HTMLInputElement>(null)
   const standRef = useRef<(() => void) | null>(null)
@@ -122,20 +127,33 @@ function World() {
   const [invOpen, setInvOpen] = useState(false), [dlist, setDlist] = useState<{ id: number; sat: boolean }[] | null>(null)
   const [dinv, setDinv] = useState<{ from: number; song: string; until: number } | null>(null), stingT = useRef(0)
 
+  /** "Play a game?": the invite I sent (to, until), one sent to me (from, until), the door fade, a door/teleport arrival */
+  const [ginvOut, setGinvOut] = useState<{ to: number; until: number } | null>(null), [ginvIn, setGinvIn] = useState<{ from: number; until: number } | null>(null)
+  const [fade, setFade] = useState(false), arrive = useRef<'' | 'door' | 'tele'>(''), keepPriv = useRef(false), doorArm = useRef(false)
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
-  const enter = (to = roomRef.current) => {
+  const enter = (to = roomRef.current, tk = '') => {
     if (!prof || !invite.trim() || !adult) return
     roomRef.current = to; useMap(mapOf(to))
     localStorage.setItem('pd.invite', invite.trim()); if (!prof.adult) void saveProfile({ ...prof, adult: true })
-    const n = new WorldNet(serverUrl(), invite.trim(), joinP(prof)); net.current = n; setPhase('joining')
+    const n = new WorldNet(serverUrl(), invite.trim(), joinP(prof)); net.current = n; if (!arrive.current) setPhase('joining')
     const A = pa.current ??= new PianoAudio(o => net.current?.send(o as any))
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
       if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
       if (m.t === 'game') { const nx = m.on ? m : null; if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
-      if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
+      if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync()
+        // through the archway: keep walking a tile into the room; the fade lifts (a teleport is seated by the server)
+        if (arrive.current === 'door') { const dc = doorCol(); n.send({ t: 'go', x: dc, y: 5 } as any); target.current = [dc, 5] }
+        arrive.current = ''; doorArm.current = false; setTimeout(() => setFade(false), 30) }
+      else if (m.t === 'ginv') { if (m.ok) setGinvOut({ to: m.to, until: performance.now() + m.ms }); else flash(GINV_WHY[m.why] ?? 'Invite not sent.') }
+      else if (m.t === 'ginvite') { if (m.from) { setGinvIn({ from: m.from, until: performance.now() + m.ms }); RA.chime() }
+        else setGinvIn(g => { if (g && m.why === 'cancel') flash(`${n.pubs.get(g.from)?.name ?? 'They'} cancelled the invite.`); if (g && m.why === 'gone') flash(`${n.pubs.get(g.from)?.name ?? 'They'} left the café.`); if (!g && m.why === 'gone') flash('That invite has ended.'); return null }) }
+      else if (m.t === 'ginvend') { setGinvOut(null); const f = GINV_END[m.why]; if (f) flash(f(n.pubs.get(m.id)?.name ?? 'They')) }
+      else if (m.t === 'gtele') { setGinvOut(null); setGinvIn(null); RA.swoosh(); goRoom(m.room, m.tk) }
+      else if (m.t === 'gfull') flash('Lounge is full')
+      else if (m.t === 'gseat') { /* seated opposite each other; the games panel opens with the table */ }
       else if (m.t === 'tm') A.onTm(m)
       else if (m.t === 'piano') { if (m.now) A.hint(m.now); A.set(m); setPianoS({ by: m.by, song: m.song, at: m.at }) }
       else if (m.t === 'duet') { if (m.now) A.hint(m.now); A.setDuet(m); const v = m.on ? m as DuetOn : null; duetRef.current = v; setDuetV(v)
@@ -157,7 +175,7 @@ function World() {
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
       else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
       else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS })
-        if (m.priv) addPriv(m.text, false); else addLog(n.pubs.get(m.id)?.name ?? 'Someone', m.text, false) }
+        if (m.priv) addPriv(m.text, false); else addLog(n.pubs.get(m.id)?.name ?? 'Someone', m.text, false, m.id) }
       else if (m.t === 'murmur') murmurs.current.set(m.tb, performance.now() + MURMUR_MS)
       else if (m.t === 'said') {
         if (m.ok) { bubbles.current.set(n.me, { text: m.text, until: performance.now() + BUBBLE_MS, mine: true }); if (m.priv) addPriv(m.text, true); else addLog(prof?.name ?? 'You', m.text, true) }
@@ -166,7 +184,8 @@ function World() {
       }
       else if (m.t === 'card') {
         const c = m.q && m.with ? m as Tbl : null
-        if (!c || c.with !== withRef.current) { setPriv([]); setPhoto(null); setAns(''); setAnsErr('') }   // a new partner (or none): start clean
+        if (keepPriv.current && c) keepPriv.current = false   // teleported together: "Just you two" carries on
+        else if (!c || c.with !== withRef.current) { setPriv([]); setPhoto(null); setAns(''); setAnsErr('') }   // a new partner (or none): start clean
         withRef.current = c?.with ?? 0; setCard(c); if (c?.mine) { setAns(''); setAnsErr('') }
         // the pair's level is app-wide (src/pairlv.ts): tell the server what this phone remembers for them, once a sitting;
         // once it has reconciled (rc), remember what the server says, so the app chat picks up at the same level
@@ -197,15 +216,19 @@ function World() {
         if (m.what === 'report') { setMenu(''); flash('Thanks. Report sent to the Pixeldate team.') } if (m.what === 'heart') flash('Heart sent. If it is mutual you will both know.') }
       else if (m.t === 'mutual') flash(`It's mutual with ${n.pubs.get(m.id)?.name ?? 'them'}!`)
     }
-    n.open(to)
+    n.open(to, tk)
   }
+  const doorCol = () => { for (let x = 0; x < 64; x++) if (isDoor(x, 3)) return x; return 0 }
   /** the door: leave this room and walk into the other (café ↔ Games Lounge) */
-  const goRoom = (to: string) => {
-    const n = net.current; if (!n || roomRef.current === to) return
+  const goRoom = (to: string, tk = '') => {
+    const n = net.current; if (!n || roomRef.current === to || !prof) return
+    // seamless: no gate, no reload; a quick fade while the other room's socket opens. A "Play a game?" teleport keeps
+    // the chat (room log and "Just you two") so the conversation carries on at the lounge table
+    arrive.current = tk ? 'tele' : 'door'; setFade(true); keepPriv.current = !!tk; setGinvOut(null); setGinvIn(null)
     callRef.current?.end('hangup'); n.close(); net.current = null
     const A = pa.current; if (A) { A.set({ t: 'piano', by: 0, song: null, at: 0, now: 0 } as any); A.setDuet({ t: 'duet', on: false } as any) }
-    setCard(null); setSel(null); setGame(null); setPriv([]); setWhere(''); setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false); setChips(null)
-    bubbles.current.clear(); murmurs.current.clear(); setRoom(to); enter(to)
+    setCard(null); setSel(null); setGame(null); if (!tk) setPriv([]); setWhere(''); target.current = null; setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false); setChips(null)
+    bubbles.current.clear(); murmurs.current.clear(); setRoom(to); enter(to, tk)
     { const u = new URL(location.href); if (to.startsWith('games')) u.searchParams.set('room', 'games'); else u.searchParams.delete('room'); history.replaceState(history.state, '', u) }   // a reload stays in this room
   }
   useEffect(() => { if (prof && invite && adult && qs.get('auto') === '1') enter() }, [])
@@ -229,7 +252,10 @@ function World() {
       if (me) { A.listen(n.lerpX(me, now), n.lerpY(me, now)); const sat = (me.f & F_SIT) !== 0, fx = Math.floor(me.x), fy = Math.floor(me.y)
         const w = sat && isPianoSeat(fx, fy) ? 'piano' : sat && at(fx, fy) === 'S' ? 'sofa' : ''
         if (w !== whereRef.current) { whereRef.current = w; setWhere(w) }
-        if (now - lastN > 500) { lastN = now; let c = 0; for (const e of n.ents.values()) if (e.id !== n.me && hears(e.x, e.y)) c++; setNear(c) } }
+        // the archway: stepping onto the door tiles walks you through (armed once you've been off them since arriving)
+        const onDoor = isDoor(fx, fy); if (!onDoor) doorArm.current = true
+        else if (doorArm.current && !arrive.current && !sat) { doorArm.current = false; goRoom(roomRef.current.startsWith('games-') ? 'cafe-1' : 'games-1') }
+        if (now - lastN > 500) { RA.bed(roomRef.current, Math.hypot(n.lerpX(me, now) - doorCol() - 1, n.lerpY(me, now) - 3)); lastN = now; let c = 0; for (const e of n.ents.values()) if (e.id !== n.me && hears(e.x, e.y)) c++; setNear(c) } }
       if (me && target.current && Math.floor(me.x) === target.current[0] && Math.floor(me.y) === target.current[1]) { target.current = null; r.path = [] }
       // GD's 9-slice bubble (world.css): the box is snapped to whole art px (u CSS px) so the slices stay crisp, and the
       // tail tip sits 2 art px above the head (r.tip), on the head's centre column unless the bubble is pushed in from an edge
@@ -298,7 +324,7 @@ function World() {
       css: (id: number) => { const e = n.ents.get(id); if (!e) return null; const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(e.x, e.y); return [b.left + x, b.top + y - 10 * r.k / r.dpr] },
       couple: () => ({ hearts: [...r.hearts], on: r.coupleOn, marks: r.markOn, call: callRef.current ? { up: callRef.current.up, host: callRef.current.host, lv: callRef.current.lv, muted: callRef.current.muted, camOff: callRef.current.camOff } : null }),
       emoteFx: () => Object.entries(r.emoteOn).map(([id, [e, f, dx, dy]]) => ({ id: +id, e, f, dx, dy })),
-      emoteCd: () => emoCdRef.current,
+      emoteCd: () => emoCdRef.current, sounds: () => RA.calls.slice(),
       emote: { played: () => pa.current!.played.slice(), requests: () => pa.current!.requests.slice(), master: () => (pa.current as any)?.master?.gain.value ?? null },
       piano: { pos: () => pa.current!.pos(), gain: () => pa.current!.gain, pan: () => pa.current!.pan, muted: () => pa.current!.muted, state: () => pa.current!.state,
         requests: () => [...pa.current!.requests], serverNow: () => pa.current!.serverNow(), offset: () => pa.current!.offset, unlocked: () => pa.current!.unlocked, notes: () => r.notesOn },
@@ -361,8 +387,9 @@ function World() {
     if (id) { const p = n.pubs.get(id); if (p) { setSel(p); setMenu(''); r.sel = id } return }
     if (sel) { setSel(null); setMenu(''); r.sel = 0 }
     const [tx, ty] = r.toTile(cx, cy); let t: [number, number] | null = [Math.floor(tx), Math.floor(ty)]
+    // the archway (or its lintel above the door tiles): walk to the doorway; stepping on it takes you through
+    if (t[1] < 3 && isDoor(t[0], 3)) t = [t[0], 3]
     // the Games Lounge door: back to the café
-    if (isDoor(t[0], t[1])) { goRoom(roomRef.current.startsWith('games-') ? 'cafe-1' : 'games-1'); return }
     // a sofa: walk to it and sit (the server picks a free spot, or says it's full)
     const si = sofaAt(t[0], t[1])
     if (si >= 0) { const f = SOFAS[si].front; n.send({ t: 'sofa', i: si } as any); const me = n.ents.get(n.me); r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], f) ?? [] : []; target.current = f; return }
@@ -409,12 +436,14 @@ function World() {
     </main>)
 
   selRef.current = sel
+  const ginv = (id: number) => { net.current?.send({ t: 'ginv', id } as any) }
   const selName = sel && <>{sel.name} <span className="w-br">{bracketLabel(sel.br)}</span></>
   const person = sel && (
     <section className="w-panel w-person" data-t="w-person" aria-label={`${sel.name}`}>
       <header>{sel.pav && <span className="w-pport"><Suspense fallback={null}><Char json={sel.pav} scale={2} label={`${sel.name}'s Pixel You`} t="w-portrait" /></Suspense></span>}<b data-t="w-person-name">{selName}</b><button className="w-x" aria-label="Close" onClick={close}>×</button></header>
       {menu === '' && <div className="w-acts">
         <button className="w-btn sm heart" data-t="w-heart" onClick={() => act('heart')}>♥ Heart</button>
+        {!room.startsWith('games-') && <button className="w-btn sm" data-t="w-ginv" onClick={() => ginv(sel.id)}>Play a game?</button>}
         <button className="w-btn sm ghost" data-t="w-pass" onClick={() => act('pass')}>Pass</button>
         <button className="w-btn sm ghost" data-t="w-report" onClick={() => setMenu('report')}>Report</button>
         <button className="w-btn sm danger" data-t="w-block" onClick={() => setMenu('block')}>Block</button></div>}
@@ -435,7 +464,7 @@ function World() {
   const callEl = call && card?.q ? <CallPanel call={call} name={tname} heartOn={heartOn} desk={layout === 'desk'}
     onHeart={v => { setHeartOn(v); net.current?.send({ t: 'cheart', on: v } as any) }} /> : null
   const cardEl = card && card.q && <TablePanel card={card} callEl={callEl} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
-    ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} say={bar} send={o => net.current?.send(o as any)} stand={stand} />
+    ans={ans} setAns={setAns} ansErr={ansErr} onAns={sendAns} priv={priv} privEl={privEl} say={bar} send={o => net.current?.send(o as any)} stand={stand} onGame={lounge ? undefined : () => ginv(card.with)} />
   const myPav = net.current?.p.pav
   const myPortrait = myPav ? <Suspense fallback={null}><Char json={myPav} scale={2} label="Your Pixel You" t="w-piano-av" /></Suspense> : null
   const nn = net.current, who: Who = { me: nn?.me ?? 0, name: id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone', pav: id => id === nn?.me ? nn?.p.pav : nn?.pubs.get(id)?.pav }
@@ -473,6 +502,10 @@ function World() {
         {duetPlaying && <NowPlaying piece={{ title: duetPlaying.title } as any} by="duet" muted={muted} onMute={() => { const v = !muted; setMuted(v); pa.current?.setMuted(v) }} />}
         {duet && duetPlaying && duet.ph === 'play' && !duet.me && !sel && pa.current && <DuetCard v={duet} who={who} A={pa.current} />}
         {invOpen && duet?.me === 'bass' && <InviteSheet people={dlist} who={who} song={duet.song} pending={!!duet.inv} onInvite={id => { dsend({ t: 'dinv', id }); setInvOpen(false) }} onClose={() => setInvOpen(false)} />}
+        {fade && <div className="w-fade" data-t="w-fade" aria-hidden="true" />}
+        {ginvIn && <GameInvite who={nn?.pubs.get(ginvIn.from)?.name ?? 'Someone'} until={ginvIn.until} onAns={yes => { dsend({ t: 'ginvans', yes }); if (!yes) setGinvIn(null) }} />}
+        {ginvOut && <section className="w-panel w-ginv-out" data-t="w-ginv-out" role="status"><span>Asked <b>{nn?.pubs.get(ginvOut.to)?.name ?? 'them'}</b> to play a game…</span>
+          <button className="w-link" data-t="w-ginv-cancel" onClick={() => { dsend({ t: 'ginvx' }); setGinvOut(null) }}>Cancel</button></section>}
         {dinv && pa.current && <InviteCard from={dinv.from} song={dinv.song} until={dinv.until} who={who} A={pa.current} send={dsend} />}</div>
       <aside className="w-side" data-t="w-side">
         {person}
@@ -487,7 +520,8 @@ function World() {
         {/* GD v05: at a table the "Just you two" chat (with the bar) replaces the room log */}
         {!seated && layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
           <h2 className="w-log-h">Chat</h2>
-          <ol ref={logEl} role="log" aria-live="polite">{log.length ? log.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined} data-mine={l.mine ? '1' : undefined}><b>{l.mine ? 'You' : l.name}</b> <span>{l.text}</span></li>)
+          <ol ref={logEl} role="log" aria-live="polite">{log.length ? log.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined} data-mine={l.mine ? '1' : undefined}><b>{l.mine ? 'You' : l.name}</b> <span>{l.text}</span>
+              {!l.mine && !lounge && l.id && nn?.pubs.has(l.id) && <button className="w-link w-ginv-l" data-t="w-ginv-log" data-id={l.id} onClick={() => ginv(l.id!)}>Play a game?</button>}</li>)
             : <li className="w-log-empty">What people say shows up here.</li>}</ol></section>}
         {!seated && bar}
         {!seated && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card · tap the piano to play</p>}
@@ -520,7 +554,7 @@ function Px({ i, n = 2, c = 'currentColor' }: { i: keyof typeof ICONS; n?: numbe
     {rows.flatMap((r, y) => [...r].map((ch, x) => ch === '#' ? <rect key={x + ',' + y} x={x} y={y} width={1} height={1} /> : null))}</svg>
 }
 /** GD v05 table-for-two sheet: who (photo + level meter), the question card, "Just you two" chat, Start call. */
-function TablePanel({ card, callEl, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, say, send, stand }: { card: Tbl; callEl?: React.ReactNode; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean
+function TablePanel({ card, callEl, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, say, send, stand, onGame }: { onGame?: () => void; card: Tbl; callEl?: React.ReactNode; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean
   ans: string; setAns: (s: string) => void; ansErr: string; onAns: (e: React.FormEvent) => void; priv: { k: number; mine: boolean; text: string }[]; privEl: React.RefObject<HTMLOListElement | null>
   say: React.ReactNode; send: Send; stand: () => void }) {
   const L = LEVELS[card.lv - 1], nextL = LEVELS[card.lv], vL = LEVELS[card.video - 1], q = card.q!, qL = LEVELS[(q.lv || card.lv) - 1]
@@ -568,7 +602,8 @@ function TablePanel({ card, callEl, name, pav, photo, desk, ans, setAns, ansErr,
             <button className="w-btn w-end" data-t="w-nfm-yes" onClick={() => { send({ t: 'nfm' }); setAsk('') }}>End it</button></div></section></>}
     </section>
     <section className="w-panel w-chat" data-t="w-priv">
-      <h3 data-t="w-priv-label"><Px i="lock" n={2} />Just you two<span className="w-sub">Others see “…”</span></h3>
+      <h3 data-t="w-priv-label"><Px i="lock" n={2} />Just you two<span className="w-sub">Others see “…”</span>
+        {onGame && <button className="w-link w-ginv-t" data-t="w-ginv-table" onClick={onGame}>Play a game?</button>}</h3>
       <ol ref={privEl} role="log" aria-live="polite">{priv.length ? priv.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.mine ? 'You' : name}</b> <span>{l.text}</span></li>)
         : <li className="w-log-empty">Only {name} sees what you say here.</li>}</ol>
       {say}
@@ -611,5 +646,14 @@ function CallPanel({ call, name, heartOn, onHeart, desk }: { call: CafeCall; nam
       <div><b>Show our heart in the café</b><span className="s">Everyone here sees a heart over your table during the call. Either of you can turn it off.</span></div>
       <button className={'w-sw' + (heartOn ? '' : ' off')} data-t="w-show-sw" role="switch" aria-checked={heartOn} aria-label="Show our heart in the café" onClick={() => onHeart(!heartOn)} />
     </section></>
+}
+/** the invitee's prompt: "<name> asks: Play a game?" with Accept / Decline and the seconds left (the server times it out) */
+function GameInvite({ who, until, onAns }: { who: string; until: number; onAns: (yes: boolean) => void }) {
+  const [, tick] = useState(0); useEffect(() => { const i = setInterval(() => tick(x => x + 1), 250); return () => clearInterval(i) }, [])
+  const s = Math.max(0, Math.ceil((until - performance.now()) / 1000))
+  return <section className="w-panel w-ginvite" data-t="w-ginvite" role="alertdialog" aria-label={`${who} asks: Play a game?`} onPointerDown={e => e.stopPropagation()}>
+    <p><b>{who}</b> asks: <b>Play a game?</b></p><p className="w-sub">You'll both go to a Games Lounge table · <span data-t="w-ginvite-s">{s}s</span></p>
+    <div className="w-acts"><button className="w-btn sm" data-t="w-ginvite-yes" onClick={() => onAns(true)}>Accept</button>
+      <button className="w-btn sm ghost" data-t="w-ginvite-no" onClick={() => onAns(false)}>Decline</button></div></section>
 }
 export function mount(el: HTMLElement) { createRoot(el).render(<World />) }

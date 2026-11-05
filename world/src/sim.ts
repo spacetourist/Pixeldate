@@ -3,7 +3,9 @@ import { newWallet, topUp, move, type Wallet } from '../shared/chips.ts'
    The Durable Object in worker.ts owns one Room, feeds it sockets and messages, and calls tick() every 100 ms. */
 import { TABLES, SPAWNS, walkable, isSeat, isPianoSeat, useMap, mapOf, seatsOf, type Table, type MapId } from '../shared/map.ts'
 import { GAMES, cryptoRnd, type GameId } from '../shared/games/index.ts'
-import { Snap, type SnapS } from '../shared/games/snap.ts'
+import { Snap } from '../shared/games/snap.ts'
+import { Blackjack, type BjS } from '../shared/games/blackjack.ts'
+import type { Game } from '../shared/games/index.ts'
 import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
 import { DUET, DUETS, PICK_MS, OFFER_MS, INVITE_MS, FLIP_MS, DUET_LEAD_MS, BASS_SEAT, MELODY_SEAT, MATCH_HOLD_MS, MAYBE_MS, LEVELUP_MS, MISS_HOLD_MS, type Part, type DuetPhase } from '../shared/duet.ts'
 import { EMOTE_COOLDOWN_MS, isEmote, nextTake, setOf } from '../shared/emote.ts'
@@ -53,8 +55,12 @@ export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => numb
   pairs?: PairStore }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
 /** a table's game: its state (shared/games), who's away (uid → since), who stood up (uid → since), each player's seat */
-interface GameRun { id: GameId; tb: number; s: SnapS; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; ids: Map<string, number>; sent: number; fam: boolean; famLv?: number }
+type GameS = { ps: { uid: string; out: boolean; away: boolean }[]; seq: number; winner: string | null }
+interface GameRun { id: GameId; tb: number; s: GameS; busy?: boolean; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; ids: Map<string, number>; sent: number; fam: boolean; famLv?: number }
 const RECONNECT_MS = 20_000, LEAVE_MS = 2500
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MOD: Record<GameId, Game<any, any>> = { snap: Snap, blackjack: Blackjack }
+const mod = (g: GameRun) => MOD[g.id]
 const R_SPACE = 0.75, BOX = 0.28, INPUT_PER_S = 20
 
 class Player {
@@ -166,7 +172,7 @@ export class Room {
       case 'dinvx': { const d = this.duet; if (d?.inv?.from === p) this.duetInviteEnd('cancel'); return }
       case 'dinvans': return this.duetInviteAns(p, m.yes === true)
       case 'gstart': return this.gameStart(p, m.g)
-      case 'gact': return this.gameAct(p, m.a)
+      case 'gact': return this.gameAct(p, m.a, m.ante)
       case 'gquit': return this.gameQuit(p)
     }
   }
@@ -788,20 +794,48 @@ export class Room {
     if (grp.length < info.min) return err('few')
     if (grp.length > info.max) return err('many')
     const now = this.now(), c = { now, rnd: cryptoRnd }
-    const g: GameRun = { id: info.id, tb: t.id, s: Snap.start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false }
+    const g: GameRun = { id: info.id, tb: t.id, s: MOD[info.id].start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false }
     for (const o of grp) g.seat.set(o.uid, [Math.floor(o.x), Math.floor(o.y)])
     this.games.set(t.id, g); this.gameSend(g)
   }
-  private gameAct(p: Player, a: unknown) {
+  private gameAct(p: Player, a: unknown, ante?: unknown) {
     const g = this.gameOf(p); if (!g || typeof a !== 'string' || a.length > 12) return
-    const why = Snap.act(g.s, p.uid, { a }, { now: this.now(), rnd: cryptoRnd })
+    if (g.id === 'blackjack' && a === 'deal') { void this.bjDeal(g, p, ante); return }
+    const why = mod(g).act(g.s, p.uid, { a }, { now: this.now(), rnd: cryptoRnd })
     if (why && why !== 'false-snap') p.sock.send(JSON.stringify({ t: 'gerr', why }))
     this.gameCheck(g)
+  }
+  /** Blackjack Deal: the ante comes out of BOTH wallets first (WalletStore.move, never below 0); if either can't cover
+      it, whatever was taken goes straight back and nobody is dealt in. One deal at a time per table (busy). */
+  private async bjDeal(g: GameRun, p: Player, ante: unknown) {
+    const s = g.s as BjS, err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
+    if (g.busy) return err('slow-down')
+    const why = Blackjack.canDeal(s, p.uid, ante); if (why) return err(why)
+    const n = ante as number, took: string[] = []; g.busy = true
+    try {
+      for (const x of s.ps) { if ((await this.wallets.move(x.uid, -n)) === null) break; took.push(x.uid) }
+      if (took.length < s.ps.length || Blackjack.canDeal(s, p.uid, n)) {
+        for (const u of took) await this.wallets.move(u, n)
+        return err(took.length < s.ps.length ? 'chips' : 'in-round')
+      }
+      Blackjack.deal(s, n, p.uid, { now: this.now(), rnd: cryptoRnd })
+    } catch { for (const u of took) await this.wallets.move(u, n).catch(() => null); return err('bad') }
+    finally { g.busy = false; this.bjChips(g) }
+    this.gameCheck(g)
+  }
+  /** drain a Blackjack round's payouts into the wallets, then tell both their balance */
+  private bjChips(g: GameRun) {
+    if (g.id !== 'blackjack') return
+    const s = g.s as BjS, pay = s.pay.splice(0)
+    void (async () => {
+      for (const x of pay) await this.wallets.move(x.uid, x.delta).catch(() => null)
+      for (const x of s.ps) { const o = this.byUid(x.uid); if (o) await this.chips(o) }
+    })()
   }
   private gameQuit(p: Player) {
     const g = this.gameOf(p); if (!g) return
     if (g.s.winner !== null) { g.s.ps = g.s.ps.filter(x => x.uid !== p.uid); p.sock.send(JSON.stringify({ t: 'game', on: false })); if (!g.s.ps.length) this.games.delete(g.tb); return }
-    Snap.leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd }); this.gameCheck(g)
+    mod(g).leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd }); this.gameCheck(g)
   }
   /** every tick: the turn clock, and who's still here. Gone (socket closed) = RECONNECT_MS to come back; stood up from
       the table for LEAVE_MS = left the game. A finished game stays on the table (the result) until its players leave. */
@@ -819,13 +853,13 @@ export class Room {
       for (const sp of g.s.ps) {
         if (sp.out) continue
         const o = this.byUid(sp.uid)
-        if (!o) { if (!g.away.has(sp.uid)) { g.away.set(sp.uid, now); sp.away = true; g.s.seq++ } else if (now - g.away.get(sp.uid)! > RECONNECT_MS) { g.away.delete(sp.uid); Snap.leave(g.s, sp.uid, c) } continue }
+        if (!o) { if (!g.away.has(sp.uid)) { g.away.set(sp.uid, now); sp.away = true; g.s.seq++ } else if (now - g.away.get(sp.uid)! > RECONNECT_MS) { g.away.delete(sp.uid); mod(g).leave(g.s, sp.uid, c) } continue }
         if (this.tableAt(o)?.id === g.tb) { g.off.delete(sp.uid); continue }
         if (!o.moving && !o.path.length && Math.floor(o.x) === g.seat.get(sp.uid)![0] && Math.floor(o.y) === g.seat.get(sp.uid)![1]) continue   // settling back in
         if (!g.off.has(sp.uid)) g.off.set(sp.uid, now)
-        else if (now - g.off.get(sp.uid)! > LEAVE_MS) { g.off.delete(sp.uid); Snap.leave(g.s, sp.uid, c) }
+        else if (now - g.off.get(sp.uid)! > LEAVE_MS) { g.off.delete(sp.uid); mod(g).leave(g.s, sp.uid, c) }
       }
-      Snap.tick(g.s, c)
+      mod(g).tick(g.s, c)
       this.gameCheck(g)
     }
   }
@@ -833,6 +867,7 @@ export class Room {
   /** send on change; at the end, the pair's familiarity */
   private gameCheck(g: GameRun) {
     if (g.s.seq !== g.sent) this.gameSend(g)
+    if (g.id === 'blackjack' && (g.s as BjS).pay.length) this.bjChips(g)
     if (g.s.winner !== null && !g.fam) { g.fam = true; void this.gameFamiliarity(g) }
   }
   private gameSend(g: GameRun) {
@@ -841,10 +876,10 @@ export class Room {
     for (const sp of g.s.ps) { const o = this.byUid(sp.uid); if (o) g.ids.set(sp.uid, o.id); ids.set(sp.uid, g.ids.get(sp.uid) ?? 0) }   // an away player keeps their last id
     for (const sp of g.s.ps) {
       const o = this.byUid(sp.uid); if (!o) continue
-      const v = Snap.view(g.s, sp.uid, { now, rnd: cryptoRnd })
+      const v = mod(g).view(g.s, sp.uid, { now, rnd: cryptoRnd })
       // uids never go on the wire: players are by their café id
       o.sock.send(JSON.stringify({ t: 'game', on: true, tb: g.tb, now, ...v, me: o.id, turn: ids.get(v.turn) ?? 0, winner: v.winner === null ? null : (ids.get(v.winner) ?? 0),
-        last: { ...v.last, who: ids.get(v.last.who) ?? 0 }, ps: v.ps.map(x => ({ ...x, uid: undefined, id: ids.get(x.uid) ?? 0 })), fam: g.famLv }))
+        last: { ...v.last, who: ids.get(v.last.who) ?? 0 }, ps: v.ps.map((x: { uid: string }) => ({ ...x, uid: undefined, id: ids.get(x.uid) ?? 0 })), fam: g.famLv }))
     }
   }
   /** A finished game between exactly two (a pair at a table) moves their meter one segment, like a card both answered;

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 56" width="40" height="56" shape-rendering="geometricPrecision">
+  <title>card-9S</title>
+  <g id="edge">
+    <rect x="0.5" y="0.5" width="39" height="55" rx="1.5" ry="1.5" fill="none" stroke="#05020F" stroke-width="1"/>
+  </g>
+  <g id="face">
+    <rect x="1" y="1" width="38" height="54" rx="1" ry="1" fill="#FFF1C1"/>
+    <line x1="2" y1="1.5" x2="38" y2="1.5" stroke="#E9E2F5" stroke-width="1"/>
+  </g>
+  <g id="rank">
+    <text x="4" y="11" fill="#A99CCB" font-size="8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" >9</text>
+    <g transform="translate(36,52) rotate(180)">
+      <text x="0" y="7" fill="#A99CCB" font-size="8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" >9</text>
+    </g>
+  </g>
+  <g id="suit">
+    <path d="M 7.5,14.62 C 11.1,17.55 10.65,20.25 7.5,19.8 C 4.35,20.25 3.9,17.55 7.5,14.62 Z" fill="#A99CCB"/><rect x="7" y="19.12" width="0.99" height="2.48" fill="#A99CCB"/><rect x="5.92" y="21.06" width="3.15" height="0.81" rx="0.18" fill="#A99CCB"/>
+    <path d="M 20,21.12 C 28.4,27.95 27.35,34.25 20,33.2 C 12.65,34.25 11.6,27.95 20,21.12 Z" fill="#A99CCB"/><rect x="18.84" y="31.62" width="2.31" height="5.78" fill="#A99CCB"/><rect x="16.32" y="36.14" width="7.35" height="1.89" rx="0.42" fill="#A99CCB"/>
+    <g transform="translate(36,52) rotate(180)">
+      <path d="M 3.5,3.62 C 7.1,6.55 6.65,9.25 3.5,8.8 C 0.35,9.25 -0.1,6.55 3.5,3.62 Z" fill="#A99CCB"/><rect x="3" y="8.12" width="0.99" height="2.48" fill="#A99CCB"/><rect x="1.93" y="10.06" width="3.15" height="0.81" rx="0.18" fill="#A99CCB"/>
+    </g>
+  </g>
+</svg>

@@ -148,7 +148,7 @@ while (Date.now() - t1 < 90000) {
     rounds++
   } else if (ph === 'play') {
     if (!shotPlay) { shotPlay = true; await shot(A, '11-bj-play'); await shot(B, '11-bj-play')
-      ok((await A.$$('[data-t=bj-house] img')).length === 2, 'House shows 2 cards, hole card face down') }
+      ok((await A.$$('[data-t=bj-house] .g-card')).length === 2, 'House shows 2 cards, hole card face down') }
     const meA = (await attr(A, '[data-t=g-bj]', 'data-turn')) === 'me', P = meA ? A : B
     const t = parseInt((await txt(P, '[data-t=bj-total]')).replace('soft ', ''))
     if (t < 15) { if (P === A) await press(A, '[data-t=bj-hit]'); else { await front(B); await B.keyboard.press('h') } hits++ }

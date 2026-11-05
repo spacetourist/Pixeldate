@@ -20,13 +20,7 @@
 .g-pile .g-card { margin-left: -40px } .g-pile .g-card:first-child { margin-left: 0 }
 .g-card { width: 60px; height: 84px; image-rendering: pixelated; display: block }
 /* card faces: vector text at device resolution (Callum: sharp, readable); a crisp 2px edge + inner rule is the pixel accent */
-.g-face { position: relative; box-sizing: border-box; background: #FFF8E6; border: 2px solid #05020F; border-radius: 5px; box-shadow: inset 0 0 0 2px #FFF8E6, inset 0 0 0 3px #E8D9B0, 2px 2px 0 #05020F;
   color: #1A1238; font-family: var(--font-ui, system-ui); image-rendering: auto; -webkit-font-smoothing: antialiased; user-select: none }
-.g-face.red { color: #D8322A }
-.g-ix { position: absolute; top: 3px; left: 4px; display: grid; justify-items: center; font: 700 15px/1 var(--font-ui, system-ui); letter-spacing: -.5px }
-.g-ix i { font-style: normal; font-size: 12px; line-height: 1.05 }
-.g-ix2 { top: auto; left: auto; bottom: 3px; right: 4px; transform: rotate(180deg) }
-.g-pip { position: absolute; inset: 0; display: grid; place-items: center; font: 700 30px/1 var(--font-ui, system-ui) }
 .g-chip { position: relative; display: inline-grid; place-items: center; flex: none; vertical-align: middle }
 .g-chip img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated }
 .g-chip b { position: relative; display: grid; place-items: center; width: 62%; height: 62%; border-radius: 50%; background: var(--cf); color: #05020F;
@@ -55,3 +49,6 @@
 .g-ante img { image-rendering: pixelated } .g-ante.on { border-color: var(--c-butter, #FFD84D) } .g-ante:disabled { opacity: .4 }
 .g-bjbtns { grid-template-columns: 1fr 1fr 1fr }
 .g-hit { background: var(--c-mint, #48E5C2); color: #05020F } .g-deal { background: var(--c-butter, #FFD84D); color: #05020F }
+
+/* GD's vector faces: smooth scaling (the back alone stays pixelated) */
+.g-card.g-face { image-rendering: auto }

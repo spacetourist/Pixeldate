@@ -24,12 +24,12 @@ const CHIP_FILL: Record<number, string> = { 1: '#FFF1C1', 5: '#FF6F59', 25: '#FF
 const Chip = ({ v, size = 18 }: { v: number; size?: number }) => <span className="g-chip" data-v={v} style={{ width: size, height: size, ['--cf' as string]: CHIP_FILL[v] ?? '#FFF1C1', fontSize: Math.max(7, Math.round(size * (v >= 100 ? .32 : .42))) }}>
   <img src={CHIP_ART[`./art/chips/${v}.png`]} srcSet={x3(CHIP_ART, `./art/chips/${v}`)} alt="" width={size} height={size} /><b aria-label={String(v)}>{v}</b></span>
 const rank = (c: number) => (c >> 2) + 1, suit = (c: number) => c & 3
-/** a card face: HTML + vector text (no bitmaps), so ranks and suits are sharp at native device resolution; a 2 px dark
-    border is the only pixel accent (the back keeps GD's pixel pattern). GD's card sprites stay in art/cards for the back. */
+/** a card face: GD's vector card (art/cards-svg, from the games-lounge sharp pack; tools/card-svgs.mjs), drawn by the
+    browser at device resolution so ranks and suits stay sharp, at the same 60x84 CSS size as before. The back keeps its pixels. */
+const FACE = import.meta.glob<string>('./art/cards-svg/*.svg', { eager: true, query: '?url', import: 'default' }), CODE = 'SHDC'
 function Card({ c, k }: { c: number; k?: string }) {
-  const r = RANK[rank(c)], st = SUIT[suit(c)], red = suit(c) === 1 || suit(c) === 2
-  return <div className={'g-card g-face' + (red ? ' red' : '')} role="img" aria-label={r + st} data-t={k} data-rank={rank(c)}>
-    <span className="g-ix">{r}<i>{st}</i></span><span className="g-pip">{rank(c) > 10 ? r : st}</span><span className="g-ix g-ix2">{r}<i>{st}</i></span></div>
+  const r = RANK[rank(c)], st = SUIT[suit(c)]
+  return <img className="g-card g-face" src={FACE[`./art/cards-svg/card-${r}${CODE[suit(c)]}.svg`]} alt={r + st} data-t={k} data-rank={rank(c)} width={60} height={84} draggable={false} />
 }
 const Deck = ({ n, k }: { n: number; k: string }) => <div className="g-deck" data-t={k}>{n > 0 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" />}{n > 1 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" style={{ left: 2, top: -2 }} />}<span>{n}</span></div>
 export const Chips = ({ bal }: { bal: number }) => <span className="g-chips" data-t="g-chips">{[1, 5, 25, 100].map(v => <Chip key={v} v={v} />)} {bal} {CHIPS_NAME}</span>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 56" width="40" height="56" shape-rendering="geometricPrecision">
+  <title>card-4D</title>
+  <g id="edge">
+    <rect x="0.5" y="0.5" width="39" height="55" rx="1.5" ry="1.5" fill="none" stroke="#05020F" stroke-width="1"/>
+  </g>
+  <g id="face">
+    <rect x="1" y="1" width="38" height="54" rx="1" ry="1" fill="#FFF1C1"/>
+    <line x1="2" y1="1.5" x2="38" y2="1.5" stroke="#E9E2F5" stroke-width="1"/>
+  </g>
+  <g id="rank">
+    <text x="4" y="11" fill="#FFD84D" font-size="8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" >4</text>
+    <g transform="translate(36,52) rotate(180)">
+      <text x="0" y="7" fill="#FFD84D" font-size="8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700" >4</text>
+    </g>
+  </g>
+  <g id="suit">
+    <path d="M 7.5,14.62 L 10.2,18 L 7.5,21.38 L 4.8,18 Z" fill="#FFD84D"/>
+    <path d="M 20,21.12 L 26.3,29 L 20,36.88 L 13.7,29 Z" fill="#FFD84D"/>
+    <g transform="translate(36,52) rotate(180)">
+      <path d="M 3.5,3.62 L 6.2,7 L 3.5,10.38 L 0.8,7 Z" fill="#FFD84D"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,273 @@
+{
+  "pack": "pd_lounge_v01",
+  "sampleRate": 48000,
+  "channels": 1,
+  "formats": {
+    "opus": ".ogg",
+    "aac": ".m4a"
+  },
+  "basePath": "./",
+  "sounds": {
+    "bjBlackjack": {
+      "takes": [
+        "bjBlackjack"
+      ],
+      "durationSec": [
+        2.046
+      ],
+      "gain": 0.75,
+      "loop": false,
+      "category": "stinger",
+      "description": "bigger warm flourish: arpeggio up to F-major chord + soft glock C6"
+    },
+    "bjBust": {
+      "takes": [
+        "bjBust"
+      ],
+      "durationSec": [
+        1.073
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "stinger",
+      "description": "gentle two-note fall A4 -> F4"
+    },
+    "bjHit": {
+      "takes": [
+        "bjHit"
+      ],
+      "durationSec": [
+        0.671
+      ],
+      "gain": 0.55,
+      "loop": false,
+      "category": "sfx",
+      "description": "soft card slide"
+    },
+    "bjPush": {
+      "takes": [
+        "bjPush"
+      ],
+      "durationSec": [
+        0.868
+      ],
+      "gain": 0.55,
+      "loop": false,
+      "category": "stinger",
+      "description": "calm open fifth F4+C5"
+    },
+    "bjStand": {
+      "takes": [
+        "bjStand"
+      ],
+      "durationSec": [
+        0.38
+      ],
+      "gain": 0.55,
+      "loop": false,
+      "category": "sfx",
+      "description": "two soft knuckle taps on felt"
+    },
+    "bjWin": {
+      "takes": [
+        "bjWin"
+      ],
+      "durationSec": [
+        1.534
+      ],
+      "gain": 0.7,
+      "loop": false,
+      "category": "stinger",
+      "description": "warm rising F-major arpeggio"
+    },
+    "cardDeal": {
+      "takes": [
+        "cardDeal_1",
+        "cardDeal_2",
+        "cardDeal_3"
+      ],
+      "durationSec": [
+        0.466,
+        0.598,
+        0.601
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "sfx",
+      "description": "card slide"
+    },
+    "cardFlip": {
+      "takes": [
+        "cardFlip_1",
+        "cardFlip_2",
+        "cardFlip_3"
+      ],
+      "durationSec": [
+        0.684,
+        0.327,
+        0.601
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "sfx",
+      "description": "card flip/place"
+    },
+    "cardGather": {
+      "takes": [
+        "cardGather"
+      ],
+      "durationSec": [
+        0.971
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "sfx",
+      "description": "cards gathered"
+    },
+    "cardShuffle": {
+      "takes": [
+        "cardShuffle"
+      ],
+      "durationSec": [
+        1.5
+      ],
+      "gain": 0.7,
+      "loop": false,
+      "category": "sfx",
+      "description": "riffle shuffle"
+    },
+    "chipCollect": {
+      "takes": [
+        "chipCollect"
+      ],
+      "durationSec": [
+        0.834
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "sfx",
+      "description": "chips swept back"
+    },
+    "chipPlace": {
+      "takes": [
+        "chipPlace_1",
+        "chipPlace_2",
+        "chipPlace_3"
+      ],
+      "durationSec": [
+        0.148,
+        0.227,
+        0.255
+      ],
+      "gain": 0.55,
+      "loop": false,
+      "category": "sfx",
+      "description": "single chip down"
+    },
+    "chipStack": {
+      "takes": [
+        "chipStack_1",
+        "chipStack_2"
+      ],
+      "durationSec": [
+        0.153,
+        0.371
+      ],
+      "gain": 0.55,
+      "loop": false,
+      "category": "sfx",
+      "description": "chips stacked"
+    },
+    "gameStart": {
+      "takes": [
+        "gameStart"
+      ],
+      "durationSec": [
+        1.494
+      ],
+      "gain": 0.65,
+      "loop": false,
+      "category": "stinger",
+      "description": "gentle chime: C5 -> F5 with soft glock"
+    },
+    "levelUp": {
+      "takes": [
+        "levelUp"
+      ],
+      "durationSec": [
+        2.145
+      ],
+      "gain": 0.7,
+      "loop": false,
+      "category": "stinger",
+      "description": "warm rolled arpeggio C5 F5 A5 C6 + sparkle"
+    },
+    "loungeBed": {
+      "takes": [
+        "loungeBed"
+      ],
+      "durationSec": [
+        24.0
+      ],
+      "gain": 0.35,
+      "loop": true,
+      "category": "bed",
+      "description": "room tone",
+      "loopStart": 0,
+      "loopEnd": 24.0,
+      "duckUnderCallGain": 0.12
+    },
+    "snapFalse": {
+      "takes": [
+        "snapFalse"
+      ],
+      "durationSec": [
+        0.317
+      ],
+      "gain": 0.6,
+      "loop": false,
+      "category": "sfx",
+      "description": "soft hand-drum bump"
+    },
+    "snapSlap": {
+      "takes": [
+        "snapSlap_1",
+        "snapSlap_2",
+        "snapSlap_3"
+      ],
+      "durationSec": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "gain": 0.75,
+      "loop": false,
+      "category": "sfx",
+      "description": "card slapped on pile"
+    },
+    "snapWin": {
+      "takes": [
+        "snapWin"
+      ],
+      "durationSec": [
+        0.862
+      ],
+      "gain": 0.8,
+      "loop": false,
+      "category": "stinger",
+      "description": "Snap! slap + happy two-note pop"
+    },
+    "uiTap": {
+      "takes": [
+        "uiTap"
+      ],
+      "durationSec": [
+        0.08
+      ],
+      "gain": 0.5,
+      "loop": false,
+      "category": "sfx",
+      "description": "soft UI tick"
+    }
+  }
+}

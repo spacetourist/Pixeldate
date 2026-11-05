@@ -12,6 +12,7 @@ import type { GameV, GameInfo } from './games.tsx'
 import { gameErr } from './games-err.ts'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
 import plaquePng from './art/door-plaque.png'
+import { LOUNGE_AUDIO } from './flags.ts'
 import { PIECE, PIANO_SEAT, hears, gainAt, panAt } from '../../world/shared/piano.ts'
 import { EMOTE_CREDIT, EMOTE_COOLDOWN_MS } from '../../world/shared/emote.ts'
 import { EmoteTray, type EmoteCd } from './EmoteTray.tsx'
@@ -113,6 +114,7 @@ function World() {
   /** voice emotes: my tray's 3 s cooldown (from my send; resynced from the server's 'slow' reply) */
   const [emoCd, setEmoCd] = useState<EmoteCd>(null), emoCdRef = useRef<EmoteCd>(null); emoCdRef.current = emoCd
   /** the café call (both tapped Start call): the live call, my heart switch (on each call), a re-render tick */
+  const gameRef = useRef<any>(null)
   const callRef = useRef<CafeCall | null>(null), [call, setCall] = useState<CafeCall | null>(null), [, setCallTick] = useState(0)
   const [heartOn, setHeartOn] = useState(true)
   /** 2c duets: the bench as the server says, the invite sheet (its list), an invite to me, the stinger played per reveal */
@@ -131,7 +133,7 @@ function World() {
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
       if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
-      if (m.t === 'game') { setGame(m.on ? m : null); return }
+      if (m.t === 'game') { const nx = m.on ? m : null; if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
       if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
       else if (m.t === 'tm') A.onTm(m)
@@ -386,6 +388,13 @@ function World() {
     if (!t) return; n.send({ t: 'go', x: t[0], y: t[1] }); target.current = t; if (ren.current) ren.current.path = [t] }
   standRef.current = card?.q || where ? stand : null
 
+  // AE's lounge sounds (flag off by default): load with the lounge, stop on the way out, bed ducked under call audio
+  useEffect(() => {
+    if (!LOUNGE_AUDIO || phase !== 'in' || !room.startsWith('games-')) return
+    import('./lounge-audio.ts').then(A => A.load())
+    return () => { import('./lounge-audio.ts').then(A => A.stop()) }
+  }, [room, phase])
+  useEffect(() => { if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.duck(!!call)) }, [call])
   if (phase !== 'in') return (
     <main className="w-gate" data-t="w-gate">
       <h1 className="w-title">Pixeldate <span>World</span></h1>

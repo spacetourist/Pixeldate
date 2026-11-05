@@ -7,7 +7,9 @@ import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
 import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
-import { walkable, isSeat, isPianoSeat, at, TABLES } from '../../world/shared/map.ts'
+import { walkable, isSeat, isPianoSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
+import type { GameV, GameInfo } from './games.tsx'
+import { gameErr } from './games-err.ts'
 import { PIECE, PIANO_SEAT, hears, gainAt, panAt } from '../../world/shared/piano.ts'
 import { EMOTE_CREDIT, EMOTE_COOLDOWN_MS } from '../../world/shared/emote.ts'
 import { EmoteTray, type EmoteCd } from './EmoteTray.tsx'
@@ -26,6 +28,8 @@ import coupleHeart3x from './art/couple/couple-heart@3x.png'
 import { CafeCall, turnUrl, type CallEnd } from './call.ts'
 import './world.css'
 const Char = lazy(() => import('../avatar/kit/Char'))
+/** the Games Lounge's panel: its own chunk, fetched only in the lounge */
+const GamesPanel = lazy(() => import('./games.tsx'))
 
 /** Dev server URL. A ?ws= override is honoured only for this machine, so a crafted link can't send your profile elsewhere. */
 function serverUrl() {
@@ -77,6 +81,9 @@ function World() {
   const [phase, setPhase] = useState<'gate' | 'joining' | 'in' | 'refused'>('gate')
   const [why, setWhy] = useState('')
   const [inst, setInst] = useState(''); const [count, setCount] = useState(0)
+  /** which room: cafe-1 or the Games Lounge (games-1); the shared map follows it */
+  const [room, setRoom] = useState(qs.get('room') === 'games' ? 'games-1' : 'cafe-1'), roomRef = useRef(room)
+  const [game, setGame] = useState<GameV | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false)
   const [layout, setLayout] = useState<Layout>(layoutOf())
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
   const [card, setCard] = useState<Tbl | null>(null), selRef = useRef<Pub | null>(null)
@@ -113,13 +120,17 @@ function World() {
 
   const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
-  const enter = () => {
+  const enter = (to = roomRef.current) => {
     if (!prof || !invite.trim() || !adult) return
+    roomRef.current = to; useMap(mapOf(to))
     localStorage.setItem('pd.invite', invite.trim()); if (!prof.adult) void saveProfile({ ...prof, adult: true })
     const n = new WorldNet(serverUrl(), invite.trim(), joinP(prof)); net.current = n; setPhase('joining')
-    const A = pa.current = new PianoAudio(o => n.send(o as any))
+    const A = pa.current ??= new PianoAudio(o => net.current?.send(o as any))
     n.onmsg = (m: ServerMsg | any) => {
-      if (m.t === 'hi') { setInst(m.inst); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
+      if (net.current !== n) return
+      if (m.t === 'game') { setGame(m.on ? m : null); return }
+      if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
+      if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
       else if (m.t === 'tm') A.onTm(m)
       else if (m.t === 'piano') { if (m.now) A.hint(m.now); A.set(m); setPianoS({ by: m.by, song: m.song, at: m.at }) }
       else if (m.t === 'duet') { if (m.now) A.hint(m.now); A.setDuet(m); const v = m.on ? m as DuetOn : null; duetRef.current = v; setDuetV(v)
@@ -181,13 +192,22 @@ function World() {
         if (m.what === 'report') { setMenu(''); flash('Thanks. Report sent to the Pixeldate team.') } if (m.what === 'heart') flash('Heart sent. If it is mutual you will both know.') }
       else if (m.t === 'mutual') flash(`It's mutual with ${n.pubs.get(m.id)?.name ?? 'them'}!`)
     }
-    n.open('cafe-1')
+    n.open(to)
+  }
+  /** the door: leave this room and walk into the other (café ↔ Games Lounge) */
+  const goRoom = (to: string) => {
+    const n = net.current; if (!n || roomRef.current === to) return
+    callRef.current?.end('hangup'); n.close(); net.current = null
+    const A = pa.current; if (A) { A.set({ t: 'piano', by: 0, song: null, at: 0, now: 0 } as any); A.setDuet({ t: 'duet', on: false } as any) }
+    setCard(null); setSel(null); setGame(null); setPriv([]); setWhere(''); setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false)
+    bubbles.current.clear(); murmurs.current.clear(); setRoom(to); enter(to)
   }
   useEffect(() => { if (prof && invite && adult && qs.get('auto') === '1') enter() }, [])
 
   // game loop + DOM overlay (bubbles, names) positioned every frame; React only re-renders for panels
   useEffect(() => {
     if (phase !== 'in' || !canvas.current) return
+    useMap(mapOf(roomRef.current))
     const r = ren.current = new Renderer(canvas.current), n = net.current!
     for (const tb of pendingHearts) r.hearts.add(tb); pendingHearts.clear()
     const size = () => { const L = layoutOf(); setLayout(L); const b = stage.current!.getBoundingClientRect(); r.resize(b.width, b.height, devicePixelRatio || 1, L) }
@@ -279,7 +299,7 @@ function World() {
       duet: { v: () => duetRef.current, r: () => ({ ...r.duetOn }), gains: () => pa.current!.duetGains(), pos: () => pa.current!.duetPos(), pv: () => pa.current!.pv?.id ?? null, pvFrac: () => pa.current!.pvFrac() },
       tileCss: (tx: number, ty: number) => { const b = canvas.current!.getBoundingClientRect(), [x, y] = r.toCss(tx + 0.5, ty + 0.5); return [b.left + x, b.top + y] } }
     return () => { cancelAnimationFrame(raf); ro.disconnect(); r.destroy() }
-  }, [phase])
+  }, [phase, room])
 
   useEffect(() => { const e = logEl.current; if (e) e.scrollTop = e.scrollHeight }, [log])
   useEffect(() => { const e = privEl.current; if (e) e.scrollTop = e.scrollHeight }, [priv])
@@ -292,6 +312,13 @@ function World() {
   useEffect(() => { if (call && tLv) call.setLevel(tLv) }, [call, tLv])
   useEffect(() => { if (call && !card?.q) call.end('hangup') }, [call, card?.q])
   useEffect(() => () => callRef.current?.end('hangup'), [])
+
+  // the Games Lounge: am I sitting at a games table? (shows the games panel)
+  useEffect(() => {
+    if (phase !== 'in' || !room.startsWith('games-')) return
+    const i = setInterval(() => { const n = net.current, e = n?.ents.get(n.me); setAtTable(!!e && !!(e.f & F_SIT) && isSeat(Math.floor(e.x), Math.floor(e.y))) }, 250)
+    return () => { clearInterval(i); setAtTable(false) }
+  }, [phase, room])
 
   // keyboard: arrows/WASD walk, Enter talks, Esc closes
   useEffect(() => {
@@ -328,6 +355,8 @@ function World() {
     if (id) { const p = n.pubs.get(id); if (p) { setSel(p); setMenu(''); r.sel = id } return }
     if (sel) { setSel(null); setMenu(''); r.sel = 0 }
     const [tx, ty] = r.toTile(cx, cy); let t: [number, number] | null = [Math.floor(tx), Math.floor(ty)]
+    // the Games Lounge door: back to the café
+    if (isDoor(t[0], t[1])) { goRoom(roomRef.current.startsWith('games-') ? 'cafe-1' : 'games-1'); return }
     // a sofa: walk to it and sit (the server picks a free spot, or says it's full)
     const si = sofaAt(t[0], t[1])
     if (si >= 0) { const f = SOFAS[si].front; n.send({ t: 'sofa', i: si } as any); const me = n.ents.get(n.me); r.path = me ? findPath([Math.floor(me.x), Math.floor(me.y)], f) ?? [] : []; target.current = f; return }
@@ -361,7 +390,7 @@ function World() {
         <p className="w-who">Joining as <b>{prof.name}</b></p>
         <label className="w-field"><span>Invite code</span><input data-t="w-invite" value={invite} onChange={e => setInvite(e.target.value)} autoComplete="off" spellCheck={false} /></label>
         <label className={'w-adult' + (adult ? ' is-on' : '')}><input type="checkbox" data-t="w-adult" checked={adult} onChange={e => setAdult(e.target.checked)} /> <span>I'm 18 or over</span></label>
-        <button className="w-btn" data-t="w-enter" disabled={!invite.trim() || !adult || phase === 'joining'} onClick={enter}>{phase === 'joining' ? 'Joining…' : 'Enter the café'}</button>
+        <button className="w-btn" data-t="w-enter" disabled={!invite.trim() || !adult || phase === 'joining'} onClick={() => enter()}>{phase === 'joining' ? 'Joining…' : 'Enter the café'}</button>
         {phase === 'refused' && <p className="w-warn" role="alert" data-t="w-refused">{why}</p>}
       </>}
     </main>)
@@ -389,7 +418,7 @@ function World() {
       <input ref={input} data-t="w-input" value={text} maxLength={MAX_SAY} onChange={e => setText(e.target.value)} placeholder={layout === 'desk' && !card?.q ? 'Say something (Enter)' : 'Say something'} enterKeyHint="send" autoComplete="off" aria-label="Say something" />
       <span className={'w-left' + (left < 10 ? ' low' : '')} aria-hidden="true">{left}</span>
       <button className={'w-btn sm' + (card?.q ? ' ghost' : '')} data-t="w-send" disabled={!text.trim()}>Say</button></form>)
-  const seated = !!card?.q
+  const seated = !!card?.q, lounge = room.startsWith('games-')
   const callEl = call && card?.q ? <CallPanel call={call} name={tname} heartOn={heartOn} desk={layout === 'desk'}
     onHeart={v => { setHeartOn(v); net.current?.send({ t: 'cheart', on: v } as any) }} /> : null
   const cardEl = card && card.q && <TablePanel card={card} callEl={callEl} name={tname} pav={net.current?.pubs.get(card.with)?.pav} photo={photo} desk={layout === 'desk'}
@@ -416,7 +445,8 @@ function World() {
     <button className="w-btn" data-t="w-gone-ok" onClick={() => setGone('')}>OK</button></section>
   return (
     <main className={'w-room ' + layout + (seated ? ' seated' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined}>
-      <header className="w-top"><b>Café</b><span data-t="w-inst">{inst.replace('cafe-', 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
+      <header className="w-top"><b data-t="w-room-name">{lounge ? 'Games Lounge' : 'Café'}</b><span data-t="w-inst">{inst.replace(/^(cafe|games)-/, 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
+        <button className="w-door" data-t="w-door" onClick={() => goRoom(lounge ? 'cafe-1' : 'games-1')}>{lounge ? '← Café' : 'Games Lounge →'}</button>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
@@ -434,6 +464,8 @@ function World() {
         {person}
         {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
         {goneEl}
+        {lounge && (atTable || game) && <Suspense fallback={null}><GamesPanel game={game} games={games} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
+          send={dsend} stand={stand} desk={layout === 'desk'} /></Suspense>}
         {cardEl}
         {pianoEl}
         {where === 'sofa' && <section className="w-panel w-sofa" data-t="w-sofa"><p>On the sofa · everyone can hear the room chat</p>

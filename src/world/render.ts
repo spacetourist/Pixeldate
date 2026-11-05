@@ -2,7 +2,7 @@
    GD's café art is the background; the hand-written grid in world/shared/map.ts says what is blocked. Everything is in
    the café's native 16 px grid, scaled by an INTEGER factor k in device pixels with nearest sampling, so every art pixel
    is exactly k×k screen pixels. */
-import { MAP, W, H, TILE, at, TABLES, isPianoSeat } from '../../world/shared/map.ts'
+import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -181,7 +181,7 @@ export class Renderer {
     this.bench.label = 'duet-bench'; this.seatOpen.label = 'duet-seat-open'
     this.people.addChild(this.bench, this.seatOpen); this.notes.addChild(this.countIn)
     const front = await load('tiles/sofa3-front.png'); T.sofaFront = tex(front); this.art['sofa3-front'] = [front.width, front.height]
-    for (const sf of SOFAS) { const sp = new Sprite(T.sofaFront); sp.position.set(sf.x * TILE, sf.y * TILE); sp.zIndex = sofaZ(sf.y, 4); sp.label = 'sofa-front-' + sf.id; this.people.addChild(sp) }
+    for (const sf of CUR === 'cafe-landscape' ? SOFAS : []) { const sp = new Sprite(T.sofaFront); sp.position.set(sf.x * TILE, sf.y * TILE); sp.zIndex = sofaZ(sf.y, 4); sp.label = 'sofa-front-' + sf.id; this.people.addChild(sp) }
     T.dot = tex(paint(['mm', 'mm'], { m: '#48E5C2' }))
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 

@@ -55,9 +55,9 @@ const walkTo = async (p, tx, ty, ms = 15000) => {
     if (on) { await tapAt(p, x, y); if (await until(there, Math.min(9000, ms - (Date.now() - t0)))) return true; continue }   // a tap lost under a closing panel: tap again
     const cx = (c.left + c.right) / 2, cy = (c.top + c.bottom) / 2, dx = x - cx, dy = y - cy, k = Math.min((c.width / 2 - m) / Math.abs(dx || 1e-9), (c.height / 2 - m) / Math.abs(dy || 1e-9))
     // an edge point can land on furniture (the server ignores taps on solid tiles): step closer to the middle until one moves us
-    const m0 = await meEnt(p)
-    for (const f of [1, 0.8, 0.6, 0.4, 0.25]) { await tapAt(p, cx + dx * k * f, cy + dy * k * f); if (await until(async () => { const e = await meEnt(p); return Math.abs(e.x - m0.x) + Math.abs(e.y - m0.y) > 0.05 }, 700, 100)) break }
-    let last = null; await until(async () => { const e = await meEnt(p); const still = last && Math.abs(e.x - last.x) < 0.01 && Math.abs(e.y - last.y) < 0.01; last = e; return still }, 4000, 250)
+    const m0 = await meEnt(p); if (!m0) continue
+    for (const f of [1, 0.8, 0.6, 0.4, 0.25]) { await tapAt(p, cx + dx * k * f, cy + dy * k * f); if (await until(async () => { const e = await meEnt(p); return !!e && Math.abs(e.x - m0.x) + Math.abs(e.y - m0.y) > 0.05 }, 700, 100)) break }
+    let last = null; await until(async () => { const e = await meEnt(p); if (!e) return false; const still = last && Math.abs(e.x - last.x) < 0.01 && Math.abs(e.y - last.y) < 0.01; last = e; return still }, 4000, 250)
   }
   return there()
 }
@@ -124,43 +124,48 @@ await tap(A, '[data-t=g-stand]')
 ok(await until(async () => (await txt(B, '[data-t=g-status]')).includes('You win'), 10000), 'Avery leaves → Blair wins')
 await shot(B, '08-win'); await shot(A, '08-left')
 ok(!!(await B.$('[data-t=g-again]')), 'play again / done offered')
-// co-op Blackjack: both back at the table, shared hand vs the House, antes through the wallet
-await tap(B, '[data-t=g-done]'); if (await A.$('[data-t=g-done]')) await tap(A, '[data-t=g-done]'); await until(() => B.$('[data-t=g-start-blackjack]'), 6000)
-ok(await walkTo(A, sa[0], sa[1], 25000), 'Avery sits again')
-if (await until(() => A.$('[data-t=g-done]'), 2500)) await tap(A, '[data-t=g-done]')
-ok(await until(() => A.$('[data-t=g-start-blackjack]'), 8000), 'Blackjack start offered')
-await tap(A, '[data-t=g-start-blackjack]')
-for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-bj]'), 6000), p.tag + ' sees the Blackjack table')
+// Blackjack tables: sit down (no Start button), each hand vs the House
+const clickIf = async (p, sel) => { if (!(await p.$(sel))) return; try { await press(p, sel) } catch { console.log('  skip', sel, 'on', p.tag) } }
+await clickIf(B, '[data-t=g-done]'); await clickIf(A, '[data-t=g-done]'); await clickIf(A, '[data-t=g-stand]'); await clickIf(B, '[data-t=g-stand]')
+const bj = TABLES.filter(t => t.kind === 'blackjack')[1], rail = [...bj.seats, ...bj.extra]
+const inLounge = async p => (await txt(p, '[data-t=w-room-name]')) === 'Games Lounge'
+const seatedAt = async (p, x, y) => until(async () => { const m = await meEnt(p); return m && (m.f & 8) && Math.floor(m.x) === x && Math.floor(m.y) === y }, 4000)
+const sitDown = async (p, x, y) => {
+  for (let i = 0; i < 3 && await inLounge(p); i++) {
+    await walkTo(p, x, y, 20000)
+    if (await seatedAt(p, x, y)) return true
+    const [cx, cy] = await p.evaluate((a, b) => window.__world.tileCss(a, b), x, y).catch(() => [0, 0])
+    if (cx) await tapAt(p, cx, cy)
+  }
+  return !!(await seatedAt(p, x, y))
+}
+ok(await walkTo(A, 8, 16, 30000) && await inLounge(A), 'Avery walks up to a blackjack table')
+await shot(A, '10-bj-lounge')
+ok(await sitDown(A, rail[0][0], rail[0][1]), 'Avery sits at the blackjack table')
+ok(await sitDown(B, rail[2][0], rail[2][1]), 'Blair sits at the same blackjack table')
+for (const p of [A, B]) ok(await until(() => p.$('[data-t=g-bj]'), 8000), p.tag + ' sees the fullscreen Blackjack table')
+ok(await A.$('[data-t=bj-leave]') && await A.$('[data-t=w-call]'), 'Leave and Start call are on the table')
 ok((await txt(A, '[data-t=g-bj]')).includes('coins · never cash') && !/play chips|£|\$|€|casino|gambl|wager/i.test(await txt(A, '[data-t=g-bj]')), 'coins copy, no currency symbols or casino words')
 await shot(A, '10-bj-start'); await shot(B, '10-bj-start')
 const coins = async p => parseInt(await txt(p, '[data-t=w-chips]'))
-let rounds = 0, hits = 0, stands = 0, shotPlay = false, shotRes = false
-const t1 = Date.now()
-while (Date.now() - t1 < 90000) {
-  if (await attr(A, '[data-t=g-bj]', 'data-over')) break
-  const ph = await attr(A, '[data-t=g-bj]', 'data-phase'), seq = +(await attr(A, '[data-t=g-bj]', 'data-seq'))
-  if (ph === 'bet') {
-    if (rounds && !shotRes) { shotRes = true; await shot(A, '12-bj-result'); await shot(B, '12-bj-result') }
-    const a0 = await coins(A), b0 = await coins(B)
-    if (rounds % 2) { await front(B); await B.keyboard.press('d') } else { await tap(A, '[data-t=bj-ante-5]'); await press(A, '[data-t=bj-deal]') }
-    if (!rounds && await until(async () => +(await attr(A, '[data-t=g-bj]', 'data-seq')) > seq, 3000, 40)) {
-      ok(await until(async () => (await coins(A)) <= a0 - 5 + 15 && (await coins(B)) <= b0 - 5 + 15 && (await coins(A)) !== a0 || (await attr(A, '[data-t=g-bj]', 'data-res')) === 'push', 4000), `ante of 5 moved through both wallets (${a0}→${await coins(A)}, ${b0}→${await coins(B)})`) }
-    rounds++
-  } else if (ph === 'play') {
-    if (!shotPlay) { shotPlay = true; await shot(A, '11-bj-play'); await shot(B, '11-bj-play')
-      ok((await A.$$('[data-t=bj-house] .g-card')).length === 2, 'House shows 2 cards, hole card face down') }
-    const meA = (await attr(A, '[data-t=g-bj]', 'data-turn')) === 'me', P = meA ? A : B
-    const t = parseInt((await txt(P, '[data-t=bj-total]')).replace('soft ', ''))
-    if (t < 15) { if (P === A) await press(A, '[data-t=bj-hit]'); else { await front(B); await B.keyboard.press('h') } hits++ }
-    else { if (P === A) await press(A, '[data-t=bj-stand]'); else await press(B, '[data-t=bj-stand]'); stands++ }
-  }
-  await until(async () => +(await attr(A, '[data-t=g-bj]', 'data-seq')) > seq || (await attr(A, '[data-t=g-bj]', 'data-over')), 4000, 40)
+const a0 = await coins(A), b0 = await coins(B)
+await tap(A, '[data-t=bj-ante-5]'); await tap(A, '[data-t=bj-deal]')
+await tap(B, '[data-t=bj-deal]')
+ok(await until(async () => (await attr(A, '[data-t=g-bj]', 'data-phase')) === 'play' || (await attr(A, '[data-t=g-bj]', 'data-res')), 8000), 'the round starts once both have dealt')
+if ((await attr(A, '[data-t=g-bj]', 'data-phase')) === 'play') {
+  ok((await A.$$('[data-t=bj-house] .g-card')).length === 2, 'House shows 2 cards, hole card face down')
+  await shot(A, '11-bj-play'); await shot(B, '11-bj-desk')
+  const meA = (await attr(A, '[data-t=g-bj]', 'data-turn')) === 'me'
+  if (meA) await press(A, '[data-t=bj-hit]'); else { await front(B); await B.keyboard.press('h') }
+  await sleep(500)
+  ok((await A.$$('[data-t=bj-seat]')).length === 5, 'five seats on the table')
 }
-ok(rounds >= 5 && await until(() => attr(A, '[data-t=g-bj]', 'data-over'), 8000), `5 rounds played together (${rounds} deals, ${hits} hits, ${stands} stands)`)
-ok(hits + stands >= 1, 'Hit / Stand on the shared turn')
-ok((await coins(A)) === (await coins(B)), 'co-op: both wallets end level')
-await shot(A, '13-bj-over'); await shot(B, '13-bj-over')
-await tap(B, '[data-t=g-stand]'); await tap(A, '[data-t=g-stand]')
+await typeIn(A, '[data-t=w-input]', 'nice hand'); await press(A, '[data-t=w-send]')
+ok(await until(async () => (await txt(B, '[data-t=w-priv]')).includes('nice hand'), 5000), 'table chat shows on the other screen')
+await shot(A, '12-bj-chat')
+ok(Number.isFinite(a0) && Number.isFinite(await coins(A)) && Number.isFinite(await coins(B)), 'coin balances stay on screen through the hand')
+await tap(A, '[data-t=bj-leave]')
+ok(await until(async () => !(await A.$('[data-t=g-bj]')), 6000), 'Leave closes the table')
 // back through the door
 await tap(B, '[data-t=w-door]')
 ok(await until(async () => (await txt(B, '[data-t=w-room-name]')) === 'Café' && (await st(B))?.inst?.startsWith('cafe-'), 12000), 'Blair back in the café')

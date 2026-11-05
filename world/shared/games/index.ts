@@ -6,9 +6,9 @@ export type GameId = 'snap' | 'blackjack'
 export interface GameInfo { id: GameId; title: string; min: number; max: number; ready: boolean; blurb: string }
 export const GAMES: Record<GameId, GameInfo> = {
   snap: { id: 'snap', title: 'Snap', min: 2, max: 2, ready: true, blurb: 'Flip in turn. Two of a rank in a row: first to snap takes the pile.' },
-  // hook, not built yet: co-op. The two at the table play together against the house dealer with coins (no stakes
-  // between players, nothing bought or paid out). No arcade games in v1.
-  blackjack: { id: 'blackjack', title: 'Blackjack', min: 2, max: 2, ready: true, blurb: 'Co-op: you two share one hand against the House, for coins.' },
+  // Each player sits at a blackjack table and plays their own hand against the House, for coins.
+  // No arcade games in v1. The table opens when you sit down (there is no separate Start).
+  blackjack: { id: 'blackjack', title: 'Blackjack', min: 1, max: 5, ready: true, blurb: 'Your own hand against the House, for coins.' },
 }
 /** What a game module gives the Room. `now` is passed in (tests use a fake clock); `rnd(n)` is a uniform 0..n-1 from crypto. */
 export interface GameCtx { now: number; rnd: (n: number) => number }

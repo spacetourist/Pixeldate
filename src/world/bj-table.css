@@ -1,0 +1,54 @@
+/* Full-screen blackjack. Placeholder felt — swap the background for GD's table PNG (same frame) when it lands.
+   Direction A faces stay smooth; only the pixel back and the coin rims are pixelated. */
+.bj-screen { position: absolute; inset: 0; z-index: 7; display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 6px;
+  background: #0C0722; color: #FFF6EC; font-family: var(--font-ui, system-ui); overflow: hidden; touch-action: manipulation }
+.bj-top { display: flex; align-items: center; gap: 8px; min-height: 36px }
+.bj-top h2 { margin: 0; font: 400 22px/1 var(--font-px, monospace); color: #FFF1C1 }
+.bj-top small { color: #A49CC2; font: 600 12px/1.2 var(--font-ui) }
+.bj-leave { margin-left: auto; min-height: 40px }
+.bj-felt { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 8px 12px;
+  background: radial-gradient(120% 80% at 50% 0%, #24945a 0%, #145c34 62%, #0c3d22 100%);
+  border: 3px solid #6B3A1E; border-bottom-left-radius: 160px; border-bottom-right-radius: 160px; box-shadow: inset 0 0 0 2px #1A3A2A }
+.bj-dealer { display: grid; justify-items: center; gap: 2px }
+.bj-dealer b { font: 400 16px/1 var(--font-px, monospace); color: #FFD84D }
+.bj-dealer small, .bj-seat small { color: #CFE6D7; font: 700 12px/1 var(--font-ui) }
+.bj-seats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; align-items: flex-start }
+.bj-seat { flex: 1 1 46%; max-width: 48%; min-width: 0; display: grid; justify-items: center; gap: 2px; padding: 4px; border: 2px solid transparent }
+.bj-seat.me { border-color: #48E5C2 } .bj-seat.turn { border-color: #FFD84D } .bj-seat.wait { opacity: .7 }
+.bj-seat .nm { font: 700 12px/1.2 var(--font-ui); color: #FFF1C1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.bj-seat .nm.me { color: #48E5C2 }
+.bj-hand { display: flex; justify-content: center; min-height: 62px; align-items: center }
+.bj-screen .g-card { width: 52px; height: 73px; display: block; flex: none }
+.bj-dealer .g-card { width: 68px; height: 95px }
+.bj-hand .g-card + .g-card { margin-left: -30px }
+.bj-dealer .g-hand .g-card + .g-card { margin-left: -24px }
+.bj-screen .g-face { image-rendering: auto; border-radius: 6px }
+.bj-screen .g-back { image-rendering: pixelated }
+.bj-screen .g-chip { position: relative; display: inline-grid; place-items: center; flex: none }
+.bj-screen .g-chip img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated }
+.bj-screen .g-chip b { position: relative; display: grid; place-items: center; width: 62%; height: 62%; border-radius: 50%; background: var(--cf); color: #05020F;
+  font: 800 1em/1 var(--font-ui, system-ui); letter-spacing: -.04em }
+.bj-empty { color: #9BC4AC; font: 600 11px/1.2 var(--font-ui) }
+.bj-bar { display: grid; gap: 6px; flex: none }
+.bj-status { margin: 0; min-height: 1.3em; font: 600 13px/1.3 var(--font-ui); color: #FFF1C1 }
+.bj-antes { display: flex; gap: 8px; justify-content: center }
+.bj-ante { min-width: 56px; min-height: 52px; background: #1E1640; border: 2px solid #05020F; display: grid; place-items: center; cursor: pointer }
+.bj-ante.on { border-color: #FFD84D; box-shadow: 0 0 0 2px #05020F }
+.bj-ante:disabled { opacity: .4 }
+.bj-note { margin: 0; text-align: center; color: #A49CC2; font: 600 11px/1.2 var(--font-ui) }
+.bj-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.bj-btns .w-btn { min-height: 52px; font: 400 22px/1 var(--font-px, monospace); touch-action: manipulation }
+.bj-hit { background: #48E5C2; color: #05020F }
+.bj-stand { background: #1E1640; color: #FFF1C1; box-shadow: inset 0 0 0 2px #3A2C6E }
+.bj-double { background: #FF6F59; color: #05020F }
+.bj-deal { background: #FFD84D; color: #05020F }
+.w-room.phone.bj { grid-template-rows: auto minmax(0, 1fr) minmax(200px, 38dvh) }
+.w-room.phone.bj .w-side, .w-room.desk.bj .w-side { overflow: hidden; display: flex; flex-direction: column }
+.w-room.bj .bj-chat { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column }
+.w-room.bj .bj-chat ol { flex: 1 1 auto; max-height: none; min-height: 0; overflow-y: auto }
+.w-room.bj .w-call { flex: none }
+@media (min-width: 900px) {
+  .bj-seat { flex-basis: 18%; max-width: 20% }
+  .bj-screen .g-card { width: 64px; height: 90px }
+  .bj-hand .g-card + .g-card { margin-left: -28px }
+}

@@ -6,7 +6,8 @@
            p the piano bench seats: the solo seat in the middle, the duet's Bass (left) and Melody (right) either side
              (shared/piano.ts, shared/duet.ts); never walked across, only sat on
            g a Games Lounge table's extra seat (up to four at a table) · D doormat / door · . floor
-   All blocked: # C T c P L S K. Rugs are art only (walkable). */
+           B blackjack felt (blocked) · b a seat at a blackjack table
+   All blocked: # C T c P L S K B. Rugs are art only (walkable). */
 export const TILE = 16
 export type Light = { kind: 'table' | 'pendant' | 'floor'; x: number; y: number }
 export interface MapDef { art: string; rows: string[]; spawns: [number, number][]; lights: Light[] }
@@ -55,8 +56,10 @@ export const MAPS: Record<string, MapDef> = {
       v1: tables for two, exactly the café's (s T T s), so the pair logic is the café's. The map format still allows g
       (extra seats on the row above) for bigger tables later. D: the door back to the café. */
   /** 40x24 Games Lounge: GD's games-lounge pack (src/world/art/games-map.png from tools/games-lounge-art.py). Six felt
-      tables for two (c s|TTT|s c: chair backs over the seats, a 3-wide felt table), the door back to the café at col 11-12
-      (D), lamps/plants/loveseat/arcade cabinets solid (P). The arcade alcove's cabinets are dim LATER props (no Pong in v1). */
+      tables for two (c s|TTT|s c: chair backs over the seats, a 3-wide felt table), plus three blackjack tables
+      (B felt, b seats — five a table, dealer on the top row). Placeholder sprites are drawn over the floor
+      (src/world/bj-art.ts); swap that painter when GD's table art lands. The door back to the café is at col 11-12
+      (D). Lamps/plants/arcade cabinets are solid (P). */
   games: {
     art: 'games-map.png',
     rows: [
@@ -65,21 +68,21 @@ export const MAPS: Record<string, MapDef> = {
     '########################################',
     '#........P.DD.P......................P.#',
     '#P.......P...........................P.#',
-    '#P.....................................#',
-    '#...P.....................P............#',
-    '#...P.....................P............#',
+    '#P...............BBBBBBB...............#',
+    '#...P...........bBBBBBBBb.P............#',
+    '#...P.............b.b.b...P............#',
     '#......cTTTc..cTTTc..cTTTc.....PP.PP.P.#',
     '#......sTTTs..sTTTs..sTTTs.....PP.PP...#',
     '#..............................PP.PP...#',
-    '#......................................#',
-    '#..............................PP.PP...#',
-    '#..............................PP.PP...#',
+    '#..BBBBBBB.............................#',
+    '#.bBBBBBBBb....................PP.PP...#',
+    '#...b.b.b......................PP.PP...#',
     '#P.............................PP.PP.P.#',
     '#P........cTTTc..cTTTc..cTTTc..........#',
     '#.........sTTTs..sTTTs..sTTTs..........#',
-    '#......................................#',
-    '#......................................#',
-    '#...P..................................#',
+    '#......................BBBBBBB.........#',
+    '#.....................bBBBBBBBb........#',
+    '#...P...................b.b.b..........#',
     '#P.PP.P..............................P.#',
     '#P.PP.P..............................P.#',
     '#......................................#',
@@ -89,6 +92,8 @@ export const MAPS: Record<string, MapDef> = {
     // warm lamps from GD's scene: each table's lamp (col*T+32, row*T+16), floor lamps (col*T+8, row*T+22)
     lights: [
       ...([[7, 8], [14, 8], [21, 8], [10, 15], [17, 15], [24, 15]] as const).map(([c, r]) => ({ kind: 'table' as const, x: c * T + 32, y: r * T + 16 })),
+      // warm pools over the three blackjack tables (felt origin + a few tiles)
+      ...([[20, 6], [6, 12], [26, 18]] as const).map(([c, r]) => ({ kind: 'table' as const, x: c * T + 8, y: r * T + 8 })),
       ...([[4, 5], [26, 5], [4, 18]] as const).map(([c, r]) => ({ kind: 'floor' as const, x: c * T + 8, y: r * T + 22 })),
     ],
   },
@@ -99,9 +104,10 @@ export const mapOf = (room: string): MapId => room.startsWith('games-') ? 'games
 /** The door tile(s): the café's doormat leads to the Games Lounge, the Games Lounge's door back to the café. */
 export const isDoor = (x: number, y: number) => at(x, y) === 'D'
 export const MAP_ID: MapId = 'cafe-landscape'
-export interface Table { id: number; x: number; y: number; /** felt width in tiles (café 2, lounge 3) */ w: number; seats: [[number, number], [number, number]]
-  /** Games Lounge tables: the two extra seats on the upper row (2-4 players) */ extra: [number, number][] }
-const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K'])
+export interface Table { id: number; x: number; y: number; /** felt width in tiles (café 2, lounge snap 3, blackjack 7) */ w: number; seats: [[number, number], [number, number]]
+  /** Games Lounge tables: extra seats (snap: the row above; blackjack: the rest of the rail, left to right) */ extra: [number, number][]
+  /** snap: a felt table for two. blackjack: five seats, own hands, fullscreen table. */ kind: 'snap' | 'blackjack' }
+const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K', 'B'])
 /* The current map. Every Room (server) and the client switch with useMap() before touching the grid; the exports are
    live bindings, so importers always see the current one. JS is single-threaded and a Room calls useMap() at the top
    of each entry point, so two rooms in one isolate never see each other's map. All maps are the same size. */
@@ -120,7 +126,13 @@ export function useMap(id: MapId) {
         // the café's 2-wide sTTs, or the Games Lounge's 3-wide felt sTTTs
         const w = ROWS[y][x + 3] === 's' ? 2 : ROWS[y][x + 3] === 'T' && ROWS[y][x + 4] === 's' ? 3 : 0; if (!w) continue
         const extra: [number, number][] = y > 0 && ROWS[y - 1][x] === 'g' && ROWS[y - 1][x + w + 1] === 'g' ? [[x, y - 1], [x + w + 1, y - 1]] : []
-        tables.push({ id: tables.length, x: x + 1, y, w, seats: [[x, y], [x + w + 1, y]], extra }) }
+        tables.push({ id: tables.length, x: x + 1, y, w, seats: [[x, y], [x + w + 1, y]], extra, kind: 'snap' }) }
+    /** Blackjack tables: felt origin (x, y) is the dealer's row. Five seats, left to right: side, three along the rail, side.
+        Placeholder art is painted over this footprint (src/world/bj-art.ts) — same origin, one tile taller for the sign. */
+    if (id === 'games') for (const [x, y] of [[16, 5], [2, 11], [22, 17]] as const) {
+      const rail: [number, number][] = [[x, y + 1], [x + 2, y + 2], [x + 4, y + 2], [x + 6, y + 2], [x + 8, y + 1]]
+      tables.push({ id: tables.length, x, y, w: 7, seats: [rail[0], rail[1]], extra: rail.slice(2), kind: 'blackjack' })
+    }
     b = { tables }; built.set(id, b) }
   TABLES = b.tables
 }
@@ -130,7 +142,9 @@ export const at = (x: number, y: number) => (x < 0 || y < 0 || x >= W || y >= H)
 /** Can a foot stand on tile (x, y)? The doormat counts, so people can walk in. */
 export const walkable = (x: number, y: number) => !BLOCK.has(at(x, y))
 /** a chair: the café's s, or a Games Lounge table's extra g */
-export const isSeat = (x: number, y: number) => { const c = at(x, y); return c === 's' || c === 'g' }
+export const isSeat = (x: number, y: number) => { const c = at(x, y); return c === 's' || c === 'g' || c === 'b' }
+/** a blackjack seat (b). Sitting here opens the fullscreen table; it is not a snap table. */
+export const isBjSeat = (x: number, y: number) => at(x, y) === 'b'
 export const isPianoSeat = (x: number, y: number) => at(x, y) === 'p'
 /** every seat of table t (the pair's two first) */
 export const seatsOf = (t: Table): [number, number][] => [...t.seats, ...t.extra]

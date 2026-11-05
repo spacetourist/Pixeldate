@@ -7,8 +7,9 @@ import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
 import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
-import { walkable, isSeat, isPianoSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
+import { walkable, isSeat, isPianoSeat, isBjSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
 import type { GameV, GameInfo } from './games.tsx'
+import type { BjGame } from './bj-table.tsx'
 import { gameErr } from './games-err.ts'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
 import plaquePng from './art/door-plaque.png'
@@ -34,6 +35,8 @@ import './world.css'
 const Char = lazy(() => import('../avatar/kit/Char'))
 /** the Games Lounge's panel: its own chunk, fetched only in the lounge */
 const GamesPanel = lazy(() => import('./games.tsx'))
+/** fullscreen blackjack: fetched only when you sit at a blackjack table */
+const BjTable = lazy(() => import('./bj-table.tsx'))
 
 /** Dev server URL. A ?ws= override is honoured only for this machine, so a crafted link can't send your profile elsewhere. */
 function serverUrl() {
@@ -91,13 +94,13 @@ function World() {
   const [inst, setInst] = useState(''); const [count, setCount] = useState(0)
   /** which room: cafe-1 or the Games Lounge (games-1); the shared map follows it */
   const [room, setRoom] = useState(qs.get('room') === 'games' ? 'games-1' : 'cafe-1'), roomRef = useRef(room)
-  const [game, setGame] = useState<GameV | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [chips, setChips] = useState<number | null>(null)
+  const [game, setGame] = useState<GameV | BjGame | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [atBj, setAtBj] = useState(false), [bjHold, setBjHold] = useState(false), [chips, setChips] = useState<number | null>(null)
   const [layout, setLayout] = useState<Layout>(layoutOf())
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
   const [card, setCard] = useState<Tbl | null>(null), selRef = useRef<Pub | null>(null)
   // the table for two: the date's photo (pixelated on their phone to our level), our private lines, answer box state
   const [photo, setPhoto] = useState<{ id: number; lv: number; data: string } | null>(null)
-  const [priv, setPriv] = useState<{ k: number; mine: boolean; text: string }[]>([]), privEl = useRef<HTMLOListElement>(null)
+  const [priv, setPriv] = useState<{ k: number; mine: boolean; text: string; id?: number }[]>([]), privEl = useRef<HTMLOListElement>(null)
   const [ans, setAns] = useState(''), [ansErr, setAnsErr] = useState('')
   const murmurs = useRef(new Map<number, number>()), withRef = useRef(0)
   /** v05 pair levels: the partner tag we already sent our app-wide level for, this sitting */
@@ -120,7 +123,7 @@ function World() {
   /** voice emotes: my tray's 3 s cooldown (from my send; resynced from the server's 'slow' reply) */
   const [emoCd, setEmoCd] = useState<EmoteCd>(null), emoCdRef = useRef<EmoteCd>(null); emoCdRef.current = emoCd
   /** the café call (both tapped Start call): the live call, my heart switch (on each call), a re-render tick */
-  const gameRef = useRef<any>(null)
+  const gameRef = useRef<any>(null), bjRef = useRef(false)
   const callRef = useRef<CafeCall | null>(null), [call, setCall] = useState<CafeCall | null>(null), [, setCallTick] = useState(0)
   const [heartOn, setHeartOn] = useState(true)
   /** 2c duets: the bench as the server says, the invite sheet (its list), an invite to me, the stinger played per reveal */
@@ -131,7 +134,7 @@ function World() {
   /** "Play a game?": the invite I sent (to, until), one sent to me (from, until), the door fade, a door/teleport arrival */
   const [ginvOut, setGinvOut] = useState<{ to: number; until: number } | null>(null), [ginvIn, setGinvIn] = useState<{ from: number; until: number } | null>(null)
   const [fade, setFade] = useState(false), arrive = useRef<'' | 'door' | 'tele'>(''), keepPriv = useRef(false), doorArm = useRef(false)
-  const addPriv = (text: string, mine: boolean) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text }])
+  const addPriv = (text: string, mine: boolean, id?: number) => setPriv(l => [...l.slice(-(LOG_MAX - 1)), { k: ++logK.current, mine, text, id }])
   const flash = (s: string) => { setNote(s); clearTimeout(noteT.current); noteT.current = window.setTimeout(() => setNote(''), 4000) }
   const enter = (to = roomRef.current, tk = '') => {
     if (!prof || !invite.trim() || !adult) return
@@ -142,7 +145,7 @@ function World() {
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
       if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
-      if (m.t === 'game') { const nx = m.on ? m : null; if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
+      if (m.t === 'game') { const nx = m.on ? m : null; if (!m.on && gameRef.current?.g === 'blackjack') setBjHold(true); if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
       if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync()
         // through the archway: keep walking a tile into the room; the fade lifts (a teleport is seated by the server)
@@ -176,7 +179,7 @@ function World() {
       else if (m.t === 'no') { setWhy(REFUSED[m.why] || 'Could not join.'); setPhase('refused'); n.close() }
       else if (m.t === 'add' || m.t === 'del') { setCount(n.pubs.size); if (m.t === 'del') { bubbles.current.delete(m.id); setSel(s => s && s.id === m.id ? null : s) } }
       else if (m.t === 'say' && m.id !== n.me) { bubbles.current.set(m.id, { text: m.text, until: performance.now() + BUBBLE_MS })
-        if (m.priv) addPriv(m.text, false); else addLog(n.pubs.get(m.id)?.name ?? 'Someone', m.text, false, m.id) }
+        if (m.priv) addPriv(m.text, false, m.id); else addLog(n.pubs.get(m.id)?.name ?? 'Someone', m.text, false, m.id) }
       else if (m.t === 'murmur') murmurs.current.set(m.tb, performance.now() + MURMUR_MS)
       else if (m.t === 'said') {
         if (m.ok) { bubbles.current.set(n.me, { text: m.text, until: performance.now() + BUBBLE_MS, mine: true }); if (m.priv) addPriv(m.text, true); else addLog(prof?.name ?? 'You', m.text, true) }
@@ -228,7 +231,7 @@ function World() {
     arrive.current = tk ? 'tele' : 'door'; setFade(true); keepPriv.current = !!tk; setGinvOut(null); setGinvIn(null)
     callRef.current?.end('hangup'); n.close(); net.current = null
     const A = pa.current; if (A) { A.set({ t: 'piano', by: 0, song: null, at: 0, now: 0 } as any); A.setDuet({ t: 'duet', on: false } as any) }
-    setCard(null); setSel(null); setGame(null); if (!tk) setPriv([]); setWhere(''); target.current = null; setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false); setChips(null)
+    setCard(null); setSel(null); setGame(null); if (!tk) setPriv([]); setWhere(''); target.current = null; setPianoS({ by: 0, song: null, at: 0 }); duetRef.current = null; setDuetV(null); setAtTable(false); setAtBj(false); setChips(null)
     bubbles.current.clear(); murmurs.current.clear(); setRoom(to); enter(to, tk)
     { const u = new URL(location.href); if (to.startsWith('games')) u.searchParams.set('room', 'games'); else u.searchParams.delete('room'); history.replaceState(history.state, '', u) }   // a reload stays in this room
   }
@@ -351,7 +354,7 @@ function World() {
   // the Games Lounge: am I sitting at a games table? (shows the games panel)
   useEffect(() => {
     if (phase !== 'in' || !room.startsWith('games-')) return
-    const i = setInterval(() => { const n = net.current, e = n?.ents.get(n.me); setAtTable(!!e && !!(e.f & F_SIT) && isSeat(Math.floor(e.x), Math.floor(e.y))) }, 250)
+    const i = setInterval(() => { const n = net.current, e = n?.ents.get(n.me); const sit = !!e && !!(e.f & F_SIT), x = e ? Math.floor(e.x) : 0, y = e ? Math.floor(e.y) : 0, bj = sit && isBjSeat(x, y); setAtBj(bj); if (!bj) setBjHold(false); setAtTable(sit && isSeat(x, y) && !bj) }, 250)
     return () => { clearInterval(i); setAtTable(false) }
   }, [phase, room])
 
@@ -364,6 +367,7 @@ function World() {
       const typing = document.activeElement === input.current || document.activeElement?.tagName === 'INPUT'
       if (e.key === 'Escape') { if (typing) (document.activeElement as HTMLElement).blur(); else if (selRef.current) { setMenu(''); setSel(null); if (ren.current) ren.current.sel = 0 } else standRef.current?.(); return }
       if (typing || (e.target as HTMLElement).closest?.('button, input, select, textarea')) return
+      if (bjRef.current && e.key.length === 1 && 'hsdb'.includes(e.key.toLowerCase())) return
       if (e.key === 'Enter') { e.preventDefault(); input.current?.focus(); return }
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
       if (K[key] && !e.repeat) { e.preventDefault(); held.add(key); steer() } else if (K[key]) e.preventDefault()
@@ -416,7 +420,8 @@ function World() {
     if (si >= 0) { const f = SOFAS[si].front; n.send({ t: 'go', x: f[0], y: f[1] }); return }   // off the sofa onto the floor in front of it
     const t = ([[0, 1], [0, -1], [-1, 0], [1, 0], [-1, 1], [1, 1], [-1, -1], [1, -1]] as const).map(([dx, dy]) => [x + dx, y + dy] as [number, number]).find(([a, b]) => walkable(a, b) && !isSeat(a, b) && !isPianoSeat(a, b))
     if (!t) return; n.send({ t: 'go', x: t[0], y: t[1] }); target.current = t; if (ren.current) ren.current.path = [t] }
-  standRef.current = card?.q || where ? stand : null
+  standRef.current = card?.q || where || atBj ? stand : null
+  bjRef.current = atBj
 
   // AE's lounge sounds (flag off by default): load with the lounge, stop on the way out, bed ducked under call audio
   useEffect(() => {
@@ -489,12 +494,14 @@ function World() {
     <p>Thanks for the chat <img src={heartPng} alt="" width={18} height={16} data-t="w-gone-heart" /></p>
     <button className="w-btn" data-t="w-gone-ok" onClick={() => setGone('')}>OK</button></section>
   return (
-    <main className={'w-room ' + layout + (seated ? ' seated' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined}>
+    <main className={'w-room ' + layout + (seated ? ' seated' : '') + (atBj ? ' bj' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined} data-bj={atBj ? '1' : undefined}>
       <header className="w-top"><b data-t="w-room-name">{lounge ? 'Games Lounge' : 'Café'}</b><span data-t="w-inst">{inst.replace(/^(cafe|games)-/, 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
         {lounge && chips !== null && <span className="w-chips" data-t="w-chips" data-n={chips} title={`${CHIPS_NAME} · just for fun, never bought or cashed out`}>{chips} {CHIPS_NAME}</span>}
         <button className="w-door" data-t="w-door" onClick={() => goRoom(lounge ? 'cafe-1' : 'games-1')}>{lounge ? '← Café' : <><img src={plaquePng} alt="" width={40} height={18} />Games Lounge →</>}</button>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas key={room} ref={canvas} data-t="w-canvas" onPointerDown={tap} />
+        {atBj && !bjHold && game?.g === 'blackjack' && <Suspense fallback={null}><BjTable game={game} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
+          send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} onLeave={() => setBjHold(true)} /></Suspense>}
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
         {/* GD's voice emote tray; phone: ♪ (café sound on/off, the piano mute everywhere) with the tray to its right */}
         {layout === 'phone' && <button className={'w-note-btn' + (muted ? ' off' : '')} data-t="w-sound" aria-pressed={!muted} aria-label={muted ? 'Café sound off' : 'Café sound on'}
@@ -514,21 +521,23 @@ function World() {
         {person}
         {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
         {goneEl}
-        {lounge && (atTable || game) && <Suspense fallback={null}><GamesPanel game={game} games={games} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
+        {lounge && !atBj && (atTable || (game && game.g === 'snap')) && <Suspense fallback={null}><GamesPanel game={game && game.g === 'snap' ? game : null} games={games} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
           send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} /></Suspense>}
-        {cardEl}
+        {atBj && <BjChat name={tname} pubs={nn?.pubs} priv={priv} log={log} privEl={privEl} say={bar} />}
+        {atBj && <BjCall card={card} name={tname} send={dsend} />}
+        {!atBj && cardEl}
         {pianoEl}
         {where === 'sofa' && <section className="w-panel w-sofa" data-t="w-sofa"><p>On the sofa · everyone can hear the room chat</p>
           <button className="w-btn sm ghost" data-t="w-sofa-stand" onClick={stand}>Stand up</button></section>}
         {/* GD v05: at a table the "Just you two" chat (with the bar) replaces the room log */}
-        {!seated && layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
+        {!seated && !atBj && layout === 'desk' && <section className="w-log" data-t="w-log" aria-label="Chat">
           <h2 className="w-log-h">Chat</h2>
           <ol ref={logEl} role="log" aria-live="polite">{log.length ? log.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined} data-mine={l.mine ? '1' : undefined}><b>{l.mine ? 'You' : l.name}</b> <span>{l.text}</span>
               {!l.mine && !lounge && l.id && nn?.pubs.has(l.id) && <button className="w-link w-ginv-l" data-t="w-ginv-log" data-id={l.id} onClick={() => ginv(l.id!)}>Play a game?</button>}</li>)
             : <li className="w-log-empty">What people say shows up here.</li>}</ol></section>}
-        {!seated && bar}
-        {!seated && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card · tap the piano to play</p>}
-        {!seated && layout === 'desk' && <p className="w-help w-credit" data-t="w-credit-help">{PIANO_CREDIT} · {EMOTE_CREDIT}</p>}
+        {!seated && !atBj && bar}
+        {!seated && !atBj && layout === 'desk' && <p className="w-help" data-t="w-help">Click to walk · arrows/WASD · Enter to talk · Esc to close · click someone for options · sit at a table with someone for a question card · tap the piano to play</p>}
+        {!seated && !atBj && layout === 'desk' && <p className="w-help w-credit" data-t="w-credit-help">{PIANO_CREDIT} · {EMOTE_CREDIT}</p>}
       </aside>
     </main>)
 }
@@ -555,6 +564,30 @@ function Px({ i, n = 2, c = 'currentColor' }: { i: keyof typeof ICONS; n?: numbe
   const rows = ICONS[i].split('/'), w = rows[0].length, h = rows.length
   return <svg className="i" width={w * n} height={h * n} viewBox={`0 0 ${w} ${h}`} fill={c} aria-hidden="true">
     {rows.flatMap((r, y) => [...r].map((ch, x) => ch === '#' ? <rect key={x + ',' + y} x={x} y={y} width={1} height={1} /> : null))}</svg>
+}
+/** Table chat beside the felt (under it on a phone). Room lines and the table's own lines, in order. */
+function BjChat({ name, pubs, priv, log, privEl, say }: { name: string; pubs?: { get(id: number): { name: string } | undefined }
+  priv: { k: number; mine: boolean; text: string; id?: number }[]; log: { k: number; name: string; text: string; mine: boolean }[]
+  privEl: React.RefObject<HTMLOListElement | null>; say: React.ReactNode }) {
+  const lines = [...log.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : l.name })),
+    ...priv.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : (l.id && pubs?.get(l.id)?.name) || name || 'Someone' }))].sort((a, b) => a.k - b.k)
+  return <section className="w-panel w-chat bj-chat" data-t="w-priv" aria-label="Table chat">
+    <h3 data-t="w-priv-label">Table chat</h3>
+    <ol ref={privEl} role="log" aria-live="polite">{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
+      : <li className="w-log-empty">The table hears you.</li>}</ol>
+    {say}
+  </section>
+}
+/** The café's Start call, kept in view at the table. Two people get the real button; anyone else still sees it. */
+function BjCall({ card, name, send }: { card: Tbl | null; name: string; send: Send }) {
+  const can = !!card && card.lv >= card.video
+  return <section className="w-panel w-call" data-t="w-callrow" data-call={card?.call ?? (can ? 'open' : 'locked')}>
+    {!card ? <><button className="w-btn wide" data-t="w-call" disabled><Px i="cam" />Start call</button><p className="w-why">Start call sits here. It opens when it's just you two.</p></>
+      : !can ? <><button className="w-btn wide" data-t="w-call" disabled><Px i="cam" />Start call</button><p className="w-why" data-t="w-call-lock">Video unlocks at Level {card.video}.</p></>
+      : card.call === 'out' ? <><button className="w-btn wide" disabled data-t="w-call-out">Waiting for {name}…</button><button className="w-link" data-t="w-call-cancel" onClick={() => send({ t: 'callno' })}>Cancel</button></>
+      : card.call === 'in' ? <button className="w-btn coral wide" data-t="w-call-yes" onClick={() => send({ t: 'callyes' })}><Px i="cam" />Start call</button>
+      : <><button className="w-btn coral wide" data-t="w-call" onClick={() => send({ t: 'call' })}><Px i="cam" />Start call</button><p className="w-why">The call starts when you both tap.</p></>}
+  </section>
 }
 /** GD v05 table-for-two sheet: who (photo + level meter), the question card, "Just you two" chat, Start call. */
 function TablePanel({ card, callEl, name, pav, photo, desk, ans, setAns, ansErr, onAns, priv, privEl, say, send, stand, onGame }: { onGame?: () => void; card: Tbl; callEl?: React.ReactNode; name: string; pav?: string; photo: { lv: number; data: string } | null; desk: boolean

@@ -144,17 +144,21 @@ const [sa] = TABLES[0].seats
 const tbl = TABLES.findIndex(t => t.seats.some(s => s[0] === Math.floor(eb.x) && s[1] === Math.floor(eb.y))), seatA = TABLES[tbl].seats.find(s => s[0] !== Math.floor(eb.x))
 ok(await walkTo(A, seatA[0], seatA[1], 25000), 'Avery sits back down')
 if (await until(() => A.$('[data-t=g-done]'), 2500)) await tap(A, '[data-t=g-done]')
-if (await until(() => A.$('[data-t=g-start-blackjack]'), 8000)) { await tap(A, '[data-t=g-start-blackjack]')
-  ok(await until(() => A.$('[data-t=g-bj]'), 6000), 'Blackjack table')
-  ok(await until(() => A.$('.g-chip b'), 4000), 'coins drawn with crisp numbers')
-  await shot(A, '05-bj-coins'); await shot(B, '05-bj-coins')
-  await tap(A, '[data-t=bj-ante-5]'); await press(A, '[data-t=bj-deal]'); await sleep(1200)
-  ok((await A.$$('[data-t=bj-house] .g-card')).length === 2, 'House shows 2 cards')
-  ok(await A.$eval('[data-t=bj-house] .g-back', e => getComputedStyle(e).imageRendering === 'pixelated' && /back-/.test(e.currentSrc)), 'hole card is the pixel back')
-  for (let i = 0; i < 3 && await A.$('[data-t=bj-hit]:not([disabled])'); i++) { await press(A, '[data-t=bj-hit]'); await sleep(600) }
-  ok(await fits(A), 'blackjack cards fit the 390 screen (' + (await A.$$('.g-card')).length + ' cards)')
-  await shot(A, '06-bj-cards'); await shot(B, '06-bj-cards') }
-else ok(false, 'blackjack offered')
+const bj = TABLES.find(t => t.kind === 'blackjack'), bseats = [...bj.seats, ...bj.extra]
+if (await B.$('[data-t=g-stand]')) await tap(B, '[data-t=g-stand]')
+ok(await walkTo(A, bseats[0][0], bseats[0][1], 25000), 'Avery sits at a blackjack table')
+ok(await walkTo(B, bseats[2][0], bseats[2][1], 25000), 'Blair sits at the same blackjack table')
+ok(await until(() => A.$('[data-t=g-bj]'), 8000), 'Blackjack table opens when you sit')
+ok(await until(() => A.$('.g-chip b'), 4000), 'coins drawn with crisp numbers')
+await shot(A, '05-bj-coins'); await shot(B, '05-bj-coins')
+await tap(A, '[data-t=bj-ante-5]'); await press(A, '[data-t=bj-deal]'); await press(B, '[data-t=bj-deal]'); await sleep(1200)
+ok(await until(async () => (await A.$$('[data-t=bj-house] .g-card')).length === 2, 6000), 'House shows 2 cards')
+if (await A.$('[data-t=bj-house] .g-back')) ok(await A.$eval('[data-t=bj-house] .g-back', e => getComputedStyle(e).imageRendering === 'pixelated' && /back-/.test(e.currentSrc || e.src)), 'hole card is the pixel back')
+else ok((await attr(A, '[data-t=g-bj]', 'data-phase')) !== 'play', 'house is face up once the round has settled')
+for (let i = 0; i < 3 && await A.$('[data-t=bj-hit]:not([disabled])'); i++) { await press(A, '[data-t=bj-hit]'); await sleep(600) }
+ok(await fits(A), 'blackjack cards fit the 390 screen (' + (await A.$$('.g-card')).length + ' cards)')
+ok(await A.$eval('.bj-screen .g-face', e => getComputedStyle(e).imageRendering !== 'pixelated'), 'faces stay smooth')
+await shot(A, '06-bj-cards'); await shot(B, '06-bj-cards')
 void sa
 await browser.close()
 console.log(`\n${n - bad}/${n} checks passed`); process.exit(bad ? 1 : 0)

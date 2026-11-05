@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 const SRC = '/workspace/design/pixeldate/world/games-lounge/src/assets/svg/', OUT = new URL('../src/world/art/cards-svg/', import.meta.url).pathname
 // traditional colours: hearts/diamonds red, clubs/spades black. GD's pack already uses them; this only fixes stray off-colours
-const RED = '#C8102E', BLACK = '#1A1A1A', KEEP = /^#(FFF1C1|FFFFFF|FFF)$/i
+const RED = '#D32F2F', BLACK = '#1A1A1A', KEEP = /^#(FFF1C1|FFFFFF|FFF)$/i
 const tone = (svg, s) => svg.replace(/(fill|stroke)="(#[0-9a-fA-F]{3,6})"/g, (m, k, c) => {
   if (KEEP.test(c)) return m
   const h = c.length === 4 ? c.slice(1).split('').map(x => x + x).join('') : c.slice(1), [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16))

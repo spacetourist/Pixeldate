@@ -25,7 +25,7 @@ export interface Report { at: number; inst: string; by: string; who: string; why
 /** v05: what a pair keeps across the whole app (one Pair Durable Object per pair in production, shared by every room
     and instance): their level, how many cards into it they are (the meter, 0..LV_SEG) and who said yes to a date. */
 export interface PairRec { lv: number; seg?: number; date: string[]; duetUp?: string
-  /** the day (ISO date) a finished Games Room game last moved this pair's meter: once per pair per day */ gameUp?: string }
+  /** the day (ISO date) a finished Games Lounge game last moved this pair's meter: once per pair per day */ gameUp?: string }
 /** Where pair records live. load() is async (a Durable Object call); save() is fire-and-forget. */
 export interface PairStore { load(key: string): Promise<PairRec | undefined>; save(key: string, r: PairRec): void }
 /** In-memory pair store: one per process is shared by every room (tests, the Node dev server). */
@@ -46,7 +46,7 @@ export interface RoomOpts { cap?: number; invites: Set<string>; now?: () => numb
   pairs?: PairStore }
 const REASONS = new Set(['rude', 'sexual', 'spam', 'underage', 'fake', 'other'])
 /** a table's game: its state (shared/games), who's away (uid → since), who stood up (uid → since), each player's seat */
-interface GameRun { id: GameId; tb: number; s: SnapS; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; sent: number; fam: boolean; famLv?: number }
+interface GameRun { id: GameId; tb: number; s: SnapS; away: Map<string, number>; off: Map<string, number>; seat: Map<string, P>; ids: Map<string, number>; sent: number; fam: boolean; famLv?: number }
 const RECONNECT_MS = 20_000, LEAVE_MS = 2500
 const R_SPACE = 0.75, BOX = 0.28, INPUT_PER_S = 20
 
@@ -111,7 +111,7 @@ export class Room {
   /** tables showing the couple heart right now (GD couple/README: only on/off per table is ever broadcast) */
   hearts = new Set<number>()
   name: string; store: Store; opts: RoomOpts; cap: number; now: () => number; stale: number
-  /** which map this instance is (games-N: the Games Room); every entry point switches the shared grid to it first */
+  /** which map this instance is (games-N: the Games Lounge); every entry point switches the shared grid to it first */
   mapId: MapId; games = new Map<number, GameRun>()
   constructor(name: string, store: Store, opts: RoomOpts) { this.mapId = mapOf(name); this.name = name; this.store = store; this.opts = opts; this.cap = opts.cap ?? CAP; this.now = opts.now ?? Date.now; this.stale = opts.staleMs ?? STALE_MS; this.ps = opts.pairs ?? memPairs() }
   get size() { return this.players.size }
@@ -304,7 +304,7 @@ export class Room {
       const a = seated.get(t.seats[0].join(',')), b = seated.get(t.seats[1].join(',')), cur = this.pairs.get(t.id)
       // Not for me is for good: those two never get a table together again (the one who sat down second is stood up)
       if (a && b && this.refused(a, b)) { const late = a.sitAt >= b.sitAt ? a : b; this.standUp(late, t.seats[late === a ? 0 : 1]); late.sock.send(JSON.stringify({ t: 'note', k: 'table-no' })); continue }
-      // a Games Room table with someone on an extra seat is a group, not a pair: no cards, chat goes to the table
+      // a Games Lounge table with someone on an extra seat is a group, not a pair: no cards, chat goes to the table
       const ok = !!(a && b && !this.hidden(a, b)) && !t.extra.some(e => seated.has(e.join(',')))
       if (cur && (!ok || cur.a !== a || cur.b !== b)) this.endPair(t.id)
       if (ok && a && b && !this.pairs.has(t.id)) {
@@ -742,7 +742,7 @@ export class Room {
     const msg = JSON.stringify({ t: 'emote', id: p.id, e, take })
     for (const v of this.players.values()) if (v === p || !this.hidden(v, p)) v.sock.send(msg)
   }
-  /* ---- Games Room (shared/games): the Room is the authority. A game belongs to a table; its players are the people
+  /* ---- Games Lounge (shared/games): the Room is the authority. A game belongs to a table; its players are the people
      seated there when someone pressed Start. Only those players are ever sent its state (gameSend). ---- */
   /** the table whose seat (any of its 2-4) p is sitting on */
   private tableAt(p: Player): Table | null {
@@ -750,7 +750,7 @@ export class Room {
     const x = Math.floor(p.x), y = Math.floor(p.y)
     return TABLES.find(t => seatsOf(t).some(([a, b]) => a === x && b === y)) ?? null
   }
-  /** everyone sitting at p's table (Games Room only; the café's tables are pairs) */
+  /** everyone sitting at p's table (Games Lounge only; the café's tables are pairs) */
   private tableGroup(p: Player): Player[] | null {
     if (this.mapId !== 'games') return null
     const t = this.tableAt(p); if (!t) return null
@@ -777,7 +777,7 @@ export class Room {
     if (grp.length < info.min) return err('few')
     if (grp.length > info.max) return err('many')
     const now = this.now(), c = { now, rnd: cryptoRnd }
-    const g: GameRun = { id: info.id, tb: t.id, s: Snap.start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), sent: 0, fam: false }
+    const g: GameRun = { id: info.id, tb: t.id, s: Snap.start(grp.map(o => o.uid), c), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false }
     for (const o of grp) g.seat.set(o.uid, [Math.floor(o.x), Math.floor(o.y)])
     this.games.set(t.id, g); this.gameSend(g)
   }
@@ -827,7 +827,7 @@ export class Room {
   private gameSend(g: GameRun) {
     g.sent = g.s.seq
     const now = this.now(), ids = new Map<string, number>()
-    for (const sp of g.s.ps) { const o = this.byUid(sp.uid); ids.set(sp.uid, o?.id ?? 0) }
+    for (const sp of g.s.ps) { const o = this.byUid(sp.uid); if (o) g.ids.set(sp.uid, o.id); ids.set(sp.uid, g.ids.get(sp.uid) ?? 0) }   // an away player keeps their last id
     for (const sp of g.s.ps) {
       const o = this.byUid(sp.uid); if (!o) continue
       const v = Snap.view(g.s, sp.uid, { now, rnd: cryptoRnd })
@@ -869,7 +869,7 @@ export class Room {
     p.says.push(t); p.recent.push({ at: t, text: v.text, ...(pr ? { to: other(pr, p).uid } : {}) }); if (p.recent.length > 8) p.recent.shift()
     const grp = !pr ? this.tableGroup(p) : null
     if (grp && grp.length > 1) {
-      // a Games Room table of 3-4 (or 2 who aren't a pair): the table hears it, everyone else gets the "…"
+      // a Games Lounge table of 3-4 (or 2 who aren't a pair): the table hears it, everyone else gets the "…"
       p.sock.send(JSON.stringify({ t: 'said', ok: true, text: v.text, priv: 1 }))
       const msg = JSON.stringify({ t: 'say', id: p.id, text: v.text, priv: 1 })
       for (const o of grp) if (o !== p && !this.hidden(p, o)) { o.sock.send(msg); o.heard.push({ at: t, text: v.text }); if (o.heard.length > 8) o.heard.shift() }

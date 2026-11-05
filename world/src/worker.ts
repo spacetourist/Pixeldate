@@ -1,7 +1,7 @@
 /* Pixeldate World · Cloudflare Worker. One Durable Object per café instance (Area, via PartyServer), one per user
    (User: met / hearted / passed / refusedBy / blocked / blockedBy) and a singleton Mod that keeps reports in SQLite.
    A singleton Budget keeps the free-plan blocks (src/budget.ts): TURN estimate / actual caps and the daily request count.
-   Routes: /parties/area/cafe-N and games-N (the Games Room) (WebSocket) · /turn (TURN credentials, src/turn.ts) · /dev/reports, /dev/budget (DEV only,
+   Routes: /parties/area/cafe-N and games-N (the Games Lounge) (WebSocket) · /turn (TURN credentials, src/turn.ts) · /dev/reports, /dev/budget (DEV only,
    for tests) · /health */
 import { Server, routePartykitRequest, type Connection } from 'partyserver'
 import { DurableObject } from 'cloudflare:workers'

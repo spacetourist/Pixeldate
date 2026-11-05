@@ -5,7 +5,7 @@
            s chair seat (sit here) · P plant · L standing lamp · S sofa / candle side table · K piano + bench
            p the piano bench seats: the solo seat in the middle, the duet's Bass (left) and Melody (right) either side
              (shared/piano.ts, shared/duet.ts); never walked across, only sat on
-           g a Games Room table's extra seat (up to four at a table) · D doormat / door · . floor
+           g a Games Lounge table's extra seat (up to four at a table) · D doormat / door · . floor
    All blocked: # C T c P L S K. Rugs are art only (walkable). */
 export const TILE = 16
 export type Light = { kind: 'table' | 'pendant' | 'floor'; x: number; y: number }
@@ -51,9 +51,9 @@ export const MAPS: Record<string, MapDef> = {
       { kind: 'table', x: 34 * T + 8, y: 6 * T + 14 },
     ],
   },
-  /** 40x24 Games Room (placeholder art until GD's lands: src/world/art/games-map.png, same grid). Tables are for up to four:
-      the 2x2 table with the pair's two seats either side of its lower row (s, the café's table for two) and two more on
-      its upper row (g). D: the door back to the café. */
+  /** 40x24 Games Lounge (placeholder velvet + warm lamps until GD's art lands: src/world/art/games-map.png, same grid).
+      v1: tables for two, exactly the café's (s T T s), so the pair logic is the café's. The map format still allows g
+      (extra seats on the row above) for bigger tables later. D: the door back to the café. */
   games: {
     art: 'games-map.png',
     rows: [
@@ -63,19 +63,19 @@ export const MAPS: Record<string, MapDef> = {
     '#P..................DD................P#',
     '#......................................#',
     '#......................................#',
-    '#...gTTg.....gTTg.....gTTg.....gTTg....#',
+    '#......................................#',
     '#...sTTs.....sTTs.....sTTs.....sTTs....#',
     '#......................................#',
     '#......................................#',
     '#......................................#',
     '#P.....................................#',
-    '#...gTTg.....gTTg.....gTTg.....gTTg....#',
+    '#......................................#',
     '#...sTTs.....sTTs.....sTTs.....sTTs....#',
     '#......................................#',
     '#......................................#',
     '#......................................#',
     '#P....................................P#',
-    '#...gTTg.....gTTg.....gTTg.....gTTg....#',
+    '#......................................#',
     '#...sTTs.....sTTs.....sTTs.....sTTs....#',
     '#......................................#',
     '#......................................#',
@@ -86,14 +86,14 @@ export const MAPS: Record<string, MapDef> = {
     lights: [],
   },
 }
-/** Which map a room instance uses: games-N is the Games Room, everything else the café. */
+/** Which map a room instance uses: games-N is the Games Lounge, everything else the café. */
 export type MapId = 'cafe-landscape' | 'games'
 export const mapOf = (room: string): MapId => room.startsWith('games-') ? 'games' : 'cafe-landscape'
-/** The door tile(s): the café's doormat leads to the Games Room, the Games Room's door back to the café. */
+/** The door tile(s): the café's doormat leads to the Games Lounge, the Games Lounge's door back to the café. */
 export const isDoor = (x: number, y: number) => at(x, y) === 'D'
 export const MAP_ID: MapId = 'cafe-landscape'
 export interface Table { id: number; x: number; y: number; seats: [[number, number], [number, number]]
-  /** Games Room tables: the two extra seats on the upper row (2-4 players) */ extra: [number, number][] }
+  /** Games Lounge tables: the two extra seats on the upper row (2-4 players) */ extra: [number, number][] }
 const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K'])
 /* The current map. Every Room (server) and the client switch with useMap() before touching the grid; the exports are
    live bindings, so importers always see the current one. JS is single-threaded and a Room calls useMap() at the top
@@ -120,7 +120,7 @@ useMap(MAP_ID)
 export const at = (x: number, y: number) => (x < 0 || y < 0 || x >= W || y >= H) ? '#' : ROWS[y][x]
 /** Can a foot stand on tile (x, y)? The doormat counts, so people can walk in. */
 export const walkable = (x: number, y: number) => !BLOCK.has(at(x, y))
-/** a chair: the café's s, or a Games Room table's extra g */
+/** a chair: the café's s, or a Games Lounge table's extra g */
 export const isSeat = (x: number, y: number) => { const c = at(x, y); return c === 's' || c === 'g' }
 export const isPianoSeat = (x: number, y: number) => at(x, y) === 'p'
 /** every seat of table t (the pair's two first) */

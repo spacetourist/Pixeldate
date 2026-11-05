@@ -1,15 +1,14 @@
-/* Games Room: the table games. The Room (Durable Object) is the only authority: it owns each game's state, shuffles
+/* Games Lounge: the table games. The Room (Durable Object) is the only authority: it owns each game's state, shuffles
    with crypto, runs the turn clock and sends every player their own view. A game is a pure module behind this
    interface, so Blackjack (house dealer, free chips) and Pong slot in as new entries without touching the Room.
    Play money only, nothing is ever bought or paid out. */
-export type GameId = 'snap' | 'blackjack' | 'pong'
+export type GameId = 'snap' | 'blackjack'
 export interface GameInfo { id: GameId; title: string; min: number; max: number; ready: boolean; blurb: string }
 export const GAMES: Record<GameId, GameInfo> = {
-  snap: { id: 'snap', title: 'Snap', min: 2, max: 4, ready: true, blurb: 'Flip in turn. Two of a rank in a row: first to snap takes the pile.' },
-  // hooks: not built yet. blackjack = each seat plays the house dealer with free chips (no stakes between players);
-  // pong = two seats, the DO runs the ball at the tick rate and sends paddle/ball state in the game view.
-  blackjack: { id: 'blackjack', title: 'Blackjack', min: 1, max: 4, ready: false, blurb: 'Coming soon: free chips against the house.' },
-  pong: { id: 'pong', title: 'Pong', min: 2, max: 2, ready: false, blurb: 'Coming soon.' },
+  snap: { id: 'snap', title: 'Snap', min: 2, max: 2, ready: true, blurb: 'Flip in turn. Two of a rank in a row: first to snap takes the pile.' },
+  // hook, not built yet: co-op. The two at the table play together against the house dealer with play chips (no stakes
+  // between players, nothing bought or paid out). No arcade games in v1.
+  blackjack: { id: 'blackjack', title: 'Blackjack', min: 2, max: 2, ready: false, blurb: 'Coming soon: the two of you against the house, play chips.' },
 }
 /** What a game module gives the Room. `now` is passed in (tests use a fake clock); `rnd(n)` is a uniform 0..n-1 from crypto. */
 export interface GameCtx { now: number; rnd: (n: number) => number }

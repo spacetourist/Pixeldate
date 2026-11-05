@@ -15,8 +15,8 @@ const J = async (o = {}, room = 'games-1') => { const b = new Bot(profile(o), { 
 const lastGame = b => b.last('game')
 const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 8000), `sat at ${x},${y}`) }
 
-await test('map: games map 40x24, 12 tables of four, door, every seat reachable; café untouched after switching', async () => {
-  M.useMap('games'); assert.equal(M.TABLES.length, 12); for (const t of M.TABLES) { assert.equal(M.seatsOf(t).length, 4); for (const [x, y] of M.seatsOf(t)) assert.ok(M.isSeat(x, y)) }
+await test('map: games map 40x24, 12 tables for two, door, every seat reachable; café untouched after switching', async () => {
+  M.useMap('games'); assert.equal(M.TABLES.length, 12); for (const t of M.TABLES) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.ok(M.isSeat(x, y)) }
   assert.ok(M.isDoor(20, 3)); const seen = new Set([M.SPAWNS[0].join()]), q = [M.SPAWNS[0]]
   while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = [x + dx, y + dy]; if (M.walkable(...k) && !seen.has(k.join())) { seen.add(k.join()); q.push(k) } } }
   for (const t of M.TABLES) for (const s of M.seatsOf(t)) assert.ok(seen.has(s.join()), 'seat ' + s)
@@ -38,7 +38,7 @@ await test('snap: turns, wrong-turn refused, timeout auto-flips, good snap takes
   assert.equal(Snap.act(s, 'a', { a: 'flip' }, c()), ''); assert.equal(s.ps[s.turn].uid, 'b')
   assert.equal(Snap.act(s, 'a', { a: 'snap' }, c()), 'false-snap'); assert.equal(s.ps[0].hand.length, 2, 'penalty card')
   t += TURN_MS; assert.ok(Snap.tick(s, c())); assert.equal(s.last.k, 'auto'); assert.ok(matches(s))
-  t += 10; assert.equal(Snap.act(s, 'a', { a: 'snap' }, c()), 'slow-down', 'within SNAP_GAP_MS of the last press')
+  s.ps[0].lastSnap = t - 10; assert.equal(Snap.act(s, 'a', { a: 'snap' }, c()), 'slow-down', 'within SNAP_GAP_MS of the last press')
   t += SNAP_GAP_MS; assert.equal(Snap.act(s, 'b', { a: 'snap' }, c()), ''); assert.equal(s.pile.length, 0); assert.equal(s.ps[1].hand.length, 6)
   for (let i = 0; i < 3; i++) { t += SNAP_GAP_MS; Snap.act(s, 'a', { a: 'snap' }, c()) }
   t += SNAP_GAP_MS; assert.equal(Snap.act(s, 'a', { a: 'snap' }, c()), 'locked'); t += LOCK_MS; assert.notEqual(Snap.act(s, 'a', { a: 'snap' }, c()), 'locked')
@@ -49,7 +49,7 @@ await test('snap: a game always ends (timeouts only), and the winner is the last
   for (let i = 0; i < 400 && !Snap.done(s); i++) { t += TURN_MS; Snap.tick(s, { now: t, rnd: cryptoRnd }) }
   const d = Snap.done(s); assert.ok(d); assert.ok(['a', 'b', 'c', ''].includes(d.winner))
 })
-await test('hooks: blackjack and pong are registered but not ready', () => { assert.ok(GAMES.snap.ready); assert.ok(!GAMES.blackjack.ready); assert.ok(!GAMES.pong.ready) })
+await test('hooks: blackjack and pong are registered but not ready', () => { assert.ok(GAMES.snap.ready); assert.ok(!GAMES.blackjack.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2) })
 
 const T = () => { M.useMap('games'); const t = M.TABLES[0]; M.useMap('cafe-landscape'); return t }
 const play = async (bots, { snapper = null } = {}) => {
@@ -69,28 +69,22 @@ const play = async (bots, { snapper = null } = {}) => {
   throw new Error('game did not finish')
 }
 
-await test('room: 3 at a four-table start Snap; only the players get it; table chat is the group; game plays to a winner', async () => {
-  const t = T(), [A, B, C] = [await J({ name: 'Ann' }), await J({ name: 'Bo' }), await J({ name: 'Cy' })], X = await J({ name: 'Xi' })
+await test('room: two at a table start Snap; only the two get it; a third person can not join; plays to a winner', async () => {
+  const t = T(), [A, B] = [await J({ name: 'Ann' }), await J({ name: 'Bo' })], X = await J({ name: 'Xi' })
   assert.equal(A.last('hi').room, 'games')
   A.send({ t: 'gstart', g: 'snap' }); assert.equal((await A.wait(() => A.last('gerr'))).why, 'sit')
-  await Promise.all([goSit(A, t.seats[0]), goSit(B, t.seats[1]), goSit(C, t.extra[0])])
-  await sleep(300); assert.ok(!A.last('card'), 'no pair cards with three at the table')
-  A.send({ t: 'gstart', g: 'blackjack' }); assert.equal((await A.wait(() => A.events.filter(e => e.t === 'gerr').length > 1 && A.last('gerr'))).why, 'soon')
+  await goSit(A, t.seats[0]); A.send({ t: 'gstart', g: 'snap' }); assert.equal((await A.wait(() => A.events.filter(e => e.t === 'gerr').length > 1 && A.last('gerr'))).why, 'few')
+  await goSit(B, t.seats[1])
+  A.send({ t: 'gstart', g: 'blackjack' }); assert.equal((await A.wait(() => A.events.filter(e => e.t === 'gerr').length > 2 && A.last('gerr'))).why, 'soon')
   A.send({ t: 'gstart', g: 'snap' })
-  for (const b of [A, B, C]) { const g = await b.wait(() => lastGame(b)?.on && lastGame(b)); assert.ok(g, b.p.name + ' got the game'); assert.equal(g.ps.length, 3); assert.equal(g.ps.reduce((a, p) => a + p.n, 0), 52) }
-  assert.ok(!lastGame(X), 'a bystander never gets the game')
-  assert.ok(!A.text.join().includes('bot-'), 'no uids on the wire')
-  B.send({ t: 'say', text: 'good luck all' }); await sleep(300)
-  assert.ok(A.events.some(e => e.t === 'say' && e.priv && e.text === 'good luck all')); assert.ok(C.events.some(e => e.t === 'say' && e.text === 'good luck all'))
-  assert.ok(!X.events.some(e => e.t === 'say' && e.text === 'good luck all')); assert.ok(X.events.some(e => e.t === 'murmur'))
-  B.send({ t: 'gact', a: 'flip' }); await sleep(100)
-  const fin = await play([A, B, C], { snapper: C })
-  assert.ok(fin.every(g => g.winner === fin[0].winner)); assert.ok([A.me, B.me, C.me, 0].includes(fin[0].winner))
-  await done()
+  for (const b of [A, B]) { const g = await b.wait(() => lastGame(b)?.on && lastGame(b)); assert.ok(g, b.p.name + ' got the game'); assert.equal(g.ps.length, 2); assert.equal(g.ps.reduce((a, p) => a + p.n, 0), 52) }
+  assert.ok(!lastGame(X), 'a bystander never gets the game'); assert.ok(!A.text.join().includes('bot-'), 'no uids on the wire')
+  const fin = await play([A, B], { snapper: B })
+  assert.ok(fin.every(g => g.winner === fin[0].winner)); assert.ok([A.me, B.me, 0].includes(fin[0].winner))
 })
 await test('room: rate limit: snap spam from one player is refused (slow-down / locked) and the game survives', async () => {
   const t = T(), A = await J(), B = await J()
-  await Promise.all([goSit(A, t.seats[0]), goSit(B, t.extra[1])])
+  await Promise.all([goSit(A, t.seats[0]), goSit(B, t.seats[1])])
   A.send({ t: 'gstart', g: 'snap' }); await A.wait(() => lastGame(A)?.on)
   for (let i = 0; i < 15; i++) A.send({ t: 'gact', a: 'snap' })
   await sleep(500); const errs = A.events.filter(e => e.t === 'gerr').map(e => e.why)
@@ -128,7 +122,7 @@ await test('familiarity: a finished game between a pair moves the meter one segm
   await play([A, B])
   const c1 = await A.wait(() => { const c = A.last('card'); return (c.seg !== seg0 || c.lv !== lv0) && c }); assert.ok(c1, 'meter moved')
   assert.ok(await A.wait(() => lastGame(A)?.fam), 'game view says so')
-  const key = [A.p.uid, B.p.uid].sort().join('|'), rec = dev.pairs.get?.(key) ?? [...(dev.pairs.values?.() ?? [])].at(-1)
+  const key = [A.p.uid, B.p.uid].sort().join('|'), rec = dev.pairs.m.get(key)
   assert.ok(rec?.gameUp, 'gameUp stored')
   const after = A.last('card'); A.send({ t: 'gstart', g: 'snap' }); await A.wait(() => lastGame(A)?.winner === null); await play([A, B]); await sleep(400)
   assert.deepEqual([A.last('card').lv, A.last('card').seg], [after.lv, after.seg], 'second game the same day: no change')

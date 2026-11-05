@@ -20,7 +20,9 @@ export const MW = W * TILE, MH = H * TILE
     the lintel. The view may rise ARCH_TOP px above the map so the lintel and plaque show whole (that strip repeats the wall
     top). Swap the art here (ARCH) when GD sends a new one; the doorway itself is never drawn over. */
 export const ARCH_TOP = 16
-export const ARCH: Record<string, { art: string; dx: number; dy: number }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16 }, games: { art: 'lounge-archway', dx: -24, dy: -16 } }
+export const ARCH: Record<string, { art: string; dx: number; dy: number; plaque?: string }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16, plaque: 'door-plaque' }, games: { art: 'lounge-archway', dx: -24, dy: -16 } }
+/** the plaque on the lintel: GD's 80x36 sign with its top 4 rows (hanging rings) cropped, body on the arch's rows 0-27 */
+const PLAQUE_CROP = 4, PLAQUE_H = 28
 /* GD's final world markers (world/markers/README.md), copied into ./art/markers/ by  node tools/import-world-art.mjs
    (sizes checked there). Anchors are in art px from the person's 24x32 sprite cell top-left (sx, sy); seated: y + SIT_D.
      heart-bob.png        18x9, two 9x9 frames (0 = lower), ~400 ms each, at (sx+7, sy-10); heart.png 9x8 at (sx+7, sy-9)
@@ -200,6 +202,8 @@ export class Renderer {
       const ar = await load(A.art + '@3x.png'), sp = new Sprite(tex(ar)), col = Math.min(...doors.map(d => d[0]))
       sp.scale.set(1 / 3); sp.position.set(col * TILE + A.dx, A.dy); sp.label = 'archway'; plaque.addChild(sp)
       this.art.archway = [ar.width / 3, ar.height / 3]
+      if (A.plaque) { const pl = await load(A.plaque + '@3x.png'), ps = new Sprite(new Texture({ source: tex(pl).source, frame: new Rectangle(0, PLAQUE_CROP * 3, pl.width, PLAQUE_H * 3) }))
+        ps.scale.set(1 / 3); ps.position.set(sp.x, sp.y); ps.label = 'plaque'; plaque.addChild(ps); this.art.plaque = [pl.width / 3, PLAQUE_H] }
     }
     for (const l of MAP.lights) { const t = T['glow-' + l.kind], s = new Sprite(t)
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }

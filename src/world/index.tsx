@@ -491,7 +491,7 @@ function World() {
         {lounge && chips !== null && <span className="w-chips" data-t="w-chips" data-n={chips} title={`${CHIPS_NAME} · just for fun, never bought or cashed out`}>{chips} {CHIPS_NAME}</span>}
         <button className="w-door" data-t="w-door" onClick={() => goRoom(lounge ? 'cafe-1' : 'games-1')}>{lounge ? '← Café' : <><img src={plaquePng} alt="" width={40} height={18} />Games Lounge →</>}</button>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
-      <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
+      <div className="w-stage" ref={stage}><canvas key={room} ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
         {/* GD's voice emote tray; phone: ♪ (café sound on/off, the piano mute everywhere) with the tray to its right */}
         {layout === 'phone' && <button className={'w-note-btn' + (muted ? ' off' : '')} data-t="w-sound" aria-pressed={!muted} aria-label={muted ? 'Café sound off' : 'Café sound on'}

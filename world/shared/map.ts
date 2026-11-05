@@ -54,39 +54,42 @@ export const MAPS: Record<string, MapDef> = {
   /** 40x24 Games Lounge (placeholder velvet + warm lamps until GD's art lands: src/world/art/games-map.png, same grid).
       v1: tables for two, exactly the café's (s T T s), so the pair logic is the café's. The map format still allows g
       (extra seats on the row above) for bigger tables later. D: the door back to the café. */
+  /** 40x24 Games Lounge: GD's games-lounge pack (src/world/art/games-map.png from tools/games-lounge-art.py). Six felt
+      tables for two (c s|TTT|s c: chair backs over the seats, a 3-wide felt table), the door back to the café at col 11-12
+      (D), lamps/plants/loveseat/arcade cabinets solid (P). The arcade alcove's cabinets are dim LATER props (no Pong in v1). */
   games: {
     art: 'games-map.png',
     rows: [
     '########################################',
     '########################################',
     '########################################',
-    '#P..................DD................P#',
-    '#......................................#',
-    '#......................................#',
-    '#....TT.......TT.......TT.......TT.....#',
-    '#...sTTs.....sTTs.....sTTs.....sTTs....#',
-    '#......................................#',
-    '#......................................#',
-    '#......................................#',
+    '#........P.DD.P......................P.#',
+    '#P.......P...........................P.#',
     '#P.....................................#',
-    '#....TT.......TT.......TT.......TT.....#',
-    '#...sTTs.....sTTs.....sTTs.....sTTs....#',
+    '#...P.....................P............#',
+    '#...P.....................P............#',
+    '#......cTTTc..cTTTc..cTTTc.....PP.PP.P.#',
+    '#......sTTTs..sTTTs..sTTTs.....PP.PP...#',
+    '#..............................PP.PP...#',
+    '#......................................#',
+    '#..............................PP.PP...#',
+    '#..............................PP.PP...#',
+    '#P.............................PP.PP.P.#',
+    '#P........cTTTc..cTTTc..cTTTc..........#',
+    '#.........sTTTs..sTTTs..sTTTs..........#',
     '#......................................#',
     '#......................................#',
+    '#...P..................................#',
+    '#P.PP.P..............................P.#',
+    '#P.PP.P..............................P.#',
     '#......................................#',
-    '#P....................................P#',
-    '#....TT.......TT.......TT.......TT.....#',
-    '#...sTTs.....sTTs.....sTTs.....sTTs....#',
-    '#......................................#',
-    '#......................................#',
-    '#P....................................P#',
     '########################################',
     ],
-    spawns: [[20, 4], [21, 4], [19, 4], [22, 4], [20, 5], [21, 5], [19, 5], [22, 5], [18, 4], [23, 4]],
-    // placeholder warm lamps: one on every table, floor lamps in the corners (no neon: velvet and lamplight)
+    spawns: [[11, 4], [12, 4], [11, 5], [12, 5], [10, 4], [13, 4], [10, 5], [13, 5], [11, 6], [12, 6]],
+    // warm lamps from GD's scene: each table's lamp (col*T+32, row*T+16), floor lamps (col*T+8, row*T+22)
     lights: [
-      ...[4, 13, 22, 31].flatMap(c => [6, 12, 18].map(r => ({ kind: 'table' as const, x: c * T + T + 16, y: r * T + 13 }))),
-      ...([[1, 3], [38, 3], [1, 11], [1, 17], [38, 17], [1, 22], [38, 22]] as const).map(([c, r]) => ({ kind: 'floor' as const, x: c * T + 8, y: r * T + 2 })),
+      ...([[7, 8], [14, 8], [21, 8], [10, 15], [17, 15], [24, 15]] as const).map(([c, r]) => ({ kind: 'table' as const, x: c * T + 32, y: r * T + 16 })),
+      ...([[4, 5], [26, 5], [4, 18]] as const).map(([c, r]) => ({ kind: 'floor' as const, x: c * T + 8, y: r * T + 22 })),
     ],
   },
 }
@@ -96,7 +99,7 @@ export const mapOf = (room: string): MapId => room.startsWith('games-') ? 'games
 /** The door tile(s): the café's doormat leads to the Games Lounge, the Games Lounge's door back to the café. */
 export const isDoor = (x: number, y: number) => at(x, y) === 'D'
 export const MAP_ID: MapId = 'cafe-landscape'
-export interface Table { id: number; x: number; y: number; seats: [[number, number], [number, number]]
+export interface Table { id: number; x: number; y: number; /** felt width in tiles (café 2, lounge 3) */ w: number; seats: [[number, number], [number, number]]
   /** Games Lounge tables: the two extra seats on the upper row (2-4 players) */ extra: [number, number][] }
 const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K'])
 /* The current map. Every Room (server) and the client switch with useMap() before touching the grid; the exports are
@@ -113,9 +116,11 @@ export function useMap(id: MapId) {
   if (!b) { const tables: Table[] = []
     /** Every table: a 2x2 table with a seat either side on its lower row, exactly where GD drew the chairs (+ g seats above). */
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
-      if (ROWS[y][x] === 's' && ROWS[y][x + 1] === 'T' && ROWS[y][x + 2] === 'T' && ROWS[y][x + 3] === 's') {
-        const extra: [number, number][] = y > 0 && ROWS[y - 1][x] === 'g' && ROWS[y - 1][x + 3] === 'g' ? [[x, y - 1], [x + 3, y - 1]] : []
-        tables.push({ id: tables.length, x: x + 1, y, seats: [[x, y], [x + 3, y]], extra }) }
+      if (ROWS[y][x] === 's' && ROWS[y][x + 1] === 'T' && ROWS[y][x + 2] === 'T') {
+        // the café's 2-wide sTTs, or the Games Lounge's 3-wide felt sTTTs
+        const w = ROWS[y][x + 3] === 's' ? 2 : ROWS[y][x + 3] === 'T' && ROWS[y][x + 4] === 's' ? 3 : 0; if (!w) continue
+        const extra: [number, number][] = y > 0 && ROWS[y - 1][x] === 'g' && ROWS[y - 1][x + w + 1] === 'g' ? [[x, y - 1], [x + w + 1, y - 1]] : []
+        tables.push({ id: tables.length, x: x + 1, y, w, seats: [[x, y], [x + w + 1, y]], extra }) }
     b = { tables }; built.set(id, b) }
   TABLES = b.tables
 }

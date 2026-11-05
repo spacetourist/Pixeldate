@@ -1,20 +1,31 @@
-/* Games Lounge (placeholder: velvet and warm lamplight in the café palette; no neon) */
-.g-panel { background: #2A1420; box-shadow: inset 0 0 0 1px #6B2737 }
-.g-h { font: var(--t-title, 600 16px/1.2 system-ui); margin: 0; display: flex; gap: 8px; align-items: baseline } .g-h small { color: var(--text-muted, #C9B8A8); font: var(--t-ui, 13px system-ui) }
+/* Games Lounge panels (GD games-lounge README): café panel purples, Jersey 15 titles (--font-px), Bricolage UI (--font-ui),
+   cream / coral / butter / mint. Never neon, never casino. Cards and chips are GD's pixel art at 3x, nearest-neighbour. */
+.g-panel { background: #281D52; border-color: var(--edge, #05020F); box-shadow: inset 0 0 0 1px #3A2C6E; font-family: var(--font-ui, system-ui) }
+.g-h { font: 400 26px/1 var(--font-px, monospace); color: var(--c-cream, #FFF1C1); margin: 0; display: flex; gap: 10px; align-items: baseline }
+.g-h small { color: var(--text-muted, #A49CC2); font: var(--t-micro, 11px system-ui) }
 .g-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px }
-.g-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; background: #3A1A28; border: 2px solid #05020F }
-.g-list small { display: block; color: var(--text-muted, #C9B8A8) }
+.g-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #1E1640; border: 2px solid var(--edge, #05020F) }
+.g-list b { font: 400 20px/1 var(--font-px, monospace); color: var(--c-cream, #FFF1C1) } .g-list small { display: block; color: var(--text-muted, #A49CC2) }
+.g-tag { font: 600 11px/1 var(--font-ui); padding: 2px 6px; background: var(--c-mint, #48E5C2); color: #05020F; margin-left: 6px; vertical-align: middle }
 .g-players { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap }
-.g-players li { padding: 4px 8px; background: #3A1A28; border: 2px solid #05020F; display: grid } .g-players li.turn { border-color: #F4C27A; box-shadow: 0 0 0 2px #8A5A3B }
-.g-players li.out { opacity: .5 } .g-players em { color: #F4C27A; font-size: 12px }
-.g-pile { position: relative; height: 96px; display: flex; align-items: center; justify-content: center; background: #26563E; border: 3px solid #7A4E2E; border-radius: 10px }
-.g-pile .g-card { margin-left: -34px } .g-pile .g-card:first-child { margin-left: 0 }
-.g-card { width: 52px; height: 74px; background: #F3E6CC; color: #1B1020; border: 2px solid #05020F; border-radius: 6px; display: grid; place-items: center; font: 700 18px/1 system-ui; box-shadow: 0 2px 0 #05020F; image-rendering: pixelated }
-.g-card b { align-self: end } .g-card i { font-style: normal; font-size: 22px; align-self: start } .g-card.red { color: #B0283A }
-.g-size { position: absolute; right: 8px; bottom: 6px; font: var(--t-ui, 13px system-ui); color: #F3E6CC } .g-empty { color: #9BC4AC }
-.g-pair .g-pile { box-shadow: 0 0 0 3px #F4C27A }
-.g-status { margin: 0 } .g-status small { color: var(--text-muted, #C9B8A8) } .g-fam { margin: 0; color: #F4C27A }
+.g-players li { padding: 4px 10px; background: #1E1640; border: 2px solid var(--edge, #05020F); display: grid }
+.g-players li b { font: 400 18px/1 var(--font-px, monospace) }
+.g-players li.turn { border-color: var(--c-butter, #FFD84D) } .g-players li.turn.me { border-color: var(--c-mint, #48E5C2) }
+.g-players li.out { opacity: .5 } .g-players em { color: var(--c-butter, #FFD84D); font-size: 12px }
+.g-felt { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; min-height: 108px;
+  background: #24543A; border: 3px solid #6B2F1C; box-shadow: inset 0 0 0 2px #1A3A2A, 0 0 0 2px var(--edge, #05020F); border-radius: 14px }
+.g-deck { position: relative; width: 60px; height: 84px } .g-deck img { position: absolute; width: 60px; height: 84px; image-rendering: pixelated }
+.g-deck span { position: absolute; bottom: -4px; right: -6px; font: 600 11px/1 var(--font-ui); background: #05020F; color: var(--c-cream, #FFF1C1); padding: 2px 4px }
+.g-pile { position: relative; flex: 1; height: 84px; display: flex; align-items: center; justify-content: center }
+.g-pile .g-card { margin-left: -40px } .g-pile .g-card:first-child { margin-left: 0 }
+.g-card { width: 60px; height: 84px; image-rendering: pixelated; display: block }
+.g-empty { color: #9BC4AC; font: var(--t-micro, 11px system-ui) }
+.g-pair .g-felt { box-shadow: inset 0 0 0 2px #1A3A2A, 0 0 0 2px var(--edge, #05020F), 0 0 0 5px var(--c-coral, #FF6F59) }
+.g-status { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center } .g-status small { color: var(--text-muted, #A49CC2) }
+.g-pill { font: 600 12px/1 var(--font-ui); padding: 4px 8px; color: #05020F; background: var(--c-butter, #FFD84D) } .g-pill.me { background: var(--c-mint, #48E5C2) }
+.g-fam { margin: 0; color: var(--c-butter, #FFD84D) }
 .g-btns { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px }
-.g-btns .w-btn { min-height: 56px; font-size: 18px; touch-action: manipulation }
-.g-snapbtn { background: #F4C27A; color: #1B1020 } .g-btns kbd { margin-left: 8px; font: 11px system-ui; opacity: .7 }
-.w-top .w-door { margin-left: auto; background: none; border: 2px solid #8A5A3B; color: inherit; padding: 2px 8px; font: var(--t-ui, 13px system-ui); cursor: pointer }
+.g-btns .w-btn { min-height: 56px; font: 400 24px/1 var(--font-px, monospace); touch-action: manipulation }
+.g-flip { background: #1E1640; color: var(--c-cream, #FFF1C1); box-shadow: inset 0 0 0 2px #3A2C6E }
+.g-snapbtn { background: var(--c-coral, #FF6F59); color: #05020F } .g-btns kbd { margin-left: 8px; font: 11px var(--font-ui); opacity: .7 }
+.g-chips { display: flex; align-items: center; gap: 4px; color: var(--c-cream, #FFF1C1); font: var(--t-micro, 11px system-ui) } .g-chips img { width: 18px; height: 18px; image-rendering: pixelated }

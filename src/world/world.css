@@ -210,3 +210,4 @@
 .w-sw::after { content: ''; position: absolute; right: 2px; top: 2px; width: 24px; height: 24px; background: #FFF1C1; border: 2px solid #05020F; box-sizing: border-box }
 .w-sw.off { background: #281D52 } .w-sw.off::after { right: auto; left: 2px; background: #A49CC2 }
 .w-top .w-chips { color: #F4C27A; font: var(--t-ui, 13px system-ui) }
+.w-top .w-door img { image-rendering: pixelated; vertical-align: middle; margin-right: 6px }

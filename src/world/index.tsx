@@ -10,6 +10,8 @@ import { findPath, nearestWalkable } from '../../world/shared/path.ts'
 import { walkable, isSeat, isPianoSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
 import type { GameV, GameInfo } from './games.tsx'
 import { gameErr } from './games-err.ts'
+import { CHIPS_NAME } from '../../world/shared/chips.ts'
+import plaquePng from './art/door-plaque.png'
 import { PIECE, PIANO_SEAT, hears, gainAt, panAt } from '../../world/shared/piano.ts'
 import { EMOTE_CREDIT, EMOTE_COOLDOWN_MS } from '../../world/shared/emote.ts'
 import { EmoteTray, type EmoteCd } from './EmoteTray.tsx'
@@ -128,7 +130,7 @@ function World() {
     const A = pa.current ??= new PianoAudio(o => net.current?.send(o as any))
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
-      if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash('Free daily top-up: your play chips are back to ' + m.bal + '.'); return }
+      if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
       if (m.t === 'game') { setGame(m.on ? m : null); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
       if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync() }
@@ -283,7 +285,7 @@ function World() {
         if (now > until || !t) { murmurs.current.delete(tb); el?.remove(); mels.delete(tb); continue }
         if (!el) { el = document.createElement('div'); el.className = 'w-murmur'; el.dataset.t = 'w-murmur'; el.dataset.tb = String(tb); el.setAttribute('aria-hidden', 'true'); ov.append(el); mels.set(tb, el) }
         // GD's table-typing strip (16x16 frames): bottom-centre (the tail tip) 4 art px above the table top, snapped to art px
-        const [x, y] = r.toCss(t.x + 1, t.y - 1 - 4 / 16); el.style.transform = `translate(${Math.round(x / u) * u - 8 * u}px, ${Math.round(y / u) * u - 16 * u}px)`
+        const [x, y] = r.toCss(t.x + t.w / 2, t.y - 1 - 4 / 16); el.style.transform = `translate(${Math.round(x / u) * u - 8 * u}px, ${Math.round(y / u) * u - 16 * u}px)`
       }
     }
     raf = requestAnimationFrame(loop)
@@ -447,8 +449,8 @@ function World() {
   return (
     <main className={'w-room ' + layout + (seated ? ' seated' : '')} data-t="w-room" data-layout={layout} data-seated={seated ? '1' : undefined}>
       <header className="w-top"><b data-t="w-room-name">{lounge ? 'Games Lounge' : 'Café'}</b><span data-t="w-inst">{inst.replace(/^(cafe|games)-/, 'room ')}</span><span data-t="w-count" data-n={count}>{count} here</span>
-        {lounge && chips !== null && <span className="w-chips" data-t="w-chips" data-n={chips} title="Play chips · just for fun, never bought or cashed out">● {chips} chips</span>}
-        <button className="w-door" data-t="w-door" onClick={() => goRoom(lounge ? 'cafe-1' : 'games-1')}>{lounge ? '← Café' : 'Games Lounge →'}</button>
+        {lounge && chips !== null && <span className="w-chips" data-t="w-chips" data-n={chips} title={`${CHIPS_NAME} · just for fun, never bought or cashed out`}>{chips} {CHIPS_NAME}</span>}
+        <button className="w-door" data-t="w-door" onClick={() => goRoom(lounge ? 'cafe-1' : 'games-1')}>{lounge ? '← Café' : <><img src={plaquePng} alt="" width={40} height={18} />Games Lounge →</>}</button>
         <a className="w-leave" href="./" onClick={() => net.current?.close()}>Leave</a></header>
       <div className="w-stage" ref={stage}><canvas ref={canvas} data-t="w-canvas" onPointerDown={tap} />
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
@@ -467,7 +469,7 @@ function World() {
         {note && <p className="w-note" role="status" data-t="w-note">{note}</p>}
         {goneEl}
         {lounge && (atTable || game) && <Suspense fallback={null}><GamesPanel game={game} games={games} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
-          send={dsend} stand={stand} desk={layout === 'desk'} /></Suspense>}
+          send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} /></Suspense>}
         {cardEl}
         {pianoEl}
         {where === 'sofa' && <section className="w-panel w-sofa" data-t="w-sofa"><p>On the sofa · everyone can hear the room chat</p>

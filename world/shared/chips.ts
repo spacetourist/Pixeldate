@@ -17,3 +17,6 @@ export function move(w: Wallet, delta: number): boolean {
   if (w.bal + delta < 0) return false
   w.bal = Math.min(CHIPS_MAX, w.bal + delta); return true
 }
+/** what the UI calls the currency: one place, because the name isn't settled (play chips, Tokens or Sparks). The chip
+    art (digits 1 5 25 100, cream / coral / butter / mint) stays whatever it's called. */
+export const CHIPS_NAME = 'play chips'

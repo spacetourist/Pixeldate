@@ -42,7 +42,7 @@
 .bj-stand { background: #1E1640; color: #FFF1C1; box-shadow: inset 0 0 0 2px #3A2C6E }
 .bj-double { background: #FF6F59; color: #05020F }
 .bj-deal { background: #FFD84D; color: #05020F }
-.w-room.phone.bj { grid-template-rows: auto minmax(0, 1fr) minmax(200px, 38dvh) }
+.w-room.phone.bj, .w-room.phone.bj.seated { grid-template-rows: auto minmax(0, 1fr) minmax(200px, 38dvh) }
 .w-room.phone.bj .w-side, .w-room.desk.bj .w-side { overflow: hidden; display: flex; flex-direction: column }
 .w-room.bj .bj-chat { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column }
 .w-room.bj .bj-chat ol { flex: 1 1 auto; max-height: none; min-height: 0; overflow-y: auto }

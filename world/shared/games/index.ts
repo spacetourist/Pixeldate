@@ -2,13 +2,15 @@
    with crypto, runs the turn clock and sends every player their own view. A game is a pure module behind this
    interface, so Blackjack (house dealer, free chips) and Pong slot in as new entries without touching the Room.
    Play money only, nothing is ever bought or paid out. */
-export type GameId = 'snap' | 'blackjack'
+export type GameId = 'snap' | 'blackjack' | 'sweet'
 export interface GameInfo { id: GameId; title: string; min: number; max: number; ready: boolean; blurb: string }
 export const GAMES: Record<GameId, GameInfo> = {
   snap: { id: 'snap', title: 'Snap', min: 2, max: 2, ready: true, blurb: 'Flip in turn. Two of a rank in a row: first to snap takes the pile.' },
   // Each player sits at a blackjack table and plays their own hand against the House, for coins.
   // No arcade games in v1. The table opens when you sit down (there is no separate Start).
   blackjack: { id: 'blackjack', title: 'Blackjack', min: 1, max: 5, ready: true, blurb: 'Your own hand against the House, for coins.' },
+  // Working name. Two seats, a shared 1–10 deck, four side cards each. Sit down to play; there is no Start button.
+  sweet: { id: 'sweet', title: 'Sweet Twenty', min: 2, max: 2, ready: true, blurb: 'Race to 20. Optional coins on the match.' },
 }
 /** What a game module gives the Room. `now` is passed in (tests use a fake clock); `rnd(n)` is a uniform 0..n-1 from crypto. */
 export interface GameCtx { now: number; rnd: (n: number) => number }

@@ -1,0 +1,28 @@
+/* Sweet Twenty fullscreen. Reuses the blackjack screen shell (bj-table.css).
+   Side cards are heart tiles — swap .sw-tile for the designer's art. Main cards stay Direction A.
+   Selectors are stronger than the blackjack shell so this table stays coral with its own card size. */
+.sw-screen.bj-screen { background: #140814 }
+.sw-screen .sw-felt { background: radial-gradient(120% 90% at 50% 100%, #e06a86 0%, #9a2944 55%, #4a1024 100%);
+  border-color: #3A1820; border-bottom-left-radius: 80px; border-bottom-right-radius: 80px }
+.sw-boards { display: grid; gap: 6px }
+.sw-board { display: grid; justify-items: center; gap: 2px; padding: 2px; border: 2px solid transparent }
+.sw-board.me { border-color: #48E5C2 } .sw-board.turn { border-color: #FFD84D }
+.sw-board .nm { font: 700 13px/1.2 var(--font-ui); color: #FFF1C1 } .sw-board .nm.me { color: #48E5C2 }
+.sw-board .tot { color: #FFF1C1; font: 700 13px/1 var(--font-ui) } .sw-board .tot.over { color: #FF6F59 }
+.sw-cards { display: flex; justify-content: center; min-height: 48px; align-items: center }
+.sw-screen.bj-screen .g-card { width: 34px; height: 48px }
+.sw-cards .g-card + .g-card, .sw-cards .sw-mini + .g-card, .sw-cards .g-card + .sw-mini, .sw-cards .sw-mini + .sw-mini { margin-left: -16px }
+.sw-screen.bj-screen .g-face { image-rendering: auto; border-radius: 4px }
+.sw-side { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; flex: none }
+.sw-tile { position: relative; width: 52px; height: 60px; border: 2px solid #05020F; background: #FFF1C1; color: #05020F; cursor: pointer; display: grid; place-items: center; padding: 0; flex: none }
+.sw-tile.minus { background: #FF8A9A } .sw-tile.flip { background: #FFD84D } .sw-tile:disabled { opacity: .55; cursor: default }
+.sw-tile.on { box-shadow: 0 0 0 2px #48E5C2 }
+.sw-heart { width: 22px; height: 20px; fill: #E23B57 }
+.sw-tile b { position: relative; font: 800 14px/1 var(--font-ui); letter-spacing: -.03em }
+.sw-screen .bj-top small { color: #FFD84D }
+.sw-free { min-width: 56px; min-height: 52px; background: #1E1640; color: #FFF1C1; border: 2px solid #05020F; font: 700 13px/1 var(--font-ui); cursor: pointer }
+.sw-free.on { border-color: #FFD84D }
+@media (min-width: 900px) {
+  .sw-screen.bj-screen .g-card { width: 48px; height: 67px }
+  .sw-cards .g-card + .g-card, .sw-cards .sw-mini + .g-card, .sw-cards .g-card + .sw-mini, .sw-cards .sw-mini + .sw-mini { margin-left: -14px }
+}

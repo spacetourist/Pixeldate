@@ -4,6 +4,7 @@
    is exactly k×k screen pixels. */
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
 import { paintBjTable } from './bj-art.ts'
+import { paintSweetTable } from './sweet-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -84,9 +85,9 @@ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
     if (isPianoSeat(tx, ty)) return 'up'
-    if (at(tx, ty - 1) === 'B') return 'up'
-    if (at(tx + 1, ty) === 'B') return 'right'
-    if (at(tx - 1, ty) === 'B') return 'left'
+    if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y') return 'up'
+    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y') return 'right'
+    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y') return 'left'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
   return Math.abs(e.dx) > Math.abs(e.dy) ? (e.dx < 0 ? 'left' : 'right') : (e.dy < 0 ? 'up' : 'down')
 }
@@ -203,6 +204,10 @@ export class Renderer {
       const felt = tex(paintBjTable())
       for (const t of TABLES) if (t.kind === 'blackjack') {
         const sp = new Sprite(felt); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'bj-table'; bj.addChild(sp)
+      }
+      const sweet = tex(paintSweetTable())
+      for (const t of TABLES) if (t.kind === 'sweet') {
+        const sp = new Sprite(sweet); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'sweet-table'; bj.addChild(sp)
       }
     }
     // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it

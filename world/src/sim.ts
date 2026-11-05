@@ -885,7 +885,7 @@ export class Room {
   /** A finished game between exactly two (a pair at a table) moves their meter one segment, like a card both answered;
       once per pair per day (gameUp, like duetUp). Not for people who refused or blocked each other. */
   get wallets() { return this.opts.wallets ??= memWallets() }
-  /** the lounge wallet line: play chips only, never bought or cashed out */
+  /** the lounge wallet line: coins only, never bought or cashed out */
   private async chips(p: Player) {
     try { const w = await this.wallets.get(p.uid, this.now()); p.sock.send(JSON.stringify({ t: 'chips', bal: w.bal, topped: w.topped })) } catch {}
   }

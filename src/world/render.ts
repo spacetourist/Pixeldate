@@ -186,11 +186,17 @@ export class Renderer {
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
     const bg = new Sprite(T.map), glow = new Container()
+    // GD's door plaque hangs on the café side of the lounge door (the DD tiles), so the way in reads in the room itself
+    const plaque = new Container(), doors: number[][] = []; for (let y = 0; y < MAP.rows.length; y++) for (let x = 0; x < MAP.rows[y].length; x++) if (MAP.rows[y][x] === 'D') doors.push([x, y])
+    if (CUR === 'cafe-landscape' && doors.length) {
+      const pl = await load('door-plaque.png'), cx = (Math.min(...doors.map(d => d[0])) + Math.max(...doors.map(d => d[0])) + 1) * TILE / 2, y0 = Math.min(...doors.map(d => d[1])) * TILE
+      const sp = new Sprite(tex(pl)); sp.position.set(Math.round(cx - pl.width / 2), y0 - pl.height + 6); sp.label = 'door-plaque'; plaque.addChild(sp)
+    }
     for (const l of MAP.lights) { const t = T['glow-' + l.kind], s = new Sprite(t)
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }
     this.goal.texture = T.goal; this.goal.visible = false
     this.people.sortableChildren = true
-    this.world.addChild(bg, this.dots, this.goal, this.people, glow, this.notes, this.marks, this.couple, this.emos)
+    this.world.addChild(bg, plaque, this.dots, this.goal, this.people, glow, this.notes, this.marks, this.couple, this.emos)
     this.stage.addChild(this.world, this.ui)
     this.px = px; this.apply()
   }

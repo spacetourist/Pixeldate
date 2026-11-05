@@ -6,7 +6,7 @@ export type GameId = 'snap' | 'blackjack'
 export interface GameInfo { id: GameId; title: string; min: number; max: number; ready: boolean; blurb: string }
 export const GAMES: Record<GameId, GameInfo> = {
   snap: { id: 'snap', title: 'Snap', min: 2, max: 2, ready: true, blurb: 'Flip in turn. Two of a rank in a row: first to snap takes the pile.' },
-  // hook, not built yet: co-op. The two at the table play together against the house dealer with play chips (no stakes
+  // hook, not built yet: co-op. The two at the table play together against the house dealer with coins (no stakes
   // between players, nothing bought or paid out). No arcade games in v1.
   blackjack: { id: 'blackjack', title: 'Blackjack', min: 2, max: 2, ready: true, blurb: 'Co-op: you two share one hand against the House, for coins.' },
 }

@@ -29,3 +29,17 @@
 .g-flip { background: #1E1640; color: var(--c-cream, #FFF1C1); box-shadow: inset 0 0 0 2px #3A2C6E }
 .g-snapbtn { background: var(--c-coral, #FF6F59); color: #05020F } .g-btns kbd { margin-left: 8px; font: 11px var(--font-ui); opacity: .7 }
 .g-chips { display: flex; align-items: center; gap: 4px; color: var(--c-cream, #FFF1C1); font: var(--t-micro, 11px system-ui) } .g-chips img { width: 18px; height: 18px; image-rendering: pixelated }
+/* co-op Blackjack (GD table-blackjack-390): House butter, shared hand mint, Hit mint · Stand ghost · Deal butter */
+.g-sub { margin: 0; color: var(--text-muted, #A49CC2); font: var(--t-small, 13px system-ui) }
+.g-bjfelt { flex-direction: column; align-items: stretch; gap: 6px }
+.g-row { display: flex; gap: 8px; align-items: baseline } .g-row small { color: #CFE6D7 }
+.g-house { font: 400 20px/1 var(--font-px, monospace); color: var(--c-butter, #FFD84D) } .g-ours { font: 600 13px/1 var(--font-ui); color: var(--c-mint, #48E5C2); margin: 0 auto }
+.g-row:has(.g-ours) { justify-content: center } .g-row:has(.g-ours) small { margin-left: 4px }
+.g-hand { display: flex; justify-content: center; gap: 6px; min-height: 84px; align-items: center; flex-wrap: wrap }
+.g-stack { display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--c-cream, #FFF1C1) } .g-stack img { image-rendering: pixelated }
+.g-stack small { margin-left: 6px; font: 600 12px/1 var(--font-ui) }
+.g-antes { display: flex; gap: 8px; justify-content: center }
+.g-ante { min-width: 44px; min-height: 44px; background: #1E1640; border: 2px solid var(--edge, #05020F); display: grid; place-items: center; cursor: pointer }
+.g-ante img { image-rendering: pixelated } .g-ante.on { border-color: var(--c-butter, #FFD84D) } .g-ante:disabled { opacity: .4 }
+.g-bjbtns { grid-template-columns: 1fr 1fr 1fr }
+.g-hit { background: var(--c-mint, #48E5C2); color: #05020F } .g-deal { background: var(--c-butter, #FFD84D); color: #05020F }

@@ -29,3 +29,11 @@ for v, c in [(1, art.CHIP_CREAM), (5, art.CHIP_CORAL), (25, art.CHIP_BUTTER), (1
     art.chip_token(v, c, 18).save(os.path.join(OUT, 'chips', f'{v}.png'))
 import shutil; shutil.copy(os.path.join(GD, '..', 'door-plaque.png'), os.path.join(OUT, 'door-plaque.png'))
 print('ok')
+
+# @3x: GD's @3x sheets are exact nearest-neighbour 3x of the 1x ones, so the per-card / per-chip @3x files are made the same way
+from PIL import Image as _I
+for d in ('cards', 'chips'):
+    for f in os.listdir(os.path.join(OUT, d)):
+        if f.endswith('.png') and '@3x' not in f:
+            im = _I.open(os.path.join(OUT, d, f)); im.resize((im.width * 3, im.height * 3), _I.NEAREST).save(os.path.join(OUT, d, f[:-4] + '@3x.png'))
+shutil.copy(os.path.join(GD, '..', 'door-plaque@3x.png'), os.path.join(OUT, 'door-plaque@3x.png'))

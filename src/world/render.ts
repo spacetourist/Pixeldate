@@ -15,6 +15,12 @@ import type { WorldNet, Seen } from './net.ts'
 import { autoDetectRenderer, Container, Sprite, Texture, CanvasSource, Rectangle, type PixiRenderer } from './pixi.ts'
 
 export const MW = W * TILE, MH = H * TILE
+/** GD's open archway between the café and the Games Lounge (games-lounge/README "Doorway / archway"): 80x64 art px, the
+    32 px opening at x 24-55 sits over the two door tiles (x = col*T - 24), bottom on the 48 px wall base (y = -16), plaque on
+    the lintel. The view may rise ARCH_TOP px above the map so the lintel and plaque show whole (that strip repeats the wall
+    top). Swap the art here (ARCH) when GD sends a new one; the doorway itself is never drawn over. */
+export const ARCH_TOP = 16
+export const ARCH: Record<string, { art: string; dx: number; dy: number }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16 }, games: { art: 'lounge-archway', dx: -24, dy: -16 } }
 /* GD's final world markers (world/markers/README.md), copied into ./art/markers/ by  node tools/import-world-art.mjs
    (sizes checked there). Anchors are in art px from the person's 24x32 sprite cell top-left (sx, sy); seated: y + SIT_D.
      heart-bob.png        18x9, two 9x9 frames (0 = lower), ~400 ms each, at (sx+7, sy-10); heart.png 9x8 at (sx+7, sy-9)
@@ -186,12 +192,14 @@ export class Renderer {
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
     const bg = new Sprite(T.map), glow = new Container()
-    // GD's door plaque hangs on the café wall beside the lounge doorway, at lintel / OPEN-sign height, at the header size
-    // (GD's @3x plaque drawn at 40x18 art px, so it stays sharp at every zoom), so the door opening stays clear
+    // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it
     const plaque = new Container(), doors: number[][] = []; for (let y = 0; y < MAP.rows.length; y++) for (let x = 0; x < MAP.rows[y].length; x++) if (MAP.rows[y][x] === 'D') doors.push([x, y])
-    if (CUR === 'cafe-landscape' && doors.length) {
-      const pl = await load('door-plaque@3x.png'), sp = new Sprite(tex(pl)), x1 = (Math.max(...doors.map(d => d[0])) + 1) * TILE
-      sp.scale.set(1 / 6); sp.position.set(x1 - 4, 6); sp.label = 'door-plaque'; plaque.addChild(sp)
+    const top = new Sprite(new Texture({ source: T.map.source, frame: new Rectangle(0, 0, MW, ARCH_TOP) })); top.position.set(0, -ARCH_TOP); plaque.addChild(top)
+    const A = ARCH[CUR]
+    if (A && doors.length) {
+      const ar = await load(A.art + '@3x.png'), sp = new Sprite(tex(ar)), col = Math.min(...doors.map(d => d[0]))
+      sp.scale.set(1 / 3); sp.position.set(col * TILE + A.dx, A.dy); sp.label = 'archway'; plaque.addChild(sp)
+      this.art.archway = [ar.width / 3, ar.height / 3]
     }
     for (const l of MAP.lights) { const t = T['glow-' + l.kind], s = new Sprite(t)
       s.position.set(Math.round(l.x - t.width / 2), Math.round(l.y - t.height / 2)); s.blendMode = 'add'; s.alpha = GLOW_ALPHA; glow.addChild(s) }
@@ -207,7 +215,7 @@ export class Renderer {
   resize(cssW: number, cssH: number, dpr: number, layout: Layout) {
     const dw = Math.max(1, Math.floor(cssW * dpr)), dh = Math.max(1, Math.floor(cssH * dpr))
     const base = layout === 'phone' ? Math.max(1, Math.round(PHONE_CSS_SCALE * dpr)) : Math.max(2, Math.floor(Math.min(dw / 320, dh / 240)))
-    this.k = Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / MH))
+    this.k = Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / (MH + ARCH_TOP)))
     this.vw = dw / this.k; this.vh = dh / this.k; this.dw = dw; this.dh = dh; this.layout = layout
     this.dpr = dpr; this.cssW = dw / dpr; this.cssH = dh / dpr; this.snap = true
     this.c.style.width = this.cssW + 'px'; this.c.style.height = this.cssH + 'px'
@@ -244,12 +252,12 @@ export class Renderer {
     // camera: ease toward the player, clamped to the room (k guarantees the view is never bigger than the room)
     const me = net.ents.get(net.me)
     if (me) { const [fx, fy] = this.feet(net, me, now)
-      const tx = Math.max(0, Math.min(MW - vw, fx - vw / 2)), ty = Math.max(0, Math.min(MH - vh, fy - 12 - vh / 2))
+      const tx = Math.max(0, Math.min(MW - vw, fx - vw / 2)), ty = Math.max(-ARCH_TOP, Math.min(MH - vh, fy - 12 - vh / 2))
       this.camT = [tx, ty]
       if (this.snap) { this.camX = tx; this.camY = ty; this.snap = false }
       else { const a = 1 - Math.exp(-dt / EASE_MS); this.camX += (tx - this.camX) * a; this.camY += (ty - this.camY) * a
         if (Math.abs(tx - this.camX) < 0.05) this.camX = tx; if (Math.abs(ty - this.camY) < 0.05) this.camY = ty } }
-    this.camX = Math.max(0, Math.min(MW - vw, this.camX)); this.camY = Math.max(0, Math.min(MH - vh, this.camY))
+    this.camX = Math.max(0, Math.min(MW - vw, this.camX)); this.camY = Math.max(-ARCH_TOP, Math.min(MH - vh, this.camY))
     this.ox = Math.round(this.camX * k); this.oy = Math.round(this.camY * k)
     this.world.position.set(-this.ox, -this.oy)
 

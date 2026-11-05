@@ -12,16 +12,24 @@ export interface GameV { on: true; g: 'snap'; tb: number; seq: number; now: numb
 export interface GameInfo { id: string; title: string; min: number; max: number; ready: boolean }
 const SUIT = ['♠', '♥', '♦', '♣'], RANK = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
 /** GD's card art (games-lounge pack via tools/games-lounge-art.py): cards/<rank><suit>.png, 20x28, shown at 3x */
-const CARD_ART = import.meta.glob<string>('./art/cards/*.png', { eager: true, query: '?url', import: 'default' })
+const CARD_ART = import.meta.glob<string>('./art/cards/back*.png', { eager: true, query: '?url', import: 'default' })
 const CHIP_ART = import.meta.glob<string>('./art/chips/*.png', { eager: true, query: '?url', import: 'default' })
 const BACK = CARD_ART['./art/cards/back.png']
 /** GD's @3x art for high-density screens (exact 3x of the 1x pixels) */
 const x3 = (m: Record<string, string>, stem: string) => m[stem + '@3x.png'] ? `${m[stem + '.png']} 1x, ${m[stem + '@3x.png']} 3x` : undefined
 const Back = () => <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" className="g-card" width={60} height={84} />
-const Chip = ({ v, size = 18 }: { v: number; size?: number }) => <img src={CHIP_ART[`./art/chips/${v}.png`]} srcSet={x3(CHIP_ART, `./art/chips/${v}`)} alt={String(v)} width={size} height={size} />
+/** a coin: GD's pixel chip is the rim (the light pixel accent); the value is crisp vector text over a flat centre disc,
+    drawn at device resolution, so the number is sharp on every screen */
+const CHIP_FILL: Record<number, string> = { 1: '#FFF1C1', 5: '#FF6F59', 25: '#FFD84D', 100: '#48E5C2' }
+const Chip = ({ v, size = 18 }: { v: number; size?: number }) => <span className="g-chip" data-v={v} style={{ width: size, height: size, ['--cf' as string]: CHIP_FILL[v] ?? '#FFF1C1', fontSize: Math.max(7, Math.round(size * (v >= 100 ? .32 : .42))) }}>
+  <img src={CHIP_ART[`./art/chips/${v}.png`]} srcSet={x3(CHIP_ART, `./art/chips/${v}`)} alt="" width={size} height={size} /><b aria-label={String(v)}>{v}</b></span>
 const rank = (c: number) => (c >> 2) + 1, suit = (c: number) => c & 3
+/** a card face: HTML + vector text (no bitmaps), so ranks and suits are sharp at native device resolution; a 2 px dark
+    border is the only pixel accent (the back keeps GD's pixel pattern). GD's card sprites stay in art/cards for the back. */
 function Card({ c, k }: { c: number; k?: string }) {
-  return <img className="g-card" src={CARD_ART[`./art/cards/${rank(c)}${'shdc'[suit(c)]}.png`]} srcSet={x3(CARD_ART, `./art/cards/${rank(c)}${'shdc'[suit(c)]}`)} alt={RANK[rank(c)] + SUIT[suit(c)]} data-t={k} data-rank={rank(c)} width={60} height={84} />
+  const r = RANK[rank(c)], st = SUIT[suit(c)], red = suit(c) === 1 || suit(c) === 2
+  return <div className={'g-card g-face' + (red ? ' red' : '')} role="img" aria-label={r + st} data-t={k} data-rank={rank(c)}>
+    <span className="g-ix">{r}<i>{st}</i></span><span className="g-pip">{rank(c) > 10 ? r : st}</span><span className="g-ix g-ix2">{r}<i>{st}</i></span></div>
 }
 const Deck = ({ n, k }: { n: number; k: string }) => <div className="g-deck" data-t={k}>{n > 0 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" />}{n > 1 && <img src={BACK} srcSet={x3(CARD_ART, './art/cards/back')} alt="" style={{ left: 2, top: -2 }} />}<span>{n}</span></div>
 export const Chips = ({ bal }: { bal: number }) => <span className="g-chips" data-t="g-chips">{[1, 5, 25, 100].map(v => <Chip key={v} v={v} />)} {bal} {CHIPS_NAME}</span>

@@ -19,6 +19,18 @@
 .g-pile { position: relative; flex: 1; height: 84px; display: flex; align-items: center; justify-content: center }
 .g-pile .g-card { margin-left: -40px } .g-pile .g-card:first-child { margin-left: 0 }
 .g-card { width: 60px; height: 84px; image-rendering: pixelated; display: block }
+/* card faces: vector text at device resolution (Callum: sharp, readable); a crisp 2px edge + inner rule is the pixel accent */
+.g-face { position: relative; box-sizing: border-box; background: #FFF8E6; border: 2px solid #05020F; border-radius: 5px; box-shadow: inset 0 0 0 2px #FFF8E6, inset 0 0 0 3px #E8D9B0, 2px 2px 0 #05020F;
+  color: #1A1238; font-family: var(--font-ui, system-ui); image-rendering: auto; -webkit-font-smoothing: antialiased; user-select: none }
+.g-face.red { color: #D8322A }
+.g-ix { position: absolute; top: 3px; left: 4px; display: grid; justify-items: center; font: 700 15px/1 var(--font-ui, system-ui); letter-spacing: -.5px }
+.g-ix i { font-style: normal; font-size: 12px; line-height: 1.05 }
+.g-ix2 { top: auto; left: auto; bottom: 3px; right: 4px; transform: rotate(180deg) }
+.g-pip { position: absolute; inset: 0; display: grid; place-items: center; font: 700 30px/1 var(--font-ui, system-ui) }
+.g-chip { position: relative; display: inline-grid; place-items: center; flex: none; vertical-align: middle }
+.g-chip img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated }
+.g-chip b { position: relative; display: grid; place-items: center; width: 62%; height: 62%; border-radius: 50%; background: var(--cf); color: #05020F;
+  font: 800 1em/1 var(--font-ui, system-ui); letter-spacing: -.04em; -webkit-font-smoothing: antialiased }
 .g-empty { color: #9BC4AC; font: var(--t-micro, 11px system-ui) }
 .g-pair .g-felt { box-shadow: inset 0 0 0 2px #1A3A2A, 0 0 0 2px var(--edge, #05020F), 0 0 0 5px var(--c-coral, #FF6F59) }
 .g-status { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center } .g-status small { color: var(--text-muted, #A49CC2) }
@@ -28,7 +40,7 @@
 .g-btns .w-btn { min-height: 56px; font: 400 24px/1 var(--font-px, monospace); touch-action: manipulation }
 .g-flip { background: #1E1640; color: var(--c-cream, #FFF1C1); box-shadow: inset 0 0 0 2px #3A2C6E }
 .g-snapbtn { background: var(--c-coral, #FF6F59); color: #05020F } .g-btns kbd { margin-left: 8px; font: 11px var(--font-ui); opacity: .7 }
-.g-chips { display: flex; align-items: center; gap: 4px; color: var(--c-cream, #FFF1C1); font: var(--t-micro, 11px system-ui) } .g-chips img { width: 18px; height: 18px; image-rendering: pixelated }
+.g-chips { display: flex; align-items: center; gap: 4px; color: var(--c-cream, #FFF1C1); font: var(--t-micro, 11px system-ui) } .g-chips .g-chip { width: 18px; height: 18px }
 /* co-op Blackjack (GD table-blackjack-390): House butter, shared hand mint, Hit mint · Stand ghost · Deal butter */
 .g-sub { margin: 0; color: var(--text-muted, #A49CC2); font: var(--t-small, 13px system-ui) }
 .g-bjfelt { flex-direction: column; align-items: stretch; gap: 6px }

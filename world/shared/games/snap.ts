@@ -42,7 +42,7 @@ export const matches = (s: SnapS) => s.pile.length >= 2 && rank(s.pile[s.pile.le
 export const Snap: Game<SnapS, SnapV> = {
   start(players, c) {
     const deck = shuffle(Array.from({ length: 52 }, (_, i) => i), c.rnd)
-    const ps: SnapP[] = players.map(uid => ({ uid, hand: [], out: false, lastSnap: 0, falses: [], lockUntil: 0, away: false }))
+    const ps: SnapP[] = players.map(uid => ({ uid, hand: [], out: false, lastSnap: -Infinity, falses: [], lockUntil: 0, away: false }))
     deck.forEach((card, i) => ps[i % ps.length].hand.push(card))
     const turn = c.rnd(ps.length)
     return { ps, pile: [], turn, turnAt: c.now, startAt: c.now, seq: 1, last: { k: 'start', who: ps[turn].uid, at: c.now }, winner: null }

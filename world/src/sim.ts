@@ -803,6 +803,8 @@ export class Room {
         if (!g.s.ps.length) this.games.delete(g.tb)
         continue
       }
+      // everyone gone: nobody to wait for, the table is free again
+      if (!g.s.ps.some(x => this.byUid(x.uid))) { this.games.delete(g.tb); continue }
       for (const sp of g.s.ps) {
         if (sp.out) continue
         const o = this.byUid(sp.uid)

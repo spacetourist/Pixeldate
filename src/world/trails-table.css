@@ -1,0 +1,14 @@
+/* Trails. The grid is CSS cells; heads are interpolated in the component. Swap .tr-cell for designer art. */
+.tr-screen.bj-screen { background: #100818 }
+.tr-screen .tr-felt { background: #160F28; border-color: #8F7BFF; border-radius: 12px; align-items: center; justify-content: center }
+.tr-grid { display: grid; gap: 1px; background: #2A2150; touch-action: none; position: relative }
+.tr-cell { width: 10px; height: 10px; background: #100818 }
+.tr-cell.on { background: var(--tr, #48E5C2) }
+.tr-head { position: absolute; width: 10px; height: 10px; border-radius: 2px; box-shadow: 0 0 0 1px #FFF1C1; pointer-events: none }
+.tr-arrows { display: grid; grid-template-columns: 56px 56px 56px; grid-template-areas: ". up ." "left down right"; gap: 6px; justify-content: center }
+.tr-arrows button { min-height: 48px; background: #1E1640; color: #FFF1C1; border: 2px solid #05020F; font: 700 16px/1 var(--font-ui, system-ui); cursor: pointer }
+.tr-arrows .up { grid-area: up } .tr-arrows .left { grid-area: left } .tr-arrows .down { grid-area: down } .tr-arrows .right { grid-area: right }
+.tr-score { margin: 0; color: #FFD84D; font: 700 13px/1.2 var(--font-ui, system-ui) }
+@media (min-width: 900px) {
+  .tr-cell, .tr-head { width: 16px; height: 16px }
+}

@@ -143,17 +143,29 @@ export class Room {
   nextName() { const m = /^(.*?)-?(\d+)$/.exec(this.name); return this.opts.next ?? (m ? `${m[1]}-${+m[2] + 1}` : `${this.name}-2`) }
 
   connect(s: Sock) { this.pending.add(s) }
+  /** recent gaps between ticks, in ms, so a probe can report jitter without joining */
+  tickGaps: number[] = []; private tickAt = 0
+  lag() {
+    const xs = this.tickGaps, n = xs.length
+    const pct = (p: number) => { if (!n) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.min(n - 1, Math.max(0, Math.ceil(p / 100 * n) - 1))] }
+    return { gaps: n, tickMs: 100, p50: pct(50), p95: pct(95) }
+  }
+  private pong(s: Sock, n: unknown) { s.send(JSON.stringify({ t: 'pong', n: typeof n === 'number' ? n : 0, now: this.now(), ...this.lag() })) }
   async message(s: Sock, raw: string | ArrayBuffer) {
     useMap(this.mapId)
     // a photo for the table partner is the one message allowed to be big (a pixelated PNG, or the level-5 512 px JPEG)
     if (typeof raw !== 'string' || raw.length > (raw.startsWith('{"t":"photo"') ? PHOTO_MAX + 64 : 1200)) return
     let m: any; try { m = JSON.parse(raw) } catch { return }
     if (!m || typeof m !== 'object') return
-    if (this.pending.has(s)) { if (m.t === 'join') await this.join(s, m); return }
+    if (this.pending.has(s)) {
+      if (m.t === 'ping' || m.t === 'tm') { this.pong(s, m.n ?? m.c); return }
+      if (m.t === 'join') await this.join(s, m); return
+    }
     const p = this.players.get(s); if (!p) return
     p.seen = this.now()
     if (m.t === 'ka') return
     if (m.t === 'tm') { if (typeof m.c === 'number') s.send(JSON.stringify({ t: 'tm', c: m.c, s: this.now() })); return }   // clock sync, unmetered (tiny, 5 a join)
+    if (m.t === 'ping') { this.pong(s, m.n); return }
     if (p.bucket < 1) return; p.bucket--
     switch (m.t) {
       case 'go': return this.go(p, m.x, m.y)
@@ -371,6 +383,9 @@ export class Room {
     for (const [s, p] of [...this.players]) if (t - p.seen > this.stale) { try { s.close(4004, 'stale') } catch {} this.close(s) }
   }
   tick() {
+    const wall = performance.now()
+    if (this.tickAt) { this.tickGaps.push(wall - this.tickAt); if (this.tickGaps.length > 240) this.tickGaps.shift() }
+    this.tickAt = wall
     useMap(this.mapId)
     this.tickN = (this.tickN + 1) & 0xffff
     if (this.tickN % 5 === 0) this.prune()

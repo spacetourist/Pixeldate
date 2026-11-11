@@ -1,7 +1,7 @@
 /* Pixeldate World · Cloudflare Worker. One Durable Object per café instance (Area, via PartyServer), one per user
    (User: met / hearted / passed / refusedBy / blocked / blockedBy) and a singleton Mod that keeps reports in SQLite.
    A singleton Budget keeps the free-plan blocks (src/budget.ts): TURN estimate / actual caps and the daily request count.
-   Routes: /parties/area/cafe-N and games-N (the Games Lounge) (WebSocket) · /turn (TURN credentials, src/turn.ts) · /dev/reports, /dev/budget (DEV only,
+   Routes: /parties/area/cafe-N and games-N (the Games Lounge) (WebSocket) · /turn (TURN credentials, src/turn.ts) · /ping (round trip) · /dev/reports, /dev/budget (DEV only,
    for tests) · /health */
 import { Server, routePartykitRequest, type Connection } from 'partyserver'
 import { DurableObject } from 'cloudflare:workers'
@@ -98,7 +98,8 @@ export class Area extends Server<Env> {
     // WebSocket messages count against the free plan's daily requests at 20:1; added to the day's count once a minute
     this.msgs++; if (Date.now() - this.flushAt > 60_000) this.flush()
     await this.room.message(c as unknown as Sock, typeof m === 'string' ? m : new ArrayBuffer(0))
-    if (this.room.size && !this.timer) this.timer = setInterval(() => { this.room.tick(); this.idle() }, TICK_MS)
+    // a ping before join still starts the tick, so the probe can see the interval
+    if (!this.timer) this.timer = setInterval(() => { this.room.tick(); this.idle() }, TICK_MS)
   }
   onClose(c: Connection) { this.gone(c) }
   onError(c: Connection) { this.gone(c) }
@@ -107,7 +108,7 @@ export class Area extends Server<Env> {
     this.idle()
   }
   /** the tick (and its prune of silent sockets) stops as soon as the room is empty */
-  idle() { if (!this.room.size && this.timer) { clearInterval(this.timer); this.timer = null; this.flush() } }
+  idle() { if (!this.room.size && !this.room.pending.size && this.timer) { clearInterval(this.timer); this.timer = null; this.flush() } }
   flush() { this.flushAt = Date.now(); const n = Math.floor(this.msgs / 20); if (!n) return; this.msgs -= n * 20; budget(this.env).hit(n).catch(() => {}) }
 }
 
@@ -146,6 +147,7 @@ export default {
     }
     if (u.pathname === '/dev/reports' && env.DEV === '1') return Response.json(await env.Mod.get(env.Mod.idFromName('mod')).list())
     if (u.pathname === '/health') return new Response('ok')
+    if (u.pathname === '/ping') return Response.json({ t: 'pong', now: Date.now() }, { headers: { 'cache-control': 'no-store' } })
     return new Response('Pixeldate World', { status: 404 })
   },
 }

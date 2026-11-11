@@ -1,0 +1,18 @@
+Letterbox word lists (world/shared/words/words.ts)
+
+Source: 12dicts release 6.0.2, compiled by Alan Beale.
+Alan Beale explicitly released the 12dicts lists into the public domain and
+asked that their use be acknowledged. This does not cover the 2of12inf list
+or the 2+2+3 lists (those depend on AGID); Letterbox does not use them.
+
+Lists used, all public domain:
+- American/6of12.txt — answer words (in at least 6 of 12 dictionaries)
+- American/2of12.txt, American/3esl.txt, Special/2of5core.txt
+- International/2of4brif.txt, International/3of6all.txt, International/3of6game.txt, International/5d+2a.txt
+  — the larger set of allowed guesses
+
+Upstream: http://wordlist.aspell.net/12dicts/
+Package: http://downloads.sourceforge.net/wordlist/12dicts-6.0.2.zip
+
+No other word list is included. In particular the Google Web Trillion Word
+Corpus frequency list is not used.

@@ -1,0 +1,29 @@
+/* Letterbox fullscreen. Reuses the blackjack screen shell. Tiles are flat squares —
+   swap .lb-tile backgrounds for the designer's art. Keep data-mark. */
+.lb-screen.bj-screen { background: #100c22 }
+.lb-screen .lb-felt { background: radial-gradient(120% 90% at 50% 0%, #3a2c55 0%, #241838 70%);
+  border-color: #6B4A2A; border-radius: 12px }
+.lb-boards { display: grid; gap: 8px; justify-items: center }
+.lb-board { display: grid; gap: 3px }
+.lb-row { display: flex; gap: 3px; justify-content: center }
+.lb-tile { width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid #3A2C6E; background: #1E1640;
+  color: #FFF1C1; font: 700 16px/1 var(--font-ui, system-ui); text-transform: uppercase }
+.lb-tile.correct { background: #48E5C2; color: #05020F; border-color: #05020F }
+.lb-tile.present { background: #FFD84D; color: #05020F; border-color: #05020F }
+.lb-tile.absent { background: #3A2C6E; color: #FFF1C1; border-color: #05020F }
+.lb-who { margin: 0; text-align: center; color: #A49CC2; font: 700 11px/1.2 var(--font-ui) }
+.lb-keys { display: flex; flex-direction: column; gap: 4px; align-items: center }
+.lb-keyrow { display: flex; gap: 4px; justify-content: center; width: 100% }
+.lb-key { min-width: 28px; min-height: 42px; flex: 1 1 0; max-width: 40px; background: #FFF1C1; color: #05020F; border: 2px solid #05020F;
+  font: 700 13px/1 var(--font-ui); text-transform: uppercase; cursor: pointer; padding: 0 }
+.lb-key.wide { flex: 1.6 1 0; max-width: 64px; font-size: 11px }
+.lb-key:disabled { opacity: .4; cursor: default }
+.lb-modes { display: flex; gap: 8px; justify-content: center }
+.lb-modes .w-btn { flex: 1 }
+.lb-modes .on { box-shadow: 0 0 0 2px #FFD84D }
+.lb-free { min-width: 56px; min-height: 48px; background: #1E1640; color: #FFF1C1; border: 2px solid #05020F; font: 700 13px/1 var(--font-ui); cursor: pointer }
+.lb-free.on { border-color: #FFD84D }
+@media (min-width: 900px) {
+  .lb-tile { width: 48px; height: 48px; font-size: 22px }
+  .lb-boards { grid-template-columns: 1fr 1fr; align-items: start }
+}

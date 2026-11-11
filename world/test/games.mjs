@@ -16,12 +16,13 @@ const lastGame = b => b.last('game')
 const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 8000), `sat at ${x},${y}`) }
 
 await test('map: games map 40x24, 6 felt tables for two plus 3 blackjack tables, door, every seat reachable; café untouched after switching', async () => {
-  M.useMap('games'); const snap = M.TABLES.filter(t => t.kind === 'snap'), bj = M.TABLES.filter(t => t.kind === 'blackjack'), sweet = M.TABLES.filter(t => t.kind === 'sweet'), box = M.TABLES.filter(t => t.kind === 'letterbox')
-  assert.equal(snap.length, 6); assert.equal(bj.length, 3); assert.equal(sweet.length, 1); assert.equal(box.length, 1); assert.deepEqual(snap[0].seats, [[7, 9], [11, 9]]); assert.equal(snap[0].w, 3)
+  M.useMap('games'); const snap = M.TABLES.filter(t => t.kind === 'snap'), bj = M.TABLES.filter(t => t.kind === 'blackjack'), sweet = M.TABLES.filter(t => t.kind === 'sweet'), box = M.TABLES.filter(t => t.kind === 'letterbox'), four = M.TABLES.filter(t => t.kind === 'fourup')
+  assert.equal(snap.length, 6); assert.equal(bj.length, 3); assert.equal(sweet.length, 1); assert.equal(box.length, 1); assert.equal(four.length, 1); assert.deepEqual(snap[0].seats, [[7, 9], [11, 9]]); assert.equal(snap[0].w, 3)
   for (const t of snap) assert.equal(M.seatsOf(t).length, 2)
   for (const t of bj) { assert.equal(M.seatsOf(t).length, 5); assert.equal(t.w, 7); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'b') }
   for (const t of sweet) { assert.equal(M.seatsOf(t).length, 2); assert.equal(t.w, 7); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'y') }
   for (const t of box) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'q') }
+  for (const t of four) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'f') }
   assert.ok(M.isDoor(11, 3) && M.isDoor(12, 3)); const seen = new Set([M.SPAWNS[0].join()]), q = [M.SPAWNS[0]]
   while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = [x + dx, y + dy]; if (M.walkable(...k) && !seen.has(k.join())) { seen.add(k.join()); q.push(k) } } }
   for (const t of M.TABLES) for (const s of M.seatsOf(t)) assert.ok(seen.has(s.join()), 'seat ' + s)
@@ -54,7 +55,7 @@ await test('snap: a game always ends (timeouts only), and the winner is the last
   for (let i = 0; i < 400 && !Snap.done(s); i++) { t += TURN_MS; Snap.tick(s, { now: t, rnd: cryptoRnd }) }
   const d = Snap.done(s); assert.ok(d); assert.ok(['a', 'b', 'c', ''].includes(d.winner))
 })
-await test('hooks: snap, blackjack, Sweet Twenty and Letterbox are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(GAMES.sweet.ready); assert.ok(GAMES.letterbox.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2); assert.equal(GAMES.blackjack.max, 5); assert.equal(GAMES.blackjack.min, 1); assert.equal(GAMES.sweet.min, 2); assert.equal(GAMES.sweet.max, 2); assert.equal(GAMES.letterbox.min, 2); assert.equal(GAMES.letterbox.max, 2) })
+await test('hooks: snap, blackjack, Sweet Twenty, Letterbox and Four Up are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(GAMES.sweet.ready); assert.ok(GAMES.letterbox.ready); assert.ok(GAMES.fourup.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2); assert.equal(GAMES.blackjack.max, 5); assert.equal(GAMES.blackjack.min, 1); assert.equal(GAMES.sweet.min, 2); assert.equal(GAMES.sweet.max, 2); assert.equal(GAMES.letterbox.min, 2); assert.equal(GAMES.letterbox.max, 2); assert.equal(GAMES.fourup.min, 2); assert.equal(GAMES.fourup.max, 2) })
 
 const T = () => { M.useMap('games'); const t = M.TABLES[0]; M.useMap('cafe-landscape'); return t }
 const play = async (bots, { snapper = null } = {}) => {

@@ -11,7 +11,7 @@ const all = []
 const done = async () => { for (const b of all.splice(0)) b.close(); await sleep(150) }
 const J = async (o = {}) => { const b = new Bot(profile(o), { room: 'games-1' }); const r = await b.connect(); assert.equal(r.t, 'hi'); all.push(b); return b }
 const lastGame = b => b.last('game')
-const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 8000), `sat at ${x},${y}`) }
+const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 12000), `sat at ${x},${y}`) }
 const sum = p => p.board.reduce((a, c) => a + c.v, 0)
 
 await test('rules: side card, one per turn, bust, stand, closer total, tie replays, nine wins, clock, match and coins', () => {

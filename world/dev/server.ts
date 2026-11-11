@@ -44,6 +44,7 @@ const http = createServer(async (req, res) => {
   let r: Response
   if (u.pathname === '/turn') { void budget.hit(1); r = await handleTurn(new Request(u, { method: req.method, headers }), { invites: INVITES, gate: (w, ip) => budget.turn(w, ip), mock: true }) }
   else if (u.pathname === '/health') r = new Response('ok')
+  else if (u.pathname === '/ping') r = Response.json({ t: 'pong', now: Date.now() }, { headers: { 'cache-control': 'no-store' } })
   else r = new Response('Pixeldate World', { status: 404 })
   res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()))
 })
@@ -67,7 +68,8 @@ function attach(ws: WebSocket, name: string) {
   ws.on('message', async (data, binary) => {
     if (++msgs % 20 === 0) void budget.hit(1)   // DO WebSocket messages count 20:1 (as the Worker's Area does)
     await room.message(s, binary ? new ArrayBuffer(0) : data.toString())
-    if (room.size && !a.timer) a.timer = setInterval(() => { tick(room); if (!room.size && a.timer) { clearInterval(a.timer); a.timer = null } }, TICK_MS)
+    // any message, including a ping before join, keeps the same 100 ms tick the worker uses
+    if (!a.timer) a.timer = setInterval(() => { tick(room); if (!room.size && !room.pending.size && a.timer) { clearInterval(a.timer); a.timer = null } }, TICK_MS)
   })
   ws.on('close', () => {
     clearTimeout(jt); room.close(s)

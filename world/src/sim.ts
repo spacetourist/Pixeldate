@@ -6,6 +6,7 @@ import { GAMES, cryptoRnd, type GameId } from '../shared/games/index.ts'
 import { Snap } from '../shared/games/snap.ts'
 import { Blackjack, type BjS } from '../shared/games/blackjack.ts'
 import { Sweet, type SwS } from '../shared/games/sweet.ts'
+import { Letterbox, type LbS } from '../shared/games/letterbox.ts'
 import { FourUp, type FuS } from '../shared/games/fourup.ts'
 import type { Game } from '../shared/games/index.ts'
 import { PIECE, PIANO_SEAT, LEAD_MS, type Role } from '../shared/piano.ts'
@@ -64,7 +65,7 @@ interface GameRun { id: GameId; tb: number; s: GameS; busy?: boolean; away: Map<
   /** pressed Leave: don't sit them straight back down while they are still on the seat */ left: Set<string> }
 const RECONNECT_MS = 20_000, LEAVE_MS = 2500
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const MOD: Record<GameId, Game<any, any>> = { snap: Snap, blackjack: Blackjack, sweet: Sweet, fourup: FourUp }
+const MOD: Record<GameId, Game<any, any>> = { snap: Snap, blackjack: Blackjack, sweet: Sweet, letterbox: Letterbox, fourup: FourUp }
 const mod = (g: GameRun) => MOD[g.id]
 /** "Play a game?" (café → Games Lounge invites): answer window, one invite per inviter per GINV_GAP_MS, at most
     GINV_MAX per GINV_WIN_MS (server-side; the client's button state is only a hint), a ticket's seat hold in the lounge */
@@ -143,17 +144,29 @@ export class Room {
   nextName() { const m = /^(.*?)-?(\d+)$/.exec(this.name); return this.opts.next ?? (m ? `${m[1]}-${+m[2] + 1}` : `${this.name}-2`) }
 
   connect(s: Sock) { this.pending.add(s) }
+  /** recent gaps between ticks, in ms, so a probe can report jitter without joining */
+  tickGaps: number[] = []; private tickAt = 0
+  lag() {
+    const xs = this.tickGaps, n = xs.length
+    const pct = (p: number) => { if (!n) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.min(n - 1, Math.max(0, Math.ceil(p / 100 * n) - 1))] }
+    return { gaps: n, tickMs: 100, p50: pct(50), p95: pct(95) }
+  }
+  private pong(s: Sock, n: unknown) { s.send(JSON.stringify({ t: 'pong', n: typeof n === 'number' ? n : 0, now: this.now(), ...this.lag() })) }
   async message(s: Sock, raw: string | ArrayBuffer) {
     useMap(this.mapId)
     // a photo for the table partner is the one message allowed to be big (a pixelated PNG, or the level-5 512 px JPEG)
     if (typeof raw !== 'string' || raw.length > (raw.startsWith('{"t":"photo"') ? PHOTO_MAX + 64 : 1200)) return
     let m: any; try { m = JSON.parse(raw) } catch { return }
     if (!m || typeof m !== 'object') return
-    if (this.pending.has(s)) { if (m.t === 'join') await this.join(s, m); return }
+    if (this.pending.has(s)) {
+      if (m.t === 'ping' || m.t === 'tm') { this.pong(s, m.n ?? m.c); return }
+      if (m.t === 'join') await this.join(s, m); return
+    }
     const p = this.players.get(s); if (!p) return
     p.seen = this.now()
     if (m.t === 'ka') return
     if (m.t === 'tm') { if (typeof m.c === 'number') s.send(JSON.stringify({ t: 'tm', c: m.c, s: this.now() })); return }   // clock sync, unmetered (tiny, 5 a join)
+    if (m.t === 'ping') { this.pong(s, m.n); return }
     if (p.bucket < 1) return; p.bucket--
     switch (m.t) {
       case 'go': return this.go(p, m.x, m.y)
@@ -184,7 +197,7 @@ export class Room {
       case 'dinvx': { const d = this.duet; if (d?.inv?.from === p) this.duetInviteEnd('cancel'); return }
       case 'dinvans': return this.duetInviteAns(p, m.yes === true)
       case 'gstart': return this.gameStart(p, m.g)
-      case 'gact': return this.gameAct(p, m.a, m.ante, m.i, m.sign)
+      case 'gact': return this.gameAct(p, m.a, m.ante, m.i, m.sign, m.w)
       case 'gquit': return this.gameQuit(p)
       case 'ginv': return this.gInvite(p, m.id)
       case 'ginvx': return this.gInviteEnd(p, 'cancel')
@@ -371,6 +384,9 @@ export class Room {
     for (const [s, p] of [...this.players]) if (t - p.seen > this.stale) { try { s.close(4004, 'stale') } catch {} this.close(s) }
   }
   tick() {
+    const wall = performance.now()
+    if (this.tickAt) { this.tickGaps.push(wall - this.tickAt); if (this.tickGaps.length > 240) this.tickGaps.shift() }
+    this.tickAt = wall
     useMap(this.mapId)
     this.tickN = (this.tickN + 1) & 0xffff
     if (this.tickN % 5 === 0) this.prune()
@@ -380,7 +396,7 @@ export class Room {
       p.moving = this.move(p)
       const tx = Math.floor(p.x), ty = Math.floor(p.y), was = p.sitting
       p.sitting = !p.moving && !p.dir && (isSeat(tx, ty) || isPianoSeat(tx, ty)) && Math.abs(p.x - tx - .5) < .05 && Math.abs(p.y - ty - .5) < .05
-      if (p.sitting && !was) { p.sitAt = this.tickN; this.bjSit(p); this.sweetSit(p); this.fourSit(p) }
+      if (p.sitting && !was) { p.sitAt = this.tickN; this.bjSit(p); this.sweetSit(p); this.letterSit(p); this.fourSit(p) }
       if (!p.sitting) for (const g of this.games.values()) g.left.delete(p.uid)
       if (p.sofaWant && !p.moving && !p.path.length) this.sofaSit(p)
     }
@@ -953,6 +969,51 @@ export class Room {
     }
     this.gameCheck(g)
   }
+  /** Sitting at the Letterbox desk joins that match. One way in, same as the other tables. */
+  private letterSit(p: Player) {
+    if (this.mapId !== 'games') return
+    const t = this.tableAt(p); if (!t || t.kind !== 'letterbox') return
+    let g = this.games.get(t.id)
+    if (g?.left.has(p.uid)) return
+    const elsewhere = [...this.games.values()].find(x => x !== g && x.s.winner === null && x.s.ps.some(sp => sp.uid === p.uid))
+    if (elsewhere) return
+    const seat = seatsOf(t).findIndex(([a, b]) => a === Math.floor(p.x) && b === Math.floor(p.y))
+    if (seat < 0) return
+    const now = this.now()
+    if (!g || g.id !== 'letterbox' || (g.s.winner !== null && !g.s.ps.length)) {
+      g = { id: 'letterbox', tb: t.id, s: Letterbox.start([], { now, rnd: cryptoRnd }), away: new Map(), off: new Map(), seat: new Map(), ids: new Map(), sent: 0, fam: false, hold: new Set(), left: new Set() }
+      this.games.set(t.id, g)
+    }
+    if (g.s.winner !== null) return
+    Letterbox.join(g.s as LbS, p.uid, seat, { now })
+    g.seat.set(p.uid, [Math.floor(p.x), Math.floor(p.y)])
+    this.gameCheck(g)
+  }
+  /** Optional match stake for Letterbox. 0 is free and does not touch the wallet. */
+  private async letterBet(g: GameRun, p: Player, ante: unknown) {
+    const s = g.s as LbS, err = (why: string) => p.sock.send(JSON.stringify({ t: 'gerr', why }))
+    if (g.hold.has(p.uid)) return err('slow-down')
+    const why = Letterbox.canBet(s, p.uid, ante); if (why) return err(why)
+    const n = ante as number
+    if (n === 0) {
+      const w = Letterbox.commit(s, p.uid, 0, { now: this.now(), rnd: cryptoRnd })
+      if (w) return err(w)
+      this.gameCheck(g); return
+    }
+    g.hold.add(p.uid); let took = false
+    try {
+      if ((await this.wallets.move(p.uid, -n)) === null) return err('chips')
+      took = true; useMap(this.mapId)
+      if (this.gameOf(p) !== g || Letterbox.canBet(s, p.uid, n)) { await this.wallets.move(p.uid, n); return err(this.gameOf(p) !== g ? 'bad' : Letterbox.canBet(s, p.uid, n) || 'in-round') }
+      const w2 = Letterbox.commit(s, p.uid, n, { now: this.now(), rnd: cryptoRnd })
+      if (w2) { await this.wallets.move(p.uid, n); return err(w2) }
+    } catch { if (took) await this.wallets.move(p.uid, n).catch(() => null); return err('bad') }
+    finally {
+      g.hold.delete(p.uid); this.bjChips(g)
+      for (const x of s.ps) { const o = this.byUid(x.uid); if (o) void this.chips(o) }
+    }
+    this.gameCheck(g)
+  }
   /** Sitting at the Four Up table joins that match. */
   private fourSit(p: Player) {
     if (this.mapId !== 'games') return
@@ -1004,7 +1065,7 @@ export class Room {
     if (!info.ready) return err('soon')
     const t = this.tableAt(p); if (!t) return err('sit')
     // Blackjack has one door: sit at a blackjack table. Snap stays on the felt tables for two.
-    if (info.id === 'blackjack' || info.id === 'sweet' || info.id === 'fourup' || t.kind !== 'snap') return err('bad')
+    if (info.id === 'blackjack' || info.id === 'sweet' || info.id === 'letterbox' || info.id === 'fourup' || t.kind !== 'snap') return err('bad')
     if (this.games.has(t.id) && this.games.get(t.id)!.s.winner === null) return err('running')
     const grp = (this.tableGroup(p) ?? []).filter(o => !this.gameOf(o) || this.gameOf(o)!.s.winner !== null)
     if (grp.some(a => grp.some(b => this.hidden(a, b)))) return err('bad')
@@ -1015,13 +1076,14 @@ export class Room {
     for (const o of grp) g.seat.set(o.uid, [Math.floor(o.x), Math.floor(o.y)])
     this.games.set(t.id, g); this.gameSend(g)
   }
-  private gameAct(p: Player, a: unknown, ante?: unknown, i?: unknown, sign?: unknown) {
+  private gameAct(p: Player, a: unknown, ante?: unknown, i?: unknown, sign?: unknown, w?: unknown) {
     const g = this.gameOf(p); if (!g || typeof a !== 'string' || a.length > 12) return
     if (g.id === 'blackjack' && a === 'deal') { void this.bjDeal(g, p, ante); return }
     if (g.id === 'blackjack' && a === 'double') { void this.bjDouble(g, p); return }
     if (g.id === 'sweet' && a === 'bet') { void this.sweetBet(g, p, ante); return }
+    if (g.id === 'letterbox' && a === 'bet') { void this.letterBet(g, p, ante); return }
     if (g.id === 'fourup' && a === 'bet') { void this.fourBet(g, p, ante); return }
-    const why = mod(g).act(g.s, p.uid, { a, ...(typeof i === 'number' ? { i } : {}), ...(sign === 1 || sign === -1 ? { sign } : {}) }, { now: this.now(), rnd: cryptoRnd })
+    const why = mod(g).act(g.s, p.uid, { a, ...(typeof i === 'number' ? { i } : {}), ...(sign === 1 || sign === -1 ? { sign } : {}), ...(typeof w === 'string' ? { w } : {}) }, { now: this.now(), rnd: cryptoRnd })
     if (why && why !== 'false-snap') p.sock.send(JSON.stringify({ t: 'gerr', why }))
     this.gameCheck(g)
   }
@@ -1070,10 +1132,10 @@ export class Room {
   private gameQuit(p: Player) {
     const g = this.gameOf(p); if (!g) { p.sock.send(JSON.stringify({ t: 'game', on: false })); return }   // already out of it (left mid-game): just clear their panel
     if (g.s.winner !== null) { g.s.ps = g.s.ps.filter(x => x.uid !== p.uid); p.sock.send(JSON.stringify({ t: 'game', on: false })); if (!g.s.ps.length) this.games.delete(g.tb); return }
-    if (g.id === 'blackjack' || g.id === 'sweet' || g.id === 'fourup') g.left.add(p.uid)
+    if (g.id === 'blackjack' || g.id === 'sweet' || g.id === 'letterbox' || g.id === 'fourup') g.left.add(p.uid)
     mod(g).leave(g.s, p.uid, { now: this.now(), rnd: cryptoRnd })
     p.sock.send(JSON.stringify({ t: 'game', on: false }))
-    if ((g.id === 'blackjack' || g.id === 'sweet' || g.id === 'fourup') && p.sitting) this.standUp(p, [Math.floor(p.x), Math.floor(p.y)])
+    if ((g.id === 'blackjack' || g.id === 'sweet' || g.id === 'letterbox' || g.id === 'fourup') && p.sitting) this.standUp(p, [Math.floor(p.x), Math.floor(p.y)])
     this.gameCheck(g)
   }
   /** every tick: the turn clock, and who's still here. Gone (socket closed) = RECONNECT_MS to come back; stood up from

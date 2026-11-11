@@ -50,7 +50,7 @@ export default function GamesPanel({ game, games, name, send, stand, desk, chips
     <h2 className="g-h">Games Lounge · coins only</h2>
     <ul className="g-list">{games.filter(g => g.id === 'snap').map(g => <li key={g.id}><div><b>{g.title}</b><small>{g.ready ? 'For two at this table' : 'Coming soon'}</small></div>
       <button className="w-btn sm" data-t={'g-start-' + g.id} disabled={!g.ready} onClick={() => send({ t: 'gstart', g: g.id })}>{g.ready ? 'Start' : 'Soon'}</button></li>)}</ul>
-    <p className="g-sub">Blackjack is at the green tables · your own hand vs the House. Sweet Twenty is the heart table for two. Letterbox is the quiet desk. Four Up is the blue grid.</p>
+    <p className="g-sub">Blackjack is at the green tables · your own hand vs the House. Sweet Twenty is the heart table for two. Letterbox is the quiet desk. Four Up is the blue grid. Trails is the cabinet for two to four.</p>
     {chips !== null && <Chips bal={chips} />}
     <button className="w-btn sm ghost" data-t="g-stand" onClick={stand}>Stand up</button></section>
   if (game.g !== 'snap') return null

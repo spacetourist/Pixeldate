@@ -10,7 +10,8 @@
            Y Sweet Twenty felt (blocked) · y a seat at that table (two seats)
            Q Letterbox felt (blocked) · q a seat at that desk (two seats)
            F Four Up felt (blocked) · f a seat at that table (two seats)
-   All blocked: # C T c P L S K B Y Q F. Rugs are art only (walkable). */
+           R Trails cabinet (blocked) · r a seat at that cabinet (up to four)
+   All blocked: # C T c P L S K B Y Q F R. Rugs are art only (walkable). */
 export const TILE = 16
 export type Light = { kind: 'table' | 'pendant' | 'floor'; x: number; y: number }
 export interface MapDef { art: string; rows: string[]; spawns: [number, number][]; lights: Light[] }
@@ -76,8 +77,8 @@ export const MAPS: Record<string, MapDef> = {
     '#...P.............b.b.b...P............#',
     '#......cTTTc..cTTTc..cTTTc.....PP.PP.P.#',
     '#......sTTTs..sTTTs..sTTTs.....PP.PP...#',
-    '#..............................PP.PP...#',
-    '#..BBBBBBB.............................#',
+    '#.....................RRRRRRR..PP.PP...#',
+    '#..BBBBBBB............r.r.r.r..........#',
     '#.bBBBBBBBb....................PP.PP...#',
     '#...b.b.b.f.....f..............PP.PP...#',
     '#P........FFFFFFF..............PP.PP.P.#',
@@ -110,8 +111,8 @@ export const isDoor = (x: number, y: number) => at(x, y) === 'D'
 export const MAP_ID: MapId = 'cafe-landscape'
 export interface Table { id: number; x: number; y: number; /** felt width in tiles (café 2, lounge snap 3, blackjack 7) */ w: number; seats: [[number, number], [number, number]]
   /** Games Lounge tables: extra seats (snap: the row above; blackjack: the rest of the rail, left to right) */ extra: [number, number][]
-  /** snap: a felt table for two. blackjack: five seats. sweet: Sweet Twenty, two seats. letterbox: Letterbox, two seats. fourup: Four Up, two seats. */ kind: 'snap' | 'blackjack' | 'sweet' | 'letterbox' | 'fourup' }
-const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K', 'B', 'Y', 'Q', 'F'])
+  /** snap: a felt table for two. blackjack: five seats. sweet: Sweet Twenty, two seats. letterbox: Letterbox, two seats. fourup: Four Up, two seats. trails: Trails, up to four. */ kind: 'snap' | 'blackjack' | 'sweet' | 'letterbox' | 'fourup' | 'trails' }
+const BLOCK = new Set(['#', 'C', 'T', 'c', 'P', 'L', 'S', 'K', 'B', 'Y', 'Q', 'F', 'R'])
 /* The current map. Every Room (server) and the client switch with useMap() before touching the grid; the exports are
    live bindings, so importers always see the current one. JS is single-threaded and a Room calls useMap() at the top
    of each entry point, so two rooms in one isolate never see each other's map. All maps are the same size. */
@@ -153,6 +154,11 @@ export function useMap(id: MapId) {
       const [x, y] = [10, 14]
       tables.push({ id: tables.length, x, y, w: 7, seats: [[x, y - 1], [x + 6, y - 1]], extra: [], kind: 'fourup' })
     }
+    /** Trails: a cabinet for up to four, east of the left blackjack table. Seats face the cabinet. */
+    if (id === 'games') {
+      const [x, y] = [22, 10]
+      tables.push({ id: tables.length, x, y, w: 7, seats: [[x, y + 1], [x + 2, y + 1]], extra: [[x + 4, y + 1], [x + 6, y + 1]], kind: 'trails' })
+    }
     b = { tables }; built.set(id, b) }
   TABLES = b.tables
 }
@@ -162,7 +168,7 @@ export const at = (x: number, y: number) => (x < 0 || y < 0 || x >= W || y >= H)
 /** Can a foot stand on tile (x, y)? The doormat counts, so people can walk in. */
 export const walkable = (x: number, y: number) => !BLOCK.has(at(x, y))
 /** a chair: the café's s, or a Games Lounge table's extra g */
-export const isSeat = (x: number, y: number) => { const c = at(x, y); return c === 's' || c === 'g' || c === 'b' || c === 'y' || c === 'q' || c === 'f' }
+export const isSeat = (x: number, y: number) => { const c = at(x, y); return c === 's' || c === 'g' || c === 'b' || c === 'y' || c === 'q' || c === 'f' || c === 'r' }
 /** a blackjack seat (b). Sitting here opens the fullscreen table; it is not a snap table. */
 export const isBjSeat = (x: number, y: number) => at(x, y) === 'b'
 /** a Sweet Twenty seat (y). Same fullscreen shell as blackjack, its own rules. */
@@ -171,6 +177,8 @@ export const isSweetSeat = (x: number, y: number) => at(x, y) === 'y'
 export const isLetterSeat = (x: number, y: number) => at(x, y) === 'q'
 /** a Four Up seat (f). Same fullscreen shell, its own rules. */
 export const isFourSeat = (x: number, y: number) => at(x, y) === 'f'
+/** a Trails seat (r). Same fullscreen shell, its own rules. */
+export const isTrailSeat = (x: number, y: number) => at(x, y) === 'r'
 export const isPianoSeat = (x: number, y: number) => at(x, y) === 'p'
 /** every seat of table t (the pair's two first) */
 export const seatsOf = (t: Table): [number, number][] => [...t.seats, ...t.extra]

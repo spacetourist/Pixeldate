@@ -7,6 +7,7 @@ import { paintBjTable } from './bj-art.ts'
 import { paintSweetTable } from './sweet-art.ts'
 import { paintLetterbox } from './letterbox-art.ts'
 import { paintFourUp } from './fourup-art.ts'
+import { paintTrails } from './trails-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -87,7 +88,7 @@ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
     if (isPianoSeat(tx, ty)) return 'up'
-    if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'Q') return 'up'
+    if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'Q' || at(tx, ty - 1) === 'R') return 'up'
     if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q') return 'right'
     if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q') return 'left'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
@@ -218,6 +219,10 @@ export class Renderer {
       const four = tex(paintFourUp())
       for (const t of TABLES) if (t.kind === 'fourup') {
         const sp = new Sprite(four); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'four-up'; bj.addChild(sp)
+      }
+      const trails = tex(paintTrails())
+      for (const t of TABLES) if (t.kind === 'trails') {
+        const sp = new Sprite(trails); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'trails'; bj.addChild(sp)
       }
     }
     // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it

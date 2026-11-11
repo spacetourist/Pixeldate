@@ -7,10 +7,11 @@ import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
 import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
-import { walkable, isSeat, isPianoSeat, isBjSeat, isSweetSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
+import { walkable, isSeat, isPianoSeat, isBjSeat, isSweetSeat, isFourSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
 import type { GameV, GameInfo } from './games.tsx'
 import type { BjGame } from './bj-table.tsx'
 import type { SwGame } from './sweet-table.tsx'
+import type { FuGame } from './fourup-table.tsx'
 import { gameErr } from './games-err.ts'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
 import plaquePng from './art/door-plaque.png'
@@ -39,6 +40,7 @@ const GamesPanel = lazy(() => import('./games.tsx'))
 /** fullscreen blackjack: fetched only when you sit at a blackjack table */
 const BjTable = lazy(() => import('./bj-table.tsx'))
 const SweetTable = lazy(() => import('./sweet-table.tsx'))
+const FourTable = lazy(() => import('./fourup-table.tsx'))
 
 /** Dev server URL. A ?ws= override is honoured only for this machine, so a crafted link can't send your profile elsewhere. */
 function serverUrl() {
@@ -96,7 +98,7 @@ function World() {
   const [inst, setInst] = useState(''); const [count, setCount] = useState(0)
   /** which room: cafe-1 or the Games Lounge (games-1); the shared map follows it */
   const [room, setRoom] = useState(qs.get('room') === 'games' ? 'games-1' : 'cafe-1'), roomRef = useRef(room)
-  const [game, setGame] = useState<GameV | BjGame | SwGame | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [atBj, setAtBj] = useState(false), [bjHold, setBjHold] = useState(false), [chips, setChips] = useState<number | null>(null)
+  const [game, setGame] = useState<GameV | BjGame | SwGame | FuGame | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [atBj, setAtBj] = useState(false), [bjHold, setBjHold] = useState(false), [chips, setChips] = useState<number | null>(null)
   const [layout, setLayout] = useState<Layout>(layoutOf())
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
   const [card, setCard] = useState<Tbl | null>(null), selRef = useRef<Pub | null>(null)
@@ -147,7 +149,7 @@ function World() {
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
       if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
-      if (m.t === 'game') { const nx = m.on ? m : null; if (!m.on && (gameRef.current?.g === 'blackjack' || gameRef.current?.g === 'sweet')) setBjHold(true); if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
+      if (m.t === 'game') { const nx = m.on ? m : null; if (!m.on && (gameRef.current?.g === 'blackjack' || gameRef.current?.g === 'sweet' || gameRef.current?.g === 'fourup')) setBjHold(true); if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
       if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync()
         // through the archway: keep walking a tile into the room; the fade lifts (a teleport is seated by the server)
@@ -357,7 +359,7 @@ function World() {
   useEffect(() => {
     if (phase !== 'in' || !room.startsWith('games-')) return
     const i = setInterval(() => { const n = net.current, e = n?.ents.get(n.me); const sit = !!e && !!(e.f & F_SIT), x = e ? Math.floor(e.x) : 0, y = e ? Math.floor(e.y) : 0
-      const full = sit && (isBjSeat(x, y) || isSweetSeat(x, y)); setAtBj(full); if (!full) setBjHold(false); setAtTable(sit && isSeat(x, y) && !full) }, 250)
+      const full = sit && (isBjSeat(x, y) || isSweetSeat(x, y) || isFourSeat(x, y)); setAtBj(full); if (!full) setBjHold(false); setAtTable(sit && isSeat(x, y) && !full) }, 250)
     return () => { clearInterval(i); setAtTable(false) }
   }, [phase, room])
 
@@ -506,6 +508,8 @@ function World() {
         {atBj && !bjHold && game?.g === 'blackjack' && <Suspense fallback={null}><BjTable game={game} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
           send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} onLeave={() => setBjHold(true)} /></Suspense>}
         {atBj && !bjHold && game?.g === 'sweet' && <Suspense fallback={null}><SweetTable game={game} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
+          send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} onLeave={() => setBjHold(true)} /></Suspense>}
+        {atBj && !bjHold && game?.g === 'fourup' && <Suspense fallback={null}><FourTable game={game} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
           send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} onLeave={() => setBjHold(true)} /></Suspense>}
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
         {/* GD's voice emote tray; phone: ♪ (café sound on/off, the piano mute everywhere) with the tray to its right */}

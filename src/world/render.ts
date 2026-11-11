@@ -5,6 +5,7 @@
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
 import { paintBjTable } from './bj-art.ts'
 import { paintSweetTable } from './sweet-art.ts'
+import { paintFourUp } from './fourup-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -208,6 +209,10 @@ export class Renderer {
       const sweet = tex(paintSweetTable())
       for (const t of TABLES) if (t.kind === 'sweet') {
         const sp = new Sprite(sweet); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'sweet-table'; bj.addChild(sp)
+      }
+      const four = tex(paintFourUp())
+      for (const t of TABLES) if (t.kind === 'fourup') {
+        const sp = new Sprite(four); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'four-up'; bj.addChild(sp)
       }
     }
     // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it

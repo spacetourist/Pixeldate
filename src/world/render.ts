@@ -5,6 +5,8 @@
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
 import { paintBjTable } from './bj-art.ts'
 import { paintSweetTable } from './sweet-art.ts'
+import { paintLetterbox } from './letterbox-art.ts'
+import { paintFourUp } from './fourup-art.ts'
 import { paintTrails } from './trails-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
@@ -86,9 +88,9 @@ const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
     if (isPianoSeat(tx, ty)) return 'up'
-    if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'R') return 'up'
-    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y') return 'right'
-    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y') return 'left'
+    if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'Q' || at(tx, ty - 1) === 'R') return 'up'
+    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q') return 'right'
+    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q') return 'left'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
   return Math.abs(e.dx) > Math.abs(e.dy) ? (e.dx < 0 ? 'left' : 'right') : (e.dy < 0 ? 'up' : 'down')
 }
@@ -209,6 +211,14 @@ export class Renderer {
       const sweet = tex(paintSweetTable())
       for (const t of TABLES) if (t.kind === 'sweet') {
         const sp = new Sprite(sweet); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'sweet-table'; bj.addChild(sp)
+      }
+      const desk = tex(paintLetterbox())
+      for (const t of TABLES) if (t.kind === 'letterbox') {
+        const sp = new Sprite(desk); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'letterbox'; bj.addChild(sp)
+      }
+      const four = tex(paintFourUp())
+      for (const t of TABLES) if (t.kind === 'fourup') {
+        const sp = new Sprite(four); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'four-up'; bj.addChild(sp)
       }
       const trails = tex(paintTrails())
       for (const t of TABLES) if (t.kind === 'trails') {

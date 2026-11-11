@@ -1,6 +1,8 @@
-/* Trails. 2–4 light cycles on a grid. The server steps at 15 Hz (STEP ms), chosen from the lag probe:
-   typical RTT to the deployed worker was ~155 ms (p95 ~470 ms), so 15 Hz leaves the client a short
-   step to interpolate across that delay. The room itself still ticks every 100 ms; each call catches up.
+/* Trails. 2–4 light cycles on a grid. The server steps at 15 Hz (STEP ms), the low end of 15–20 Hz.
+   Measured from this VM to the live worker's /ping (40 HTTP samples, 20 socket pings):
+   HTTP p50 35.4 ms, p95 123.6 ms; socket p50 91.8 ms, p95 99.4 ms; room tick p50/p95 100 ms.
+   A 15 Hz step is shorter than the socket p95, so the client interpolates across that delay.
+   The room itself still ticks every 100 ms; each call catches up.
    Last bike alive wins the round. First to 3 rounds wins. Driving straight into a wall is the idle outcome. */
 import type { Game, Act, GameCtx } from './index.ts'
 export const HZ = 15, STEP = 1000 / HZ, ROUNDS = 3, LOBBY_MS = 8_000

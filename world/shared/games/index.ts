@@ -2,7 +2,7 @@
    with crypto, runs the turn clock and sends every player their own view. A game is a pure module behind this
    interface, so Blackjack (house dealer, free chips) and Pong slot in as new entries without touching the Room.
    Play money only, nothing is ever bought or paid out. */
-export type GameId = 'snap' | 'blackjack' | 'sweet' | 'trails'
+export type GameId = 'snap' | 'blackjack' | 'sweet' | 'letterbox' | 'fourup' | 'trails'
 export interface GameInfo { id: GameId; title: string; min: number; max: number; ready: boolean; blurb: string }
 export const GAMES: Record<GameId, GameInfo> = {
   snap: { id: 'snap', title: 'Snap', min: 2, max: 2, ready: true, blurb: 'Flip in turn. Two of a rank in a row: first to snap takes the pile.' },
@@ -11,6 +11,9 @@ export const GAMES: Record<GameId, GameInfo> = {
   blackjack: { id: 'blackjack', title: 'Blackjack', min: 1, max: 5, ready: true, blurb: 'Your own hand against the House, for coins.' },
   // Working name. Two seats, a shared 1–10 deck, four side cards each. Sit down to play; there is no Start button.
   sweet: { id: 'sweet', title: 'Sweet Twenty', min: 2, max: 2, ready: true, blurb: 'Race to 20. Optional coins on the match.' },
+  // Working name. Two seats, a hidden word. Sit down to play; there is no Start button.
+  letterbox: { id: 'letterbox', title: 'Letterbox', min: 2, max: 2, ready: true, blurb: 'A hidden word. Race, or pick one for each other.' },
+  fourup: { id: 'fourup', title: 'Four Up', min: 2, max: 2, ready: true, blurb: 'Drop four in a line. Optional coins on the match.' },
   trails: { id: 'trails', title: 'Trails', min: 2, max: 4, ready: true, blurb: 'Light cycles. Last one riding wins the round.' },
 }
 /** What a game module gives the Room. `now` is passed in (tests use a fake clock); `rnd(n)` is a uniform 0..n-1 from crypto. */

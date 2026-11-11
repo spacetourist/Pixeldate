@@ -1,0 +1,23 @@
+/* Four Up. The grid is CSS; a new piece falls in with fu-drop. Swap .fu-disc for the designer's pieces. */
+.fu-screen.bj-screen { background: #071428 }
+.fu-screen .fu-felt { background: #12305A; border-color: #48E5C2; border-radius: 16px; align-items: center }
+.fu-note { margin: 0; color: #A49CC2; font: 700 12px/1.2 var(--font-ui, system-ui); text-align: center }
+.fu-free { min-width: 48px; min-height: 44px; background: #1E1640; color: #FFF1C1; border: 2px solid #05020F; font: 700 13px/1 var(--font-ui, system-ui); cursor: pointer }
+.fu-free.on { border-color: #FFD84D }
+.fu-free:disabled { opacity: .4 }
+.fu-grid { display: grid; grid-template-columns: repeat(7, 36px); gap: 4px; padding: 8px; background: #0C2448; border-radius: 12px }
+.fu-col { display: grid; gap: 4px; background: transparent; border: 0; padding: 0; cursor: pointer }
+.fu-col:disabled { cursor: default }
+.fu-cell { width: 36px; height: 36px; border-radius: 50%; background: #071428; display: grid; place-items: center }
+.fu-disc { width: 30px; height: 30px; border-radius: 50%; display: block }
+.fu-disc.p1 { background: #48E5C2 }
+.fu-disc.p2 { background: #FF6F59 }
+.fu-disc.drop { animation: fu-drop .28s ease-out }
+.fu-cell.win { box-shadow: 0 0 0 3px #FFD84D }
+@keyframes fu-drop { from { transform: translateY(-180px) } to { transform: translateY(0) } }
+@media (min-width: 900px) {
+  .fu-grid { grid-template-columns: repeat(7, 52px); gap: 6px }
+  .fu-cell { width: 52px; height: 52px }
+  .fu-disc { width: 44px; height: 44px }
+}
+@media (prefers-reduced-motion: reduce) { .fu-disc.drop { animation: none } }

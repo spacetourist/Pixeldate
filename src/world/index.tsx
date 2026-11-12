@@ -540,7 +540,7 @@ function World() {
         {goneEl}
         {lounge && !atBj && (atTable || (game && game.g === 'snap')) && <Suspense fallback={null}><GamesPanel game={game && game.g === 'snap' ? game : null} games={games} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
           send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} /></Suspense>}
-        {atBj && <BjChat name={tname} pubs={nn?.pubs} priv={priv} log={log} privEl={privEl} say={bar} />}
+        {atBj && <BjChat desk={layout === 'desk'} name={tname} pubs={nn?.pubs} priv={priv} log={log} privEl={privEl} say={bar} />}
         {atBj && <BjCall card={card} name={tname} send={dsend} />}
         {!atBj && cardEl}
         {pianoEl}
@@ -582,15 +582,21 @@ function Px({ i, n = 2, c = 'currentColor' }: { i: keyof typeof ICONS; n?: numbe
   return <svg className="i" width={w * n} height={h * n} viewBox={`0 0 ${w} ${h}`} fill={c} aria-hidden="true">
     {rows.flatMap((r, y) => [...r].map((ch, x) => ch === '#' ? <rect key={x + ',' + y} x={x} y={y} width={1} height={1} /> : null))}</svg>
 }
-/** Table chat beside the felt (under it on a phone). Room lines and the table's own lines, in order. */
-function BjChat({ name, pubs, priv, log, privEl, say }: { name: string; pubs?: { get(id: number): { name: string } | undefined }
+/** Table chat beside the felt on a desktop. On a phone the history is a drawer; a one-line composer stays under the felt. */
+function BjChat({ desk, name, pubs, priv, log, privEl, say }: { desk: boolean; name: string; pubs?: { get(id: number): { name: string } | undefined }
   priv: { k: number; mine: boolean; text: string; id?: number }[]; log: { k: number; name: string; text: string; mine: boolean }[]
   privEl: React.RefObject<HTMLOListElement | null>; say: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
   const lines = [...log.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : l.name })),
     ...priv.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : (l.id && pubs?.get(l.id)?.name) || name || 'Someone' }))].sort((a, b) => a.k - b.k)
-  return <section className="w-panel w-chat bj-chat" data-t="w-priv" aria-label="Table chat">
-    <h3 data-t="w-priv-label">Table chat</h3>
-    <ol ref={privEl} role="log" aria-live="polite">{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
+  const last = lines.at(-1)
+  const showLog = desk || open
+  return <section className={'w-panel w-chat bj-chat' + (!desk && open ? ' open' : '')} data-t="w-priv" data-open={showLog ? '1' : '0'} aria-label="Table chat">
+    <h3 data-t="w-priv-label">Table chat
+      {!desk && !open && last && <span className="bj-peek" data-t="w-chat-peek"><b>{last.who}</b> {last.text}</span>}
+      {!desk && <button type="button" className="w-link bj-chat-toggle" data-t="w-chat-toggle" aria-expanded={open} onClick={() => setOpen(v => !v)}>{open ? 'Hide' : 'History'}</button>}
+    </h3>
+    <ol ref={privEl} role="log" aria-live="polite" hidden={!showLog}>{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
       : <li className="w-log-empty">The table hears you.</li>}</ol>
     {say}
   </section>

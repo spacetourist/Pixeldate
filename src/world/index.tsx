@@ -590,13 +590,12 @@ function BjChat({ desk, name, pubs, priv, log, privEl, say }: { desk: boolean; n
   const lines = [...log.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : l.name })),
     ...priv.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : (l.id && pubs?.get(l.id)?.name) || name || 'Someone' }))].sort((a, b) => a.k - b.k)
   const last = lines.at(-1)
-  const showLog = desk || open
-  return <section className={'w-panel w-chat bj-chat' + (!desk && open ? ' open' : '')} data-t="w-priv" data-open={showLog ? '1' : '0'} aria-label="Table chat">
+  return <section className={'w-panel w-chat bj-chat' + (!desk && open ? ' open' : '')} data-t="w-priv" data-open={!desk && open ? '1' : '0'} aria-label="Table chat">
     <h3 data-t="w-priv-label">Table chat
       {!desk && !open && last && <span className="bj-peek" data-t="w-chat-peek"><b>{last.who}</b> {last.text}</span>}
       {!desk && <button type="button" className="w-link bj-chat-toggle" data-t="w-chat-toggle" aria-expanded={open} onClick={() => setOpen(v => !v)}>{open ? 'Hide' : 'History'}</button>}
     </h3>
-    <ol ref={privEl} role="log" aria-live="polite" hidden={!showLog}>{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
+    <ol ref={privEl} role="log" aria-live="polite">{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
       : <li className="w-log-empty">The table hears you.</li>}</ol>
     {say}
   </section>

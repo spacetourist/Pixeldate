@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import './bj-table.css'
 import './sweet-table.css'
+import youSeat from './art/lounge/you-seated.png'
+import jessSeat from './art/lounge/jess-seated.png'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
 export interface SwCell { v: number; side: boolean }
 export interface SwSide { k: 'plus' | 'minus' | 'flip'; n: number }
@@ -39,6 +41,7 @@ function Mini({ v }: { v: number }) {
   return <span className="sw-tile sw-mini" data-t="sw-played" style={{ width: 34, height: 48 }}><b>{label}</b></span>
 }
 const Board = ({ p, name, me, turn }: { p: SwSeat; name: string; me: boolean; turn: boolean }) => <div className={'sw-board' + (me ? ' me' : '') + (turn ? ' turn' : '')} data-t={me ? 'sw-me' : 'sw-them'} data-total={p.total} data-sets={p.sets}>
+  <img className="sw-sit" src={me ? youSeat : jessSeat} alt="" width={36} height={48} />
   <span className={'nm' + (me ? ' me' : '')}>{name}</span>
   <div className="sw-cards" data-t={me ? 'sw-board' : 'sw-their-board'}>{p.board.length ? p.board.map((c, i) => c.side ? <Mini key={i} v={c.v} /> : <MainCard key={i} v={c.v} />) : <span className="bj-empty">waiting for a card</span>}</div>
   <span className={'tot' + (p.total > 20 ? ' over' : '')}>{p.bust ? 'bust' : p.stood ? `stood ${p.total}` : p.total}{p.away ? ' · back soon' : ''}</span>
@@ -75,7 +78,7 @@ export default function SweetTable({ game, name, send, stand, desk, chips, onLea
   return <section className="bj-screen sw-screen" data-t="g-sw" data-seq={game?.seq ?? 0} data-phase={game?.phase ?? 'bet'} data-turn={mine ? 'me' : 'them'} data-over={game?.phase === 'over' ? '1' : undefined} aria-label="Sweet Twenty">
     <header className="bj-top"><h2>Sweet Twenty</h2><small data-t="sw-sets">Sets {sets}</small>
       <button className="w-btn sm ghost bj-leave" data-t="sw-leave" onClick={leave}>Leave</button></header>
-    <div className="bj-felt sw-felt" data-sw-art="placeholder">
+    <div className="bj-felt sw-felt" data-sw-art="heart">
       <div className="sw-boards">
         {me && <Board p={me} name="You" me turn={!!mine} />}
         {them && <Board p={them} name={name(them.id)} me={false} turn={!!play && game!.turn === them.id} />}

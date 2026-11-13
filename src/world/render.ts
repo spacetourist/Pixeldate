@@ -3,11 +3,6 @@
    the café's native 16 px grid, scaled by an INTEGER factor k in device pixels with nearest sampling, so every art pixel
    is exactly k×k screen pixels. */
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
-import { paintBjTable } from './bj-art.ts'
-import { paintSweetTable } from './sweet-art.ts'
-import { paintLetterbox } from './letterbox-art.ts'
-import { paintFourUp } from './fourup-art.ts'
-import { paintTrails } from './trails-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -25,7 +20,7 @@ export const MW = W * TILE, MH = H * TILE
     the lintel. The view may rise ARCH_TOP px above the map so the lintel and plaque show whole (that strip repeats the wall
     top). Swap the art here (ARCH) when GD sends a new one; the doorway itself is never drawn over. */
 export const ARCH_TOP = 16
-export const ARCH: Record<string, { art: string; dx: number; dy: number; plaque?: string }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16, plaque: 'door-plaque' }, games: { art: 'lounge-archway', dx: -24, dy: -16 } }
+export const ARCH: Record<string, { art: string; dx: number; dy: number; plaque?: string }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16, plaque: 'door-plaque' } }
 /** the plaque on the lintel: GD's 80x36 sign with its top 4 rows (hanging rings) cropped, body on the arch's rows 0-27 */
 const PLAQUE_CROP = 4, PLAQUE_H = 28
 /* GD's final world markers (world/markers/README.md), copied into ./art/markers/ by  node tools/import-world-art.mjs
@@ -89,8 +84,8 @@ const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
     if (isPianoSeat(tx, ty)) return 'up'
     if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'Q' || at(tx, ty - 1) === 'R') return 'up'
-    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q') return 'right'
-    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q') return 'left'
+    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q' || at(tx + 1, ty) === 'F') return 'right'
+    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q' || at(tx - 1, ty) === 'F') return 'left'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
   return Math.abs(e.dx) > Math.abs(e.dy) ? (e.dx < 0 ? 'left' : 'right') : (e.dy < 0 ? 'up' : 'down')
 }
@@ -202,29 +197,8 @@ export class Renderer {
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
     const bg = new Sprite(T.map), glow = new Container(), bj = new Container()
-    // Placeholder blackjack tables (src/world/bj-art.ts). Same texture for each; GD's PNG replaces paintBjTable().
-    if (CUR === 'games') {
-      const felt = tex(paintBjTable())
-      for (const t of TABLES) if (t.kind === 'blackjack') {
-        const sp = new Sprite(felt); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'bj-table'; bj.addChild(sp)
-      }
-      const sweet = tex(paintSweetTable())
-      for (const t of TABLES) if (t.kind === 'sweet') {
-        const sp = new Sprite(sweet); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'sweet-table'; bj.addChild(sp)
-      }
-      const desk = tex(paintLetterbox())
-      for (const t of TABLES) if (t.kind === 'letterbox') {
-        const sp = new Sprite(desk); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'letterbox'; bj.addChild(sp)
-      }
-      const four = tex(paintFourUp())
-      for (const t of TABLES) if (t.kind === 'fourup') {
-        const sp = new Sprite(four); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'four-up'; bj.addChild(sp)
-      }
-      const trails = tex(paintTrails())
-      for (const t of TABLES) if (t.kind === 'trails') {
-        const sp = new Sprite(trails); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'trails'; bj.addChild(sp)
-      }
-    }
+    // The lounge painting already includes the six furniture sprites (lit) at the README art-px positions.
+    // Drawing the unlit PNGs again would stack a second table on each one.
     // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it
     const plaque = new Container(), doors: number[][] = []; for (let y = 0; y < MAP.rows.length; y++) for (let x = 0; x < MAP.rows[y].length; x++) if (MAP.rows[y][x] === 'D') doors.push([x, y])
     const top = new Sprite(new Texture({ source: T.map.source, frame: new Rectangle(0, 0, MW, ARCH_TOP) })); top.position.set(0, -ARCH_TOP); plaque.addChild(top)

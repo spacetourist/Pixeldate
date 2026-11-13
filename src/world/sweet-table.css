@@ -2,8 +2,9 @@
    Side cards are heart tiles — swap .sw-tile for the designer's art. Main cards stay Direction A.
    Selectors are stronger than the blackjack shell so this table stays coral with its own card size. */
 .sw-screen.bj-screen { background: #140814 }
-.sw-screen .sw-felt { background: radial-gradient(120% 90% at 50% 100%, #e06a86 0%, #9a2944 55%, #4a1024 100%);
-  border-color: #3A1820; border-bottom-left-radius: 80px; border-bottom-right-radius: 80px }
+.sw-screen .sw-felt { background: #4a1024 url('./art/lounge/table-rim-sweet20-phone@2x.png') center / 100% 100% no-repeat;
+  border: 0; border-radius: 0; box-shadow: none }
+.sw-sit { width: 36px; height: 48px; image-rendering: pixelated; display: block }
 .sw-boards { display: grid; gap: 6px }
 .sw-board { display: grid; justify-items: center; gap: 2px; padding: 2px; border: 2px solid transparent }
 .sw-board.me { border-color: #48E5C2 } .sw-board.turn { border-color: #FFD84D }

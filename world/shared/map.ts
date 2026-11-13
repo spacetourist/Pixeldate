@@ -56,51 +56,40 @@ export const MAPS: Record<string, MapDef> = {
       { kind: 'table', x: 34 * T + 8, y: 6 * T + 14 },
     ],
   },
-  /** 40x24 Games Lounge (placeholder velvet + warm lamps until GD's art lands: src/world/art/games-map.png, same grid).
-      v1: tables for two, exactly the café's (s T T s), so the pair logic is the café's. The map format still allows g
-      (extra seats on the row above) for bigger tables later. D: the door back to the café. */
-  /** 40x24 Games Lounge: GD's games-lounge pack (src/world/art/games-map.png from tools/games-lounge-art.py). Six felt
-      tables for two (c s|TTT|s c: chair backs over the seats, a 3-wide felt table), plus three blackjack tables
-      (B felt, b seats — five a table, dealer on the top row). Placeholder sprites are drawn over the floor
-      (src/world/bj-art.ts); swap that painter when GD's table art lands. The door back to the café is at col 11-12
-      (D). Lamps/plants/arcade cabinets are solid (P). */
+  /** 40×24 Games Lounge. The painting is lounge-pixel.png (640×384): the six furniture sprites are
+      already composited there, lit, at the redesign art-px positions below. Seats sit on the chairs beside each piece.
+      Snap (88,104) and (208,104) · Letterbox (328,96) · Blackjack (80,188) · Four Up (300,196) ·
+      Sweet Twenty (176,286) · Trails (530,136). Door back to the café stays at col 11–12. */
   games: {
-    art: 'games-map.png',
+    art: 'lounge-pixel.png',
     rows: [
     '########################################',
     '########################################',
     '########################################',
-    '#........P.DD.P......................P.#',
-    '#P.......P..................QQQQQQQ..P.#',
-    '#P...............BBBBBBB....q.....q....#',
-    '#...P...........bBBBBBBBb.P............#',
-    '#...P.............b.b.b...P............#',
-    '#......cTTTc..cTTTc..cTTTc.....PP.PP.P.#',
-    '#......sTTTs..sTTTs..sTTTs.....PP.PP...#',
-    '#.....................RRRRRRR..PP.PP...#',
-    '#..BBBBBBB............r.r.r.r..........#',
-    '#.bBBBBBBBb....................PP.PP...#',
-    '#...b.b.b.f.....f..............PP.PP...#',
-    '#P........FFFFFFF..............PP.PP.P.#',
-    '#P........cTTTc..cTTTc..cTTTc..........#',
-    '#.........sTTTs..sTTTs..sTTTs..........#',
-    '#......................BBBBBBB.........#',
-    '#.....................bBBBBBBBb........#',
-    '#...P...................b.b.b..........#',
-    '#P.PP.P..............................P.#',
-    '#P.PP.P.......YYYYYYYYY..............P.#',
-    '#.............y.......y................#',
+    '#..........DD..........................#',
+    '#......................................#',
+    '#......................................#',
+    '#.....TTT....TTT.....QQQQQ.............#',
+    '#....sTTTs..sTTTs...qQQQQQq............#',
+    '#.....TTT....TTT.....QQQQQ.............#',
+    '#................................RRR...#',
+    '#................................RRR...#',
+    '#................................RRR...#',
+    '#.....BBBBBB.....................RRR...#',
+    '#.....BBBBBB.......FFFF.........rrr.r..#',
+    '#....bBBBBBBb.....fFFFFf...............#',
+    '#.....BBBBBB.......FFFF................#',
+    '#.....BBBBBB...........................#',
+    '#......b.b.b...........................#',
+    '#...........YYYYY......................#',
+    '#.........y.YYYYY.y....................#',
+    '#...........YYYYY......................#',
+    '#...........YYYYY......................#',
+    '#......................................#',
     '########################################',
     ],
     spawns: [[11, 4], [12, 4], [11, 5], [12, 5], [10, 4], [13, 4], [10, 5], [13, 5], [11, 6], [12, 6]],
-    // warm lamps from GD's scene: each table's lamp (col*T+32, row*T+16), floor lamps (col*T+8, row*T+22)
-    lights: [
-      ...([[7, 8], [14, 8], [21, 8], [10, 15], [17, 15], [24, 15]] as const).map(([c, r]) => ({ kind: 'table' as const, x: c * T + 32, y: r * T + 16 })),
-      // warm pools over the three blackjack tables (felt origin + a few tiles)
-      ...([[20, 6], [6, 12], [26, 18]] as const).map(([c, r]) => ({ kind: 'table' as const, x: c * T + 8, y: r * T + 8 })),
-      { kind: 'table' as const, x: 18 * T + 8, y: 21 * T + 8 },
-      ...([[4, 5], [26, 5], [4, 18]] as const).map(([c, r]) => ({ kind: 'floor' as const, x: c * T + 8, y: r * T + 22 })),
-    ],
+    lights: [],
   },
 }
 /** Which map a room instance uses: games-N is the Games Lounge, everything else the café. */
@@ -132,32 +121,26 @@ export function useMap(id: MapId) {
         const w = ROWS[y][x + 3] === 's' ? 2 : ROWS[y][x + 3] === 'T' && ROWS[y][x + 4] === 's' ? 3 : 0; if (!w) continue
         const extra: [number, number][] = y > 0 && ROWS[y - 1][x] === 'g' && ROWS[y - 1][x + w + 1] === 'g' ? [[x, y - 1], [x + w + 1, y - 1]] : []
         tables.push({ id: tables.length, x: x + 1, y, w, seats: [[x, y], [x + w + 1, y]], extra, kind: 'snap' }) }
-    /** Blackjack tables: felt origin (x, y) is the dealer's row. Five seats, left to right: side, three along the rail, side.
-        Placeholder art is painted over this footprint (src/world/bj-art.ts) — same origin, one tile taller for the sign. */
-    if (id === 'games') for (const [x, y] of [[16, 5], [2, 11], [22, 17]] as const) {
-      const rail: [number, number][] = [[x, y + 1], [x + 2, y + 2], [x + 4, y + 2], [x + 6, y + 2], [x + 8, y + 1]]
-      tables.push({ id: tables.length, x, y, w: 7, seats: [rail[0], rail[1]], extra: rail.slice(2), kind: 'blackjack' })
-    }
-    /** Sweet Twenty: one table for two along the south wall. Felt origin (x, y); seats on the row below, either end.
-        Placeholder art is paintSweetTable() — same anchor as blackjack, one tile above the felt for the sign. */
+    /** One house-rail blackjack table (art px 80,188). Five seats: left wing, three along the bottom rail, right wing. */
     if (id === 'games') {
-      const [x, y] = [14, 21]
-      tables.push({ id: tables.length, x, y, w: 7, seats: [[x, y + 1], [x + 8, y + 1]], extra: [], kind: 'sweet' })
+      const rail: [number, number][] = [[5, 14], [7, 17], [9, 17], [11, 17], [12, 14]]
+      tables.push({ id: tables.length, x: 6, y: 12, w: 6, seats: [rail[0], rail[1]], extra: rail.slice(2), kind: 'blackjack' })
     }
-    /** Letterbox: a quiet desk for two on the east side, just south of the door row. Seats face the felt. */
+    /** Sweet Twenty coral heart (art px 176,286). Seats on the left and right lobes. */
     if (id === 'games') {
-      const [x, y] = [28, 4]
-      tables.push({ id: tables.length, x, y, w: 7, seats: [[x, y + 1], [x + 6, y + 1]], extra: [], kind: 'letterbox' })
+      tables.push({ id: tables.length, x: 12, y: 18, w: 5, seats: [[10, 19], [18, 19]], extra: [], kind: 'sweet' })
     }
-    /** Four Up: felt on the open floor south of the left blackjack table. Seats are on the row above, facing the grid. */
+    /** Letterbox desk (art px 328,96). A seat at each end of the blotter. */
     if (id === 'games') {
-      const [x, y] = [10, 14]
-      tables.push({ id: tables.length, x, y, w: 7, seats: [[x, y - 1], [x + 6, y - 1]], extra: [], kind: 'fourup' })
+      tables.push({ id: tables.length, x: 21, y: 6, w: 5, seats: [[20, 7], [26, 7]], extra: [], kind: 'letterbox' })
     }
-    /** Trails: a cabinet for up to four, east of the left blackjack table. Seats face the cabinet. */
+    /** Four Up square table (art px 300,196). Seats on either side of the grid. */
     if (id === 'games') {
-      const [x, y] = [22, 10]
-      tables.push({ id: tables.length, x, y, w: 7, seats: [[x, y + 1], [x + 2, y + 1]], extra: [[x + 4, y + 1], [x + 6, y + 1]], kind: 'trails' })
+      tables.push({ id: tables.length, x: 19, y: 13, w: 4, seats: [[18, 14], [23, 14]], extra: [], kind: 'fourup' })
+    }
+    /** One Trails cabinet in the east alcove (art px 530,136). Up to four seats along the front. */
+    if (id === 'games') {
+      tables.push({ id: tables.length, x: 33, y: 9, w: 3, seats: [[32, 13], [33, 13]], extra: [[34, 13], [36, 13]], kind: 'trails' })
     }
     b = { tables }; built.set(id, b) }
   TABLES = b.tables

@@ -60,8 +60,8 @@
 @keyframes w-type { to { background-position-x: calc(-48 * var(--u, 2px)) } }
 @media (prefers-reduced-motion: reduce) { .w-murmur { animation: none; background-position-x: calc(-32 * var(--u, 2px)) } }
 .w-room.phone.seated { grid-template-rows: auto 122px 1fr }
-/* Fullscreen lounge tables (the shared bj shell) give the felt the phone. Chat history is a drawer in bj-table.css. */
-.w-room.phone.bj, .w-room.phone.bj.seated { grid-template-rows: auto minmax(0, 1fr) auto }
+/* Fullscreen lounge tables: 48px header, stage, 132px dock. bj-table.css fills in the dock. */
+.w-room.phone.bj, .w-room.phone.bj.seated { grid-template-rows: 48px minmax(0, 1fr) 132px }
 .w-room.phone.seated .w-side { overflow-y: auto; overscroll-behavior: contain; gap: 8px; padding: 8px 8px max(10px, env(safe-area-inset-bottom)) }
 .w-room.desk.seated .w-side { overflow-y: auto }
 /* GD v05 sign-off: Start call sits directly under the chat on phone too (no pinned-to-bottom gap) */

@@ -3,6 +3,7 @@
    the café's native 16 px grid, scaled by an INTEGER factor k in device pixels with nearest sampling, so every art pixel
    is exactly k×k screen pixels. */
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
+import { paintBoard } from './board-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -95,8 +96,8 @@ const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
     if (isPianoSeat(tx, ty)) return 'up'
     if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'Q' || at(tx, ty - 1) === 'R') return 'up'
-    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q' || at(tx + 1, ty) === 'F') return 'right'
-    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q' || at(tx - 1, ty) === 'F') return 'left'
+    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q' || at(tx + 1, ty) === 'F' || at(tx + 1, ty) === 'N') return 'right'
+    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q' || at(tx - 1, ty) === 'F' || at(tx - 1, ty) === 'N') return 'left'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
   return Math.abs(e.dx) > Math.abs(e.dy) ? (e.dx < 0 ? 'left' : 'right') : (e.dy < 0 ? 'up' : 'down')
 }
@@ -208,8 +209,14 @@ export class Renderer {
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
     const bg = new Sprite(T.map), glow = new Container(), bj = new Container()
-    // The lounge painting already includes the six furniture sprites (lit) at the README art-px positions.
-    // Drawing the unlit PNGs again would stack a second table on each one.
+    // The lounge painting already includes the six furniture sprites. The board-games table is a placeholder
+    // painted on the open brick (paintBoard). Swap that canvas for the designer's PNG, same origin and size.
+    if (CUR === 'games') {
+      const wood = tex(paintBoard())
+      for (const t of TABLES) if (t.kind === 'board') {
+        const sp = new Sprite(wood); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'board-table'; bj.addChild(sp)
+      }
+    }
     // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it
     const plaque = new Container(), doors: number[][] = []; for (let y = 0; y < MAP.rows.length; y++) for (let x = 0; x < MAP.rows[y].length; x++) if (MAP.rows[y][x] === 'D') doors.push([x, y])
     const top = new Sprite(new Texture({ source: T.map.source, frame: new Rectangle(0, 0, MW, ARCH_TOP) })); top.position.set(0, -ARCH_TOP); plaque.addChild(top)

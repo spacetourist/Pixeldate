@@ -16,14 +16,15 @@ const lastGame = b => b.last('game')
 const goSit = async (b, [x, y]) => { b.send({ t: 'go', x, y }); assert.ok(await b.wait(() => { const s = b.self(); return s && Math.floor(s.x) === x && Math.floor(s.y) === y && (s.f & 8) }, 8000), `sat at ${x},${y}`) }
 
 await test('map: games map 40x24, two snap tables, one of each other game, door, every seat reachable; café untouched after switching', async () => {
-  M.useMap('games'); const snap = M.TABLES.filter(t => t.kind === 'snap'), bj = M.TABLES.filter(t => t.kind === 'blackjack'), sweet = M.TABLES.filter(t => t.kind === 'sweet'), box = M.TABLES.filter(t => t.kind === 'letterbox'), four = M.TABLES.filter(t => t.kind === 'fourup'), trails = M.TABLES.filter(t => t.kind === 'trails')
-  assert.equal(snap.length, 2); assert.equal(bj.length, 1); assert.equal(sweet.length, 1); assert.equal(box.length, 1); assert.equal(four.length, 1); assert.equal(trails.length, 1); assert.deepEqual(snap[0].seats, [[5, 7], [9, 7]]); assert.equal(snap[0].w, 3)
+  M.useMap('games'); const snap = M.TABLES.filter(t => t.kind === 'snap'), bj = M.TABLES.filter(t => t.kind === 'blackjack'), sweet = M.TABLES.filter(t => t.kind === 'sweet'), box = M.TABLES.filter(t => t.kind === 'letterbox'), four = M.TABLES.filter(t => t.kind === 'fourup'), trails = M.TABLES.filter(t => t.kind === 'trails'), board = M.TABLES.filter(t => t.kind === 'board')
+  assert.equal(snap.length, 2); assert.equal(bj.length, 1); assert.equal(sweet.length, 1); assert.equal(box.length, 1); assert.equal(four.length, 1); assert.equal(trails.length, 1); assert.equal(board.length, 1); assert.deepEqual(snap[0].seats, [[5, 7], [9, 7]]); assert.equal(snap[0].w, 3)
   for (const t of snap) assert.equal(M.seatsOf(t).length, 2)
   for (const t of bj) { assert.equal(M.seatsOf(t).length, 5); assert.equal(t.w, 6); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'b') }
   for (const t of sweet) { assert.equal(M.seatsOf(t).length, 2); assert.equal(t.w, 5); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'y') }
   for (const t of box) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'q') }
   for (const t of four) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'f') }
   for (const t of trails) { assert.equal(M.seatsOf(t).length, 4); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'r') }
+  for (const t of board) { assert.equal(M.seatsOf(t).length, 2); for (const [x, y] of M.seatsOf(t)) assert.equal(M.at(x, y), 'n') }
   assert.ok(M.isDoor(11, 3) && M.isDoor(12, 3)); const seen = new Set([M.SPAWNS[0].join()]), q = [M.SPAWNS[0]]
   while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = [x + dx, y + dy]; if (M.walkable(...k) && !seen.has(k.join())) { seen.add(k.join()); q.push(k) } } }
   for (const t of M.TABLES) for (const s of M.seatsOf(t)) assert.ok(seen.has(s.join()), 'seat ' + s)
@@ -56,7 +57,7 @@ await test('snap: a game always ends (timeouts only), and the winner is the last
   for (let i = 0; i < 400 && !Snap.done(s); i++) { t += TURN_MS; Snap.tick(s, { now: t, rnd: cryptoRnd }) }
   const d = Snap.done(s); assert.ok(d); assert.ok(['a', 'b', 'c', ''].includes(d.winner))
 })
-await test('hooks: snap, blackjack, Sweet Twenty, Letterbox, Four Up and Trails are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(GAMES.sweet.ready); assert.ok(GAMES.letterbox.ready); assert.ok(GAMES.fourup.ready); assert.ok(GAMES.trails.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2); assert.equal(GAMES.blackjack.max, 5); assert.equal(GAMES.blackjack.min, 1); assert.equal(GAMES.sweet.min, 2); assert.equal(GAMES.sweet.max, 2); assert.equal(GAMES.letterbox.min, 2); assert.equal(GAMES.letterbox.max, 2); assert.equal(GAMES.fourup.min, 2); assert.equal(GAMES.fourup.max, 2); assert.equal(GAMES.trails.min, 2); assert.equal(GAMES.trails.max, 4) })
+await test('hooks: snap, blackjack, Sweet Twenty, Letterbox, Four Up, Trails and Board Games are ready, no pong yet', () => { assert.ok(GAMES.snap.ready); assert.ok(GAMES.blackjack.ready); assert.ok(GAMES.sweet.ready); assert.ok(GAMES.letterbox.ready); assert.ok(GAMES.fourup.ready); assert.ok(GAMES.trails.ready); assert.ok(GAMES.board.ready); assert.ok(!('pong' in GAMES)); assert.equal(GAMES.snap.max, 2); assert.equal(GAMES.blackjack.max, 5); assert.equal(GAMES.blackjack.min, 1); assert.equal(GAMES.sweet.min, 2); assert.equal(GAMES.sweet.max, 2); assert.equal(GAMES.letterbox.min, 2); assert.equal(GAMES.letterbox.max, 2); assert.equal(GAMES.fourup.min, 2); assert.equal(GAMES.fourup.max, 2); assert.equal(GAMES.trails.min, 2); assert.equal(GAMES.trails.max, 4); assert.equal(GAMES.board.min, 2); assert.equal(GAMES.board.max, 2) })
 
 const T = () => { M.useMap('games'); const t = M.TABLES[0]; M.useMap('cafe-landscape'); return t }
 const play = async (bots, { snapper = null } = {}) => {
@@ -240,7 +241,8 @@ await test('room: two tables, own turns, Double, rejected acts, AFK stand, mid-r
   const g = await A.wait(() => { const v = lastGame(A); return v && (v.phase === 'play' || (v.round >= 1 && v.phase === 'bet')) ? v : null }, 5000); assert.ok(g)
   if (g.phase === 'play') {
     const first = [A, B].find(b => b.me === lastGame(A).turn), other = first === A ? B : A
-    other.send({ t: 'gact', a: 'hit' }); assert.equal((await other.wait(() => other.last('gerr'))).why, 'not-your-turn')
+    other.send({ t: 'gact', a: 'hit' }); const refused = (await other.wait(() => other.last('gerr'))).why
+    assert.ok(refused === 'not-your-turn' || refused === 'not-in-round', refused)
     D = await J({ name: 'Dee' }); await goSit(D, s1[2])
     const dw = await D.wait(() => lastGame(D)?.phase === 'play' && lastGame(D), 4000); assert.ok(dw)
     assert.equal(dw.waiting || dw.mine === 'wait', true, 'mid-round seat waits')

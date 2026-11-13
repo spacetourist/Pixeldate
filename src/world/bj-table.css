@@ -9,7 +9,7 @@
 .bj-felt { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 8px 12px;
   background: #12382c url('./art/lounge/table-rim-phone@2x.png') center / 100% 100% no-repeat;
   border: 0; border-radius: 0; box-shadow: none }
-.w-room.desk .bj-screen:not(.sw-screen):not(.lb-screen):not(.fu-screen):not(.tr-screen) > .bj-felt { background-image: url('./art/lounge/table-rim-desktop@2x.png'); background-size: contain; background-position: center bottom; background-repeat: no-repeat }
+.w-room.desk .bj-screen:not(.sw-screen):not(.lb-screen):not(.fu-screen):not(.tr-screen):not(.bd-screen) > .bj-felt { background-image: url('./art/lounge/table-rim-desktop@2x.png'); background-size: contain; background-position: center bottom; background-repeat: no-repeat }
 .bj-npc { width: 48px; height: 56px; image-rendering: pixelated; display: block; margin: 0 auto }
 .bj-sit { width: 36px; height: 48px; image-rendering: pixelated; display: block }
 .bj-dealer { display: grid; justify-items: center; gap: 2px }

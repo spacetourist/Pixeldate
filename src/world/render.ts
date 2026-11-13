@@ -72,6 +72,7 @@ const LOUNGE_PIECES: [number, number, number, number][] = [
   [276, 186, 112, 72], // four up
   [148, 268, 164, 96], // sweet twenty, heart and sign
   [500, 108, 100, 80], // trails cabinet
+  [416, 300, 72, 56], // board games placeholder, painted over the open brick
 ]
 /** Renderer choice; ?gl=canvas / ?gl=webgpu forces a fallback for testing. */
 const PREF = (['webgl', 'webgpu', 'canvas'] as const).find(x => x === new URLSearchParams(location.search).get('gl')) ?? 'webgl'

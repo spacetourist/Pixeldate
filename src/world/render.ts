@@ -3,11 +3,7 @@
    the café's native 16 px grid, scaled by an INTEGER factor k in device pixels with nearest sampling, so every art pixel
    is exactly k×k screen pixels. */
 import { MAP, W, H, TILE, at, TABLES, isPianoSeat, CUR } from '../../world/shared/map.ts'
-import { paintBjTable } from './bj-art.ts'
-import { paintSweetTable } from './sweet-art.ts'
-import { paintLetterbox } from './letterbox-art.ts'
-import { paintFourUp } from './fourup-art.ts'
-import { paintTrails } from './trails-art.ts'
+import { paintBoard } from './board-art.ts'
 import { PIANO_PX, PIECE, NOTE, noteEveryMs } from '../../world/shared/piano.ts'
 import { SOFAS, seatOf, seatPx } from '../../world/shared/sofa.ts'
 import { DUET, DUET_PX, partAt, type Part } from '../../world/shared/duet.ts'
@@ -25,7 +21,7 @@ export const MW = W * TILE, MH = H * TILE
     the lintel. The view may rise ARCH_TOP px above the map so the lintel and plaque show whole (that strip repeats the wall
     top). Swap the art here (ARCH) when GD sends a new one; the doorway itself is never drawn over. */
 export const ARCH_TOP = 16
-export const ARCH: Record<string, { art: string; dx: number; dy: number; plaque?: string }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16, plaque: 'door-plaque' }, games: { art: 'lounge-archway', dx: -24, dy: -16 } }
+export const ARCH: Record<string, { art: string; dx: number; dy: number; plaque?: string }> = { 'cafe-landscape': { art: 'archway', dx: -24, dy: -16, plaque: 'door-plaque' } }
 /** the plaque on the lintel: GD's 80x36 sign with its top 4 rows (hanging rings) cropped, body on the arch's rows 0-27 */
 const PLAQUE_CROP = 4, PLAQUE_H = 28
 /* GD's final world markers (world/markers/README.md), copied into ./art/markers/ by  node tools/import-world-art.mjs
@@ -66,6 +62,18 @@ const GLOW: Record<string, string> = { table: 'glow-table-lamp.png', pendant: 'g
     enough to warm the people standing in a pool of light without washing out the art. */
 const GLOW_ALPHA = 0.55
 const PHONE_CSS_SCALE = 2
+/** Painted Games Lounge pieces, including their signs, in art pixels (measured on lounge-pixel.png).
+    When you stand near one and it fits in the view, the camera shifts so the whole piece stays on screen. */
+const LOUNGE_PIECES: [number, number, number, number][] = [
+  [64, 86, 96, 70], // snap, west
+  [186, 86, 96, 70], // snap, east
+  [48, 168, 188, 112], // blackjack
+  [300, 78, 130, 78], // letterbox
+  [276, 186, 112, 72], // four up
+  [148, 268, 164, 96], // sweet twenty, heart and sign
+  [500, 108, 100, 80], // trails cabinet
+  [416, 300, 72, 56], // board games placeholder, painted over the open brick
+]
 /** Renderer choice; ?gl=canvas / ?gl=webgpu forces a fallback for testing. */
 const PREF = (['webgl', 'webgpu', 'canvas'] as const).find(x => x === new URLSearchParams(location.search).get('gl')) ?? 'webgl'
 /** Camera ease time constant (ms): the view glides after you rather than locking to every step. */
@@ -89,8 +97,8 @@ const dirOf = (e: Seen): Dir => {
   if (e.f & F_SIT) { const tx = Math.floor(e.x), ty = Math.floor(e.y)  // face the table
     if (isPianoSeat(tx, ty)) return 'up'
     if (at(tx, ty - 1) === 'B' || at(tx, ty - 1) === 'Y' || at(tx, ty - 1) === 'Q' || at(tx, ty - 1) === 'R') return 'up'
-    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q') return 'right'
-    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q') return 'left'
+    if (at(tx + 1, ty) === 'B' || at(tx + 1, ty) === 'Y' || at(tx + 1, ty) === 'Q' || at(tx + 1, ty) === 'F' || at(tx + 1, ty) === 'N') return 'right'
+    if (at(tx - 1, ty) === 'B' || at(tx - 1, ty) === 'Y' || at(tx - 1, ty) === 'Q' || at(tx - 1, ty) === 'F' || at(tx - 1, ty) === 'N') return 'left'
     return at(tx + 1, ty) === 'T' ? 'right' : at(tx - 1, ty) === 'T' ? 'left' : at(tx, ty - 1) === 'T' ? 'up' : 'down' }
   return Math.abs(e.dx) > Math.abs(e.dy) ? (e.dx < 0 ? 'left' : 'right') : (e.dy < 0 ? 'up' : 'down')
 }
@@ -202,27 +210,12 @@ export class Renderer {
     T.goal = tex(paint(['mmmmmmmmmm', 'm........m', 'm........m', 'm........m', 'm........m', 'mmmmmmmmmm'], { m: '#48E5C2' }))
 
     const bg = new Sprite(T.map), glow = new Container(), bj = new Container()
-    // Placeholder blackjack tables (src/world/bj-art.ts). Same texture for each; GD's PNG replaces paintBjTable().
+    // The lounge painting already includes the six furniture sprites. The board-games table is a placeholder
+    // painted on the open brick (paintBoard). Swap that canvas for the designer's PNG, same origin and size.
     if (CUR === 'games') {
-      const felt = tex(paintBjTable())
-      for (const t of TABLES) if (t.kind === 'blackjack') {
-        const sp = new Sprite(felt); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'bj-table'; bj.addChild(sp)
-      }
-      const sweet = tex(paintSweetTable())
-      for (const t of TABLES) if (t.kind === 'sweet') {
-        const sp = new Sprite(sweet); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'sweet-table'; bj.addChild(sp)
-      }
-      const desk = tex(paintLetterbox())
-      for (const t of TABLES) if (t.kind === 'letterbox') {
-        const sp = new Sprite(desk); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'letterbox'; bj.addChild(sp)
-      }
-      const four = tex(paintFourUp())
-      for (const t of TABLES) if (t.kind === 'fourup') {
-        const sp = new Sprite(four); sp.position.set(t.x * TILE, (t.y - 1) * TILE); sp.label = 'four-up'; bj.addChild(sp)
-      }
-      const trails = tex(paintTrails())
-      for (const t of TABLES) if (t.kind === 'trails') {
-        const sp = new Sprite(trails); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'trails'; bj.addChild(sp)
+      const wood = tex(paintBoard())
+      for (const t of TABLES) if (t.kind === 'board') {
+        const sp = new Sprite(wood); sp.position.set(t.x * TILE, t.y * TILE); sp.label = 'board-table'; bj.addChild(sp)
       }
     }
     // GD's open archway over the door tiles (ARCH), plaque on its lintel; a strip of the wall top above the map behind it
@@ -245,12 +238,22 @@ export class Renderer {
     this.px = px; this.apply()
   }
   destroy() { this.dead = true; if (this.px) { this.px.destroy(); this.px = null } }
-  /** Integer factor k (device px per art px), and never so small that the view is wider or taller than the room, so there
-      are no empty bands. Phone: 2 CSS px per art px (about 12 tiles across at 390). Desktop: a closer view that follows you. */
+  /** Device pixels per art pixel. Phone and the café stay on a whole number. The desktop lounge uses the largest
+      whole number that fits the room, or the exact fit (nearest-neighbour) when a whole number would leave a big gap. */
   resize(cssW: number, cssH: number, dpr: number, layout: Layout) {
     const dw = Math.max(1, Math.floor(cssW * dpr)), dh = Math.max(1, Math.floor(cssH * dpr))
-    const base = layout === 'phone' ? Math.max(1, Math.round(PHONE_CSS_SCALE * dpr)) : Math.max(2, Math.floor(Math.min(dw / 320, dh / 240)))
-    this.k = Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / (MH + ARCH_TOP)))
+    const roomH = MH + ARCH_TOP
+    // Desktop Games Lounge: the whole room fits in the canvas (integer k), pinned to the top, so no table is cropped
+    // and the margin under the map is clear of the emote bar. The café keeps its closer follow camera.
+    const lounge = layout === 'desk' && CUR === 'games'
+    // Largest scale that still shows the whole room. Prefer a whole number of device pixels per art pixel.
+    // If that leaves the room under about 80% of the tighter canvas edge, use the exact fit instead.
+    // Textures stay nearest-neighbour, so a fractional scale stays crisp.
+    const fit = Math.min(dw / MW, dh / roomH)
+    const whole = Math.max(1, Math.floor(fit))
+    const base = lounge ? (whole / fit >= 0.8 ? whole : fit)
+      : layout === 'phone' ? Math.max(1, Math.round(PHONE_CSS_SCALE * dpr)) : Math.max(2, Math.floor(Math.min(dw / 320, dh / 240)))
+    this.k = lounge ? base : Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / roomH))
     this.vw = dw / this.k; this.vh = dh / this.k; this.dw = dw; this.dh = dh; this.layout = layout
     this.dpr = dpr; this.cssW = dw / dpr; this.cssH = dh / dpr; this.snap = true
     this.c.style.width = this.cssW + 'px'; this.c.style.height = this.cssH + 'px'
@@ -284,15 +287,42 @@ export class Renderer {
     const dt = Math.min(100, Math.max(0, now - (this.last || now))); this.last = now
     if (!this.px) return
     const k = this.k, vw = this.vw, vh = this.vh
-    // camera: ease toward the player, clamped to the room (k guarantees the view is never bigger than the room)
+    // camera: ease toward the player. The Games Lounge on a desktop shows the whole room; on a phone it
+    // shifts so a nearby table and its sign stay inside the view.
     const me = net.ents.get(net.me)
     if (me) { const [fx, fy] = this.feet(net, me, now)
-      const tx = Math.max(0, Math.min(MW - vw, fx - vw / 2)), ty = Math.max(-ARCH_TOP, Math.min(MH - vh, fy - 12 - vh / 2))
+      const roomTop = -ARCH_TOP, roomH = MH - roomTop
+      let tx: number, ty: number
+      if (this.layout === 'desk' && CUR === 'games' && vw >= MW - 0.5 && vh >= roomH - 0.5) {
+        tx = (MW - vw) / 2; ty = roomTop - (vh - roomH) / 2
+      } else {
+        tx = fx - vw / 2; ty = fy - 12 - vh / 2
+        if (CUR === 'games') {
+          let best: [number, number, number, number] | null = null, bestD = 80
+          for (const b of LOUNGE_PIECES) {
+            if (b[2] + 8 > vw || b[3] + 8 > vh) continue
+            const d = Math.hypot(fx - (b[0] + b[2] / 2), fy - (b[1] + b[3] / 2))
+            if (d < bestD) { best = b; bestD = d }
+          }
+          if (best) {
+            const m = 6
+            if (best[0] - m < tx) tx = best[0] - m
+            if (best[0] + best[2] + m > tx + vw) tx = best[0] + best[2] + m - vw
+            if (best[1] - m < ty) ty = best[1] - m
+            if (best[1] + best[3] + m > ty + vh) ty = best[1] + best[3] + m - vh
+          }
+        }
+        tx = Math.max(0, Math.min(MW - vw, tx)); ty = Math.max(roomTop, Math.min(MH - vh, ty))
+      }
       this.camT = [tx, ty]
       if (this.snap) { this.camX = tx; this.camY = ty; this.snap = false }
       else { const a = 1 - Math.exp(-dt / EASE_MS); this.camX += (tx - this.camX) * a; this.camY += (ty - this.camY) * a
         if (Math.abs(tx - this.camX) < 0.05) this.camX = tx; if (Math.abs(ty - this.camY) < 0.05) this.camY = ty } }
-    this.camX = Math.max(0, Math.min(MW - vw, this.camX)); this.camY = Math.max(-ARCH_TOP, Math.min(MH - vh, this.camY))
+    // Desktop lounge shows the whole room, centred in the play area. A closer view stays inside the walls.
+    if (vw >= MW - 0.5) this.camX = (MW - vw) / 2
+    else this.camX = Math.max(0, Math.min(MW - vw, this.camX))
+    if (vh >= MH + ARCH_TOP - 0.5) this.camY = -ARCH_TOP - (vh - (MH + ARCH_TOP)) / 2
+    else this.camY = Math.max(-ARCH_TOP, Math.min(MH - vh, this.camY))
     this.ox = Math.round(this.camX * k); this.oy = Math.round(this.camY * k)
     this.world.position.set(-this.ox, -this.oy)
 

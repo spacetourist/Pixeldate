@@ -8,6 +8,7 @@
     "bots": "node test/bots.mjs"
   },
   "dependencies": {
+    "chess.js": "^1.4.0",
     "obscenity": "^0.4.6",
     "partyserver": "^0.5.10"
   },

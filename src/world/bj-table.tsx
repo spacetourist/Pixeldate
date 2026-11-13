@@ -4,6 +4,9 @@
 import { useEffect, useState } from 'react'
 import './bj-table.css'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
+import housePng from './art/lounge/house.png'
+import youSeat from './art/lounge/you-seated.png'
+import jessSeat from './art/lounge/jess-seated.png'
 export interface BjSeat { id: number; out: boolean; away: boolean; hand: number[]; total: number; soft: boolean; bet: number; st: string; res: string | null; seat: number }
 export interface BjGame { on: true; g: 'blackjack'; tb: number; seq: number; now: number; me: number; phase: 'bet' | 'play'
   ante: number; hand: number[]; house: (number | null)[]; total: number; soft: boolean; houseTotal: number | null
@@ -25,7 +28,6 @@ function Card({ c }: { c: number }) {
     onError={e => { const i = e.currentTarget; if (!i.src.endsWith('.png')) i.src = `${CARDS}png/${f}.png` }} />
 }
 const Back = () => <img src={BACK} srcSet={BACK_SET} alt="" className="g-card g-back" width={120} height={168} />
-const ST: Record<string, string> = { bet: 'betting', locked: 'in', wait: 'next round', play: 'playing', stand: 'stand', bust: 'bust', bj: 'blackjack' }
 const RES = { win: 'You win this hand', bj: 'Blackjack', push: 'Push · your coins come back', lose: 'The House takes this one', bust: 'Bust · over 21' } as const
 
 export default function BjTable({ game, name, send, stand, desk, chips, onLeave }: { game: BjGame | null; name: (id: number) => string; send: (o: object) => void
@@ -57,14 +59,15 @@ export default function BjTable({ game, name, send, stand, desk, chips, onLeave 
   return <section className="bj-screen" data-t="g-bj" data-seq={game?.seq ?? 0} data-phase={game?.phase ?? 'bet'} data-turn={mine ? 'me' : 'them'} data-res={game?.res ?? undefined} aria-label="Blackjack table">
     <header className="bj-top"><h2>Blackjack</h2><small>your hand vs the House</small>
       <button className="w-btn sm ghost bj-leave" data-t="bj-leave" onClick={leave}>Leave</button></header>
-    <div className="bj-felt" data-bj-art="placeholder">
-      <div className="bj-dealer"><b>Dealer</b>
+    <div className="bj-felt" data-bj-art="rim">
+      <div className="bj-dealer"><img className="bj-npc" src={housePng} alt="" width={48} height={56} /><b>Dealer</b>
         <div className="bj-hand g-hand" data-t="bj-house">{game?.house.length ? game.house.map((c, i) => c === null ? <Back key={i} /> : <Card key={i} c={c} />) : <span className="bj-empty">House</span>}</div>
         <small data-t="bj-house-total">{game?.houseTotal != null ? game.houseTotal : game?.house.length ? '?' : ''}</small></div>
       <div className="bj-seats">{seats.map((p, i) => ({ p, i })).sort((a, b) => (a.p ? 0 : 1) - (b.p ? 0 : 1)).map(({ p, i }) => <div key={i} className={'bj-seat' + (p && p.id === game?.me ? ' me' : '') + (p && play && p.id === game?.turn ? ' turn' : '') + (p?.st === 'wait' ? ' wait' : '')} data-t="bj-seat" data-seat={i} data-st={p?.st ?? 'empty'} data-me={p && p.id === game?.me ? '1' : undefined}>
+        {p && <img className="bj-sit" src={p.id === game?.me ? youSeat : jessSeat} alt="" width={36} height={48} />}
         <span className={'nm' + (p && p.id === game?.me ? ' me' : '')}>{p ? name(p.id) : 'Open seat'}</span>
-        <div className="bj-hand" data-t={p && p.id === game?.me ? 'bj-hand' : undefined}>{p?.hand.length ? p.hand.map((c, k) => <Card key={k} c={c} />) : <span className="bj-empty">{p ? 'no cards yet' : 'seat'}</span>}</div>
-        <small>{p ? <>{p.hand.length ? (p.soft && p.total < 21 ? 'soft ' : '') + p.total : ''}{p.bet ? ` · ${p.bet}` : ''} · {ST[p.st] ?? p.st}{p.away ? ' · back soon' : ''}</> : ' '}</small>
+        <div className="bj-hand" data-t={p && p.id === game?.me ? 'bj-hand' : undefined}>{p?.hand.length ? p.hand.map((c, k) => <Card key={k} c={c} />) : p ? <span className="bj-empty">no cards yet</span> : null}</div>
+        <small data-t="bj-meta">{p ? <>{p.hand.length ? `${p.soft && p.total < 21 ? 'soft ' : ''}${p.total} · bet ${p.bet}` : p.bet ? `bet ${p.bet}` : ''}{p.away ? ' · back soon' : ''}</> : ''}</small>
       </div>)}</div>
     </div>
     <div className="bj-bar">

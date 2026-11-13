@@ -7,12 +7,13 @@ import { pixelateCanvas, loadImage, animateReveal } from '../pixel'
 import type { Profile } from '../net'
 import { BRACKETS, BUBBLE_MS, MAX_SAY, MAX_ANS, PHOTO_MAX, F_SIT, bracketLabel, type Pub, type ServerMsg, type Table } from '../../world/shared/proto.ts'
 import { findPath, nearestWalkable } from '../../world/shared/path.ts'
-import { walkable, isSeat, isPianoSeat, isBjSeat, isSweetSeat, isLetterSeat, isFourSeat, isTrailSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
+import { walkable, isSeat, isPianoSeat, isBjSeat, isSweetSeat, isLetterSeat, isFourSeat, isTrailSeat, isBoardSeat, at, TABLES, useMap, mapOf, isDoor } from '../../world/shared/map.ts'
 import type { GameV, GameInfo } from './games.tsx'
 import type { BjGame } from './bj-table.tsx'
 import type { SwGame } from './sweet-table.tsx'
 import type { LbGame } from './letterbox-table.tsx'
 import type { FuGame } from './fourup-table.tsx'
+import type { BdGame } from './board-table.tsx'
 import type { TrGame } from './trails-table.tsx'
 import { gameErr } from './games-err.ts'
 import { CHIPS_NAME } from '../../world/shared/chips.ts'
@@ -45,6 +46,7 @@ const SweetTable = lazy(() => import('./sweet-table.tsx'))
 const LetterTable = lazy(() => import('./letterbox-table.tsx'))
 const FourTable = lazy(() => import('./fourup-table.tsx'))
 const TrailTable = lazy(() => import('./trails-table.tsx'))
+const BoardTable = lazy(() => import('./board-table.tsx'))
 
 /** Dev server URL. A ?ws= override is honoured only for this machine, so a crafted link can't send your profile elsewhere. */
 function serverUrl() {
@@ -102,7 +104,7 @@ function World() {
   const [inst, setInst] = useState(''); const [count, setCount] = useState(0)
   /** which room: cafe-1 or the Games Lounge (games-1); the shared map follows it */
   const [room, setRoom] = useState(qs.get('room') === 'games' ? 'games-1' : 'cafe-1'), roomRef = useRef(room)
-  const [game, setGame] = useState<GameV | BjGame | SwGame | LbGame | FuGame | TrGame | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [atBj, setAtBj] = useState(false), [bjHold, setBjHold] = useState(false), [chips, setChips] = useState<number | null>(null)
+  const [game, setGame] = useState<GameV | BjGame | SwGame | LbGame | FuGame | TrGame | BdGame | null>(null), [games, setGames] = useState<GameInfo[]>([]), [atTable, setAtTable] = useState(false), [atBj, setAtBj] = useState(false), [bjHold, setBjHold] = useState(false), [chips, setChips] = useState<number | null>(null)
   const [layout, setLayout] = useState<Layout>(layoutOf())
   const [sel, setSel] = useState<Pub | null>(null); const [menu, setMenu] = useState<'' | 'report' | 'block'>('')
   const [card, setCard] = useState<Tbl | null>(null), selRef = useRef<Pub | null>(null)
@@ -153,7 +155,7 @@ function World() {
     n.onmsg = (m: ServerMsg | any) => {
       if (net.current !== n) return
       if (m.t === 'chips') { setChips(m.bal); if (m.topped) flash(`Free daily top-up: your ${CHIPS_NAME} are back to ${m.bal}.`); return }
-      if (m.t === 'game') { const nx = m.on ? m : null; if (!m.on && (gameRef.current?.g === 'blackjack' || gameRef.current?.g === 'sweet' || gameRef.current?.g === 'letterbox' || gameRef.current?.g === 'fourup' || gameRef.current?.g === 'trails')) setBjHold(true); if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
+      if (m.t === 'game') { const nx = m.on ? m : null; if (!m.on && (gameRef.current?.g === 'blackjack' || gameRef.current?.g === 'sweet' || gameRef.current?.g === 'letterbox' || gameRef.current?.g === 'fourup' || gameRef.current?.g === 'trails' || gameRef.current?.g === 'board')) setBjHold(true); if (LOUNGE_AUDIO) import('./lounge-audio.ts').then(A => A.onGame(gameRef.current, nx)); gameRef.current = nx; setGame(nx); return }
       if (m.t === 'gerr') { const s = gameErr(m.why); if (s) flash(s); return }
       if (m.t === 'hi') { setInst(m.inst); setGames(m.games ?? []); setPhase('in'); if (m.now) A.hint(m.now); A.sync()
         // through the archway: keep walking a tile into the room; the fade lifts (a teleport is seated by the server)
@@ -363,7 +365,7 @@ function World() {
   useEffect(() => {
     if (phase !== 'in' || !room.startsWith('games-')) return
     const i = setInterval(() => { const n = net.current, e = n?.ents.get(n.me); const sit = !!e && !!(e.f & F_SIT), x = e ? Math.floor(e.x) : 0, y = e ? Math.floor(e.y) : 0
-      const full = sit && (isBjSeat(x, y) || isSweetSeat(x, y) || isLetterSeat(x, y) || isFourSeat(x, y) || isTrailSeat(x, y)); setAtBj(full); if (!full) setBjHold(false); setAtTable(sit && isSeat(x, y) && !full) }, 250)
+      const full = sit && (isBjSeat(x, y) || isSweetSeat(x, y) || isLetterSeat(x, y) || isFourSeat(x, y) || isTrailSeat(x, y) || isBoardSeat(x, y)); setAtBj(full); if (!full) setBjHold(false); setAtTable(sit && isSeat(x, y) && !full) }, 250)
     return () => { clearInterval(i); setAtTable(false) }
   }, [phase, room])
 
@@ -519,6 +521,8 @@ function World() {
           send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} onLeave={() => setBjHold(true)} /></Suspense>}
         {atBj && !bjHold && game?.g === 'trails' && <Suspense fallback={null}><TrailTable game={game} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
           send={dsend} stand={stand} desk={layout === 'desk'} chips={chips} onLeave={() => setBjHold(true)} /></Suspense>}
+        {atBj && !bjHold && game?.g === 'board' && <Suspense fallback={null}><BoardTable game={game} name={id => id === nn?.me ? 'You' : nn?.pubs.get(id)?.name ?? 'Someone'}
+          send={dsend} stand={stand} desk={layout === 'desk'} onLeave={() => setBjHold(true)} /></Suspense>}
         <div className="w-over" ref={over} aria-live={layout === 'desk' ? 'off' : 'polite'} />
         {/* GD's voice emote tray; phone: ♪ (café sound on/off, the piano mute everywhere) with the tray to its right */}
         {layout === 'phone' && <button className={'w-note-btn' + (muted ? ' off' : '')} data-t="w-sound" aria-pressed={!muted} aria-label={muted ? 'Café sound off' : 'Café sound on'}
@@ -590,13 +594,12 @@ function BjChat({ desk, name, pubs, priv, log, privEl, say }: { desk: boolean; n
   const lines = [...log.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : l.name })),
     ...priv.map(l => ({ k: l.k, mine: l.mine, text: l.text, who: l.mine ? 'You' : (l.id && pubs?.get(l.id)?.name) || name || 'Someone' }))].sort((a, b) => a.k - b.k)
   const last = lines.at(-1)
-  const showLog = desk || open
-  return <section className={'w-panel w-chat bj-chat' + (!desk && open ? ' open' : '')} data-t="w-priv" data-open={showLog ? '1' : '0'} aria-label="Table chat">
+  return <section className={'w-panel w-chat bj-chat' + (!desk && open ? ' open' : '')} data-t="w-priv" data-open={!desk && open ? '1' : '0'} aria-label="Table chat">
     <h3 data-t="w-priv-label">Table chat
       {!desk && !open && last && <span className="bj-peek" data-t="w-chat-peek"><b>{last.who}</b> {last.text}</span>}
       {!desk && <button type="button" className="w-link bj-chat-toggle" data-t="w-chat-toggle" aria-expanded={open} onClick={() => setOpen(v => !v)}>{open ? 'Hide' : 'History'}</button>}
     </h3>
-    <ol ref={privEl} role="log" aria-live="polite" hidden={!showLog}>{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
+    <ol ref={privEl} role="log" aria-live="polite">{lines.length ? lines.map(l => <li key={l.k} className={l.mine ? 'mine' : undefined}><b>{l.who}</b> <span>{l.text}</span></li>)
       : <li className="w-log-empty">The table hears you.</li>}</ol>
     {say}
   </section>

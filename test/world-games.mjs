@@ -127,7 +127,7 @@ ok(!!(await B.$('[data-t=g-again]')), 'play again / done offered')
 // Blackjack tables: sit down (no Start button), each hand vs the House
 const clickIf = async (p, sel) => { if (!(await p.$(sel))) return; try { await press(p, sel) } catch { console.log('  skip', sel, 'on', p.tag) } }
 await clickIf(B, '[data-t=g-done]'); await clickIf(A, '[data-t=g-done]'); await clickIf(A, '[data-t=g-stand]'); await clickIf(B, '[data-t=g-stand]')
-const bj = TABLES.filter(t => t.kind === 'blackjack')[1], rail = [...bj.seats, ...bj.extra]
+const bj = TABLES.find(t => t.kind === 'blackjack'), rail = [...bj.seats, ...bj.extra]
 const inLounge = async p => (await txt(p, '[data-t=w-room-name]')) === 'Games Lounge'
 const seatedAt = async (p, x, y) => until(async () => { const m = await meEnt(p); return m && (m.f & 8) && Math.floor(m.x) === x && Math.floor(m.y) === y }, 4000)
 const sitDown = async (p, x, y) => {
@@ -139,7 +139,7 @@ const sitDown = async (p, x, y) => {
   }
   return !!(await seatedAt(p, x, y))
 }
-ok(await walkTo(A, 8, 16, 30000) && await inLounge(A), 'Avery walks up to a blackjack table')
+ok(await walkTo(A, 4, 16, 30000) && await inLounge(A), 'Avery walks up to a blackjack table')
 await shot(A, '10-bj-lounge')
 ok(await sitDown(A, rail[0][0], rail[0][1]), 'Avery sits at the blackjack table')
 ok(await sitDown(B, rail[2][0], rail[2][1]), 'Blair sits at the same blackjack table')

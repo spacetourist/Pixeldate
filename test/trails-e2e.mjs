@@ -74,7 +74,7 @@ const A = await player('a', PHONE, 'Ada'), B = await player('b', DESK, 'Bea', { 
 for (const p of [A, B]) { js.set(p.tag, 0); p.on('request', r => { if (/trails-table-[^/]*\.js/.test(r.url())) js.set(p.tag, js.get(p.tag) + 1) }) }
 ok(await inLounge(A) && await inLounge(B), 'both open in the Games Lounge')
 ok(!js.get('a') && !js.get('b'), 'Trails stays unloaded until someone sits')
-await hop(A, [[15, 4], [20, 13], [22, 12]]); await hop(B, [[16, 4], [28, 13], [24, 12]])
+await hop(A, [[15, 4], [30, 5], [30, 13]]); await hop(B, [[16, 4], [37, 5], [37, 13]])
 ok(await inLounge(A) && await inLounge(B), 'both are still in the lounge by the cabinet')
 await shot(A, '01-lounge'); await shot(B, '01-lounge')
 ok(await sitDown(A, seats[0][0], seats[0][1]), 'Ada sits at Trails')

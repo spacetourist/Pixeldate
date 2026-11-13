@@ -4,5 +4,6 @@ const ERR: Record<string, string> = { 'not-your-turn': 'Not your turn yet.', 'sl
   chips: 'Not enough coins for that.', 'bad-ante': 'Pick a coin amount, or play free.', waiting: "You're in on the next round.", 'no-double': 'Double is only on your first two cards.', 'in-round': 'That round has already started.', full: 'Every seat at this table is taken.',
   'one-side': 'Only one side card each turn.', 'bad-card': 'That side card is gone.', 'bad-sign': 'Choose plus or minus for that card.', over: 'That match is over.', 'need-two': 'That table needs two.',
   'bad-turn': 'That is not a direction.', 'bad-col': 'That column is full.',
-  'bad-word': 'That is not in the word list.', short: 'Five letters.', 'bad-mode': 'Pick Race or Pick for me.', mode: 'Pick a mode first.', differ: 'Pick the same mode.' }
+  'bad-word': 'That is not in the word list.', short: 'Five letters.', 'bad-mode': 'Pick Race or Pick for me.', mode: 'Pick a mode first.', differ: 'Pick the same mode.',
+  illegal: 'That move is not legal.', promo: 'Choose a piece to promote to.', 'must-take': 'You have to take.', 'bad-clock': 'Pick a clock: off, 5+0, or 10+0.' }
 export const gameErr = (why: string) => ERR[why] ?? ''

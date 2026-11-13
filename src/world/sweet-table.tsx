@@ -28,11 +28,11 @@ function MainCard({ v }: { v: number }) {
 /** Heart ± tile. Swap this component for GD's side-card art; keep data-k and data-n. */
 function SideTile({ card, disabled, on }: { card: SwSide; disabled?: boolean; on?: (sign: 1 | -1) => void }) {
   const [flip, setFlip] = useState<1 | -1>(1)
-  const label = card.k === 'plus' ? `+${card.n}` : card.k === 'minus' ? `−${card.n}` : `${flip > 0 ? '+' : '−'}${card.n}`
+  const label = card.k === 'plus' ? `+${card.n}` : card.k === 'minus' ? `−${card.n}` : `±${card.n}`
   return <button type="button" className={'sw-tile ' + card.k + (card.k === 'flip' && flip < 0 ? ' on' : '')} data-t="sw-side" data-k={card.k} data-n={card.n} disabled={disabled}
     onClick={() => { if (card.k === 'flip' && !disabled) { on?.(flip); return } on?.(card.k === 'minus' ? -1 : 1) }}>
     <svg className="sw-heart" viewBox="0 0 20 18" aria-hidden="true"><path d="M10 16S2 11 2 6.2C2 3.8 3.8 2 6.1 2 7.6 2 8.9 2.8 10 4.2 11.1 2.8 12.4 2 13.9 2 16.2 2 18 3.8 18 6.2 18 11 10 16 10 16z" /></svg>
-    <b>{card.k === 'flip' ? '±' : ''}{label}</b>
+    <b>{label}</b>
     {card.k === 'flip' && !disabled && <span className="sw-flip" onClick={e => { e.stopPropagation(); setFlip(f => f > 0 ? -1 : 1) }} data-t="sw-flip">{flip > 0 ? '+' : '−'}</span>}
   </button>
 }
@@ -44,7 +44,7 @@ const Board = ({ p, name, me, turn }: { p: SwSeat; name: string; me: boolean; tu
   <img className="sw-sit" src={me ? youSeat : jessSeat} alt="" width={36} height={48} />
   <span className={'nm' + (me ? ' me' : '')}>{name}</span>
   <div className="sw-cards" data-t={me ? 'sw-board' : 'sw-their-board'}>{p.board.length ? p.board.map((c, i) => c.side ? <Mini key={i} v={c.v} /> : <MainCard key={i} v={c.v} />) : <span className="bj-empty">waiting for a card</span>}</div>
-  <span className={'tot' + (p.total > 20 ? ' over' : '')}>{p.bust ? 'bust' : p.stood ? `stood ${p.total}` : p.total}{p.away ? ' · back soon' : ''}</span>
+  <span className={'tot' + (p.total > 20 ? ' over' : '')} data-t="sw-tot">{p.board.length || p.bust || p.stood ? (p.bust ? 'bust' : p.stood ? `stood ${p.total}` : p.total) : ''}{p.away ? ' · back soon' : ''}</span>
 </div>
 
 export default function SweetTable({ game, name, send, stand, desk, chips, onLeave }: { game: SwGame | null; name: (id: number) => string; send: (o: object) => void
@@ -79,12 +79,11 @@ export default function SweetTable({ game, name, send, stand, desk, chips, onLea
     <header className="bj-top"><h2>Sweet Twenty</h2><small data-t="sw-sets">Sets {sets}</small>
       <button className="w-btn sm ghost bj-leave" data-t="sw-leave" onClick={leave}>Leave</button></header>
     <div className="bj-felt sw-felt" data-sw-art="heart">
-      <div className="sw-boards">
+      {them ? <Board p={them} name={name(them.id)} me={false} turn={!!play && game!.turn === them.id} /> : <p className="bj-empty">Waiting for someone to sit opposite.</p>}
+      <div className="sw-lower">
         {me && <Board p={me} name="You" me turn={!!mine} />}
-        {them && <Board p={them} name={name(them.id)} me={false} turn={!!play && game!.turn === them.id} />}
-        {!them && <p className="bj-empty">Waiting for someone to sit opposite.</p>}
+        {!!game?.side.length && <div className="sw-side" data-t="sw-hand">{game.side.map((c, i) => <SideTile key={i + c.k + c.n} card={c} disabled={!mine || game.played} on={sign => playSide(i, sign)} />)}</div>}
       </div>
-      {!!game?.side.length && <div className="sw-side" data-t="sw-hand">{game.side.map((c, i) => <SideTile key={i + c.k + c.n} card={c} disabled={!mine || game.played} on={sign => playSide(i, sign)} />)}</div>}
     </div>
     <div className="bj-bar">
       <p className="bj-status" role="status" data-t="g-status">{status}{mine ? <small data-t="sw-total"> · {game!.total}</small> : null}</p>

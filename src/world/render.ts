@@ -61,6 +61,17 @@ const GLOW: Record<string, string> = { table: 'glow-table-lamp.png', pendant: 'g
     enough to warm the people standing in a pool of light without washing out the art. */
 const GLOW_ALPHA = 0.55
 const PHONE_CSS_SCALE = 2
+/** Painted Games Lounge pieces, including their signs, in art pixels (measured on lounge-pixel.png).
+    When you stand near one and it fits in the view, the camera shifts so the whole piece stays on screen. */
+const LOUNGE_PIECES: [number, number, number, number][] = [
+  [64, 86, 96, 70], // snap, west
+  [186, 86, 96, 70], // snap, east
+  [48, 168, 188, 112], // blackjack
+  [300, 78, 130, 78], // letterbox
+  [276, 186, 112, 72], // four up
+  [148, 268, 164, 96], // sweet twenty, heart and sign
+  [500, 108, 100, 80], // trails cabinet
+]
 /** Renderer choice; ?gl=canvas / ?gl=webgpu forces a fallback for testing. */
 const PREF = (['webgl', 'webgpu', 'canvas'] as const).find(x => x === new URLSearchParams(location.search).get('gl')) ?? 'webgl'
 /** Camera ease time constant (ms): the view glides after you rather than locking to every step. */
@@ -223,8 +234,13 @@ export class Renderer {
       are no empty bands. Phone: 2 CSS px per art px (about 12 tiles across at 390). Desktop: a closer view that follows you. */
   resize(cssW: number, cssH: number, dpr: number, layout: Layout) {
     const dw = Math.max(1, Math.floor(cssW * dpr)), dh = Math.max(1, Math.floor(cssH * dpr))
-    const base = layout === 'phone' ? Math.max(1, Math.round(PHONE_CSS_SCALE * dpr)) : Math.max(2, Math.floor(Math.min(dw / 320, dh / 240)))
-    this.k = Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / (MH + ARCH_TOP)))
+    const roomH = MH + ARCH_TOP
+    // Desktop Games Lounge: the whole room fits in the canvas (integer k), pinned to the top, so no table is cropped
+    // and the margin under the map is clear of the emote bar. The café keeps its closer follow camera.
+    const fit = layout === 'desk' && CUR === 'games'
+    const base = fit ? Math.max(1, Math.min(Math.floor(dw / MW) || 1, Math.floor(dh / roomH) || 1))
+      : layout === 'phone' ? Math.max(1, Math.round(PHONE_CSS_SCALE * dpr)) : Math.max(2, Math.floor(Math.min(dw / 320, dh / 240)))
+    this.k = fit ? base : Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / roomH))
     this.vw = dw / this.k; this.vh = dh / this.k; this.dw = dw; this.dh = dh; this.layout = layout
     this.dpr = dpr; this.cssW = dw / dpr; this.cssH = dh / dpr; this.snap = true
     this.c.style.width = this.cssW + 'px'; this.c.style.height = this.cssH + 'px'
@@ -258,15 +274,43 @@ export class Renderer {
     const dt = Math.min(100, Math.max(0, now - (this.last || now))); this.last = now
     if (!this.px) return
     const k = this.k, vw = this.vw, vh = this.vh
-    // camera: ease toward the player, clamped to the room (k guarantees the view is never bigger than the room)
+    // camera: ease toward the player. The Games Lounge on a desktop shows the whole room; on a phone it
+    // shifts so a nearby table and its sign stay inside the view.
     const me = net.ents.get(net.me)
     if (me) { const [fx, fy] = this.feet(net, me, now)
-      const tx = Math.max(0, Math.min(MW - vw, fx - vw / 2)), ty = Math.max(-ARCH_TOP, Math.min(MH - vh, fy - 12 - vh / 2))
+      const roomTop = -ARCH_TOP, roomH = MH - roomTop
+      let tx: number, ty: number
+      if (this.layout === 'desk' && CUR === 'games' && vw >= MW && vh >= roomH) {
+        tx = 0; ty = roomTop
+      } else {
+        tx = fx - vw / 2; ty = fy - 12 - vh / 2
+        if (CUR === 'games') {
+          let best: [number, number, number, number] | null = null, bestD = 80
+          for (const b of LOUNGE_PIECES) {
+            if (b[2] + 8 > vw || b[3] + 8 > vh) continue
+            const d = Math.hypot(fx - (b[0] + b[2] / 2), fy - (b[1] + b[3] / 2))
+            if (d < bestD) { best = b; bestD = d }
+          }
+          if (best) {
+            const m = 6
+            if (best[0] - m < tx) tx = best[0] - m
+            if (best[0] + best[2] + m > tx + vw) tx = best[0] + best[2] + m - vw
+            if (best[1] - m < ty) ty = best[1] - m
+            if (best[1] + best[3] + m > ty + vh) ty = best[1] + best[3] + m - vh
+          }
+        }
+        tx = Math.max(0, Math.min(MW - vw, tx)); ty = Math.max(roomTop, Math.min(MH - vh, ty))
+      }
       this.camT = [tx, ty]
       if (this.snap) { this.camX = tx; this.camY = ty; this.snap = false }
       else { const a = 1 - Math.exp(-dt / EASE_MS); this.camX += (tx - this.camX) * a; this.camY += (ty - this.camY) * a
         if (Math.abs(tx - this.camX) < 0.05) this.camX = tx; if (Math.abs(ty - this.camY) < 0.05) this.camY = ty } }
-    this.camX = Math.max(0, Math.min(MW - vw, this.camX)); this.camY = Math.max(-ARCH_TOP, Math.min(MH - vh, this.camY))
+    // A view larger than the room (desktop lounge) is centered across and pinned to the top, so the
+    // margin below the map stays clear of the emote bar. A closer view stays clamped to the walls.
+    if (vw >= MW) this.camX = (MW - vw) / 2
+    else this.camX = Math.max(0, Math.min(MW - vw, this.camX))
+    if (vh >= MH + ARCH_TOP) this.camY = -ARCH_TOP
+    else this.camY = Math.max(-ARCH_TOP, Math.min(MH - vh, this.camY))
     this.ox = Math.round(this.camX * k); this.oy = Math.round(this.camY * k)
     this.world.position.set(-this.ox, -this.oy)
 

@@ -28,7 +28,6 @@ function Card({ c }: { c: number }) {
     onError={e => { const i = e.currentTarget; if (!i.src.endsWith('.png')) i.src = `${CARDS}png/${f}.png` }} />
 }
 const Back = () => <img src={BACK} srcSet={BACK_SET} alt="" className="g-card g-back" width={120} height={168} />
-const ST: Record<string, string> = { bet: 'betting', locked: 'in', wait: 'next round', play: 'playing', stand: 'stand', bust: 'bust', bj: 'blackjack' }
 const RES = { win: 'You win this hand', bj: 'Blackjack', push: 'Push · your coins come back', lose: 'The House takes this one', bust: 'Bust · over 21' } as const
 
 export default function BjTable({ game, name, send, stand, desk, chips, onLeave }: { game: BjGame | null; name: (id: number) => string; send: (o: object) => void
@@ -67,8 +66,8 @@ export default function BjTable({ game, name, send, stand, desk, chips, onLeave 
       <div className="bj-seats">{seats.map((p, i) => ({ p, i })).sort((a, b) => (a.p ? 0 : 1) - (b.p ? 0 : 1)).map(({ p, i }) => <div key={i} className={'bj-seat' + (p && p.id === game?.me ? ' me' : '') + (p && play && p.id === game?.turn ? ' turn' : '') + (p?.st === 'wait' ? ' wait' : '')} data-t="bj-seat" data-seat={i} data-st={p?.st ?? 'empty'} data-me={p && p.id === game?.me ? '1' : undefined}>
         {p && <img className="bj-sit" src={p.id === game?.me ? youSeat : jessSeat} alt="" width={36} height={48} />}
         <span className={'nm' + (p && p.id === game?.me ? ' me' : '')}>{p ? name(p.id) : 'Open seat'}</span>
-        <div className="bj-hand" data-t={p && p.id === game?.me ? 'bj-hand' : undefined}>{p?.hand.length ? p.hand.map((c, k) => <Card key={k} c={c} />) : <span className="bj-empty">{p ? 'no cards yet' : 'seat'}</span>}</div>
-        <small>{p ? <>{p.hand.length ? (p.soft && p.total < 21 ? 'soft ' : '') + p.total : ''}{p.bet ? ` · ${p.bet}` : ''} · {ST[p.st] ?? p.st}{p.away ? ' · back soon' : ''}</> : ' '}</small>
+        <div className="bj-hand" data-t={p && p.id === game?.me ? 'bj-hand' : undefined}>{p?.hand.length ? p.hand.map((c, k) => <Card key={k} c={c} />) : p ? <span className="bj-empty">no cards yet</span> : null}</div>
+        <small data-t="bj-meta">{p ? <>{p.hand.length ? `${p.soft && p.total < 21 ? 'soft ' : ''}${p.total} · bet ${p.bet}` : p.bet ? `bet ${p.bet}` : ''}{p.away ? ' · back soon' : ''}</> : ''}</small>
       </div>)}</div>
     </div>
     <div className="bj-bar">

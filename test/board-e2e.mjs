@@ -84,6 +84,12 @@ const layoutOf = p => p.evaluate(() => {
     phase: document.querySelector('[data-t=g-bd]')?.getAttribute('data-phase') ?? '',
   }
 })
+const cellsOf = p => p.evaluate(() => [...document.querySelectorAll('[data-t=bd-sq]')].map(e => { const b = e.getBoundingClientRect(); return { w: b.width, h: b.height } }))
+const squaresOk = async (p) => {
+  const cells = await cellsOf(p)
+  const bad = cells.filter(c => Math.abs(c.w - c.h) > 1)
+  return cells.length === 64 && !bad.length ? cells : null
+}
 const move = async (p, from, to) => {
   await press(p, `[data-sq="${from}"]`)
   const dotted = await until(() => p.$(`[data-sq="${to}"] [data-t=bd-dot]`), 2000)
@@ -123,12 +129,30 @@ ok(phone.call && phone.call.b <= phone.vh + 1 && phone.call.y >= (phone.side?.y 
 ok(desk.layout === 'desk' && desk.side && desk.stage && desk.side.x >= desk.stage.r - 4, 'desktop chat sits beside the board')
 ok(!desk.olHidden && !desk.toggle, 'desktop chat stays open, with no tuck control')
 ok(desk.call && desk.call.x >= desk.stage.r - 4, 'Start call stays in the desktop side column')
+const phoneSq = await squaresOk(A), deskSq = await squaresOk(B)
+console.log('  cells phone', phoneSq ? `${phoneSq[0].w.toFixed(1)}²` : 'uneven', 'desk', deskSq ? `${deskSq[0].w.toFixed(1)}²` : 'uneven')
+ok(!!phoneSq, 'every phone cell is square within 1px')
+ok(!!deskSq, 'every desktop cell is square within 1px')
 await shot(A, 'board-phone'); await shot(B, 'board-desk')
 
 await press(white, '[data-t=bd-resign]')
 ok(await until(async () => (await attr(black, '[data-t=g-bd]', 'data-phase')) === 'over', 4000), 'resign ends the game')
 const status = await txt(black, '[data-t=g-status]')
 ok(/win/i.test(status), 'the other player is told they win (' + status + ')')
+
+for (const p of [A, B]) await press(p, '[data-t=bd-leave]')
+ok(await until(async () => !(await A.$('[data-t=g-bd]')) && !(await B.$('[data-t=g-bd]')), 6000), 'both leave so the table is free')
+ok(await sitDown(A, seats[0][0], seats[0][1]) && await sitDown(B, seats[1][0], seats[1][1]), 'both sit again for draughts')
+for (const p of [A, B]) ok(await until(() => p.$('[data-t=bd-game-draughts]'), 8000), p.tag + ' can pick again')
+for (const p of [A, B]) {
+  await press(p, '[data-t=bd-game-draughts]'); await press(p, '[data-t=bd-clock-off]')
+  await until(() => p.$('[data-t=bd-ready]:not([disabled])'), 3000)
+  await press(p, '[data-t=bd-ready]')
+}
+ok(await until(async () => (await attr(A, '[data-t=g-bd]', 'data-kind')) === 'draughts' && (await attr(A, '[data-t=g-bd]', 'data-phase')) === 'play', 6000), 'draughts is on')
+const draughtsSq = await squaresOk(A)
+ok(!!draughtsSq, 'draughts cells are square within 1px too')
+await shot(A, 'board-draughts-phone')
 
 await browser.close()
 console.log(`\n${n - bad}/${n} checks passed`)

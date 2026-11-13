@@ -230,17 +230,22 @@ export class Renderer {
     this.px = px; this.apply()
   }
   destroy() { this.dead = true; if (this.px) { this.px.destroy(); this.px = null } }
-  /** Integer factor k (device px per art px), and never so small that the view is wider or taller than the room, so there
-      are no empty bands. Phone: 2 CSS px per art px (about 12 tiles across at 390). Desktop: a closer view that follows you. */
+  /** Device pixels per art pixel. Phone and the café stay on a whole number. The desktop lounge uses the largest
+      whole number that fits the room, or the exact fit (nearest-neighbour) when a whole number would leave a big gap. */
   resize(cssW: number, cssH: number, dpr: number, layout: Layout) {
     const dw = Math.max(1, Math.floor(cssW * dpr)), dh = Math.max(1, Math.floor(cssH * dpr))
     const roomH = MH + ARCH_TOP
     // Desktop Games Lounge: the whole room fits in the canvas (integer k), pinned to the top, so no table is cropped
     // and the margin under the map is clear of the emote bar. The café keeps its closer follow camera.
-    const fit = layout === 'desk' && CUR === 'games'
-    const base = fit ? Math.max(1, Math.min(Math.floor(dw / MW) || 1, Math.floor(dh / roomH) || 1))
+    const lounge = layout === 'desk' && CUR === 'games'
+    // Largest scale that still shows the whole room. Prefer a whole number of device pixels per art pixel.
+    // If that leaves the room under about 80% of the tighter canvas edge, use the exact fit instead.
+    // Textures stay nearest-neighbour, so a fractional scale stays crisp.
+    const fit = Math.min(dw / MW, dh / roomH)
+    const whole = Math.max(1, Math.floor(fit))
+    const base = lounge ? (whole / fit >= 0.8 ? whole : fit)
       : layout === 'phone' ? Math.max(1, Math.round(PHONE_CSS_SCALE * dpr)) : Math.max(2, Math.floor(Math.min(dw / 320, dh / 240)))
-    this.k = fit ? base : Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / roomH))
+    this.k = lounge ? base : Math.max(base, Math.ceil(dw / MW), Math.ceil(dh / roomH))
     this.vw = dw / this.k; this.vh = dh / this.k; this.dw = dw; this.dh = dh; this.layout = layout
     this.dpr = dpr; this.cssW = dw / dpr; this.cssH = dh / dpr; this.snap = true
     this.c.style.width = this.cssW + 'px'; this.c.style.height = this.cssH + 'px'
@@ -280,8 +285,8 @@ export class Renderer {
     if (me) { const [fx, fy] = this.feet(net, me, now)
       const roomTop = -ARCH_TOP, roomH = MH - roomTop
       let tx: number, ty: number
-      if (this.layout === 'desk' && CUR === 'games' && vw >= MW && vh >= roomH) {
-        tx = 0; ty = roomTop
+      if (this.layout === 'desk' && CUR === 'games' && vw >= MW - 0.5 && vh >= roomH - 0.5) {
+        tx = (MW - vw) / 2; ty = roomTop - (vh - roomH) / 2
       } else {
         tx = fx - vw / 2; ty = fy - 12 - vh / 2
         if (CUR === 'games') {
@@ -305,11 +310,10 @@ export class Renderer {
       if (this.snap) { this.camX = tx; this.camY = ty; this.snap = false }
       else { const a = 1 - Math.exp(-dt / EASE_MS); this.camX += (tx - this.camX) * a; this.camY += (ty - this.camY) * a
         if (Math.abs(tx - this.camX) < 0.05) this.camX = tx; if (Math.abs(ty - this.camY) < 0.05) this.camY = ty } }
-    // A view larger than the room (desktop lounge) is centered across and pinned to the top, so the
-    // margin below the map stays clear of the emote bar. A closer view stays clamped to the walls.
-    if (vw >= MW) this.camX = (MW - vw) / 2
+    // Desktop lounge shows the whole room, centred in the play area. A closer view stays inside the walls.
+    if (vw >= MW - 0.5) this.camX = (MW - vw) / 2
     else this.camX = Math.max(0, Math.min(MW - vw, this.camX))
-    if (vh >= MH + ARCH_TOP) this.camY = -ARCH_TOP
+    if (vh >= MH + ARCH_TOP - 0.5) this.camY = -ARCH_TOP - (vh - (MH + ARCH_TOP)) / 2
     else this.camY = Math.max(-ARCH_TOP, Math.min(MH - vh, this.camY))
     this.ox = Math.round(this.camX * k); this.oy = Math.round(this.camY * k)
     this.world.position.set(-this.ox, -this.oy)

@@ -7,6 +7,8 @@
 .sw-sit { width: 36px; height: 48px; image-rendering: pixelated; display: block }
 .sw-screen .sw-felt { justify-content: space-between }
 .sw-lower { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100% }
+/* Phone: lift You and the side cards into the lower lobe, about 15% of the stage. */
+.w-room.phone .sw-lower { position: relative; bottom: 15% }
 .sw-board { display: grid; justify-items: center; gap: 2px; padding: 2px; border: 2px solid transparent }
 .sw-board.me { border-color: #48E5C2 } .sw-board.turn { border-color: #FFD84D }
 .sw-board .nm { font: 700 13px/1.2 var(--font-ui); color: #FFF1C1 } .sw-board .nm.me { color: #48E5C2 }

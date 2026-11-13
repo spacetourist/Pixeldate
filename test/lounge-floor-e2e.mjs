@@ -86,21 +86,32 @@ ok(trails.ok, 'the Trails cabinet sits inside the phone view')
 await shot(A, 'lounge-floor-phone-trails')
 await shot(A, 'trails-cabinet-close')
 
-const B = await player('b', DESK, 'Bea')
-await sleep(600)
-const bj = await pieceIn(B, BJ), sw = await pieceIn(B, SWEET)
-console.log('  desk bj', JSON.stringify(bj), 'sweet', JSON.stringify(sw))
-ok(bj.ok && sw.ok, 'desktop shows the blackjack table and the heart, uncropped')
-const clear = await B.evaluate(() => {
-  const tray = document.querySelector('.w-et-tray')
-  const sign = window.__world.tileCss(230 / 16 - 0.5, 352 / 16 - 0.5)
-  if (!tray) return { ok: true, sign }
-  const t = tray.getBoundingClientRect()
-  return { ok: sign[1] + 8 < t.top, sign: sign[1], tray: t.top }
+const fitOf = p => p.evaluate(() => {
+  const c = document.querySelector('[data-t=w-canvas]').getBoundingClientRect()
+  const css = (ax, ay) => window.__world.tileCss(ax / 16 - 0.5, ay / 16 - 0.5)
+  const tl = css(0, -16), br = css(640, 384)
+  const room = { x: tl[0], y: tl[1], r: br[0], b: br[1] }
+  const rw = room.r - room.x, rh = room.b - room.y
+  const cover = Math.max(rw / c.width, rh / c.height)
+  const dx = (room.x + room.r) / 2 - (c.left + c.right) / 2
+  const dy = (room.y + room.b) / 2 - (c.top + c.bottom) / 2
+  const tray = document.querySelector('.w-et-tray')?.getBoundingClientRect()
+  const hit = !!(tray && !(tray.right < room.x || tray.left > room.r || tray.bottom < room.y || tray.top > room.b))
+  return { cover, dx, dy, hit, rw: Math.round(rw), rh: Math.round(rh), cw: Math.round(c.width), ch: Math.round(c.height) }
 })
-console.log('  emote', JSON.stringify(clear))
-ok(clear.ok, 'the emote bar sits clear of the Sweet Twenty sign')
-await shot(B, 'lounge-floor-desk')
+const B = await player('b', DESK, 'Bea')
+for (const [w, h, name] of [[1440, 900, 'lounge-floor-desk'], [1280, 800, 'lounge-floor-desk-1280'], [1024, 640, 'lounge-floor-desk-1024']]) {
+  await B.setViewport({ width: w, height: h, deviceScaleFactor: 1 })
+  await sleep(500)
+  const f = await fitOf(B)
+  console.log(`  ${w}x${h}`, JSON.stringify(f))
+  ok(f.cover >= 0.8, `${w}: the room covers ${Math.round(f.cover * 100)}% of the tighter edge`)
+  ok(Math.abs(f.dx) <= 2 && Math.abs(f.dy) <= 2, `${w}: centred within 2px (${f.dx.toFixed(2)}, ${f.dy.toFixed(2)})`)
+  ok(!f.hit, `${w}: the emote bar stays off the room`)
+  if (w !== 1024) await shot(B, name)
+}
+const bj = await pieceIn(B, BJ), sw = await pieceIn(B, SWEET)
+ok(bj.ok && sw.ok, 'desktop shows the blackjack table and the heart, uncropped')
 
 await browser.close()
 console.log(`\n${n - bad}/${n} checks passed`)
